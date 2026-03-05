@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.0.0
+Version: 1.1
 Description: Log des visites des guests avec géolocalisation IP
 Plugin URI: ip_location
 Has Settings: webmaster
@@ -105,16 +105,6 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
         pwg_query($query);
     }
 
-    // Blocage par pays (uniquement si activé)
-    if (conf_get_param('ip_location_blocking_enabled', '0') === '1') {
-        $blocked_raw = conf_get_param('ip_location_blocked_countries', '');
-        $blocked = array_filter(array_map('trim', explode(',', strtoupper($blocked_raw))));
-        if (!empty($blocked) && in_array(strtoupper($geo['country_code']), $blocked)) {
-            header('HTTP/1.0 403 Forbidden');
-            exit;
-        }
-    }
-
     // Construction de l'URL visitée
     $scheme     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $url        = $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
@@ -123,10 +113,20 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
     // Détection bot
     $is_bot = ip_location_is_bot($user_agent, $url, $ip, $prefixeTable) ? 1 : 0;
 
+    // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer)
+    $is_blocked = 0;
+    if (conf_get_param('ip_location_blocking_enabled', '0') === '1') {
+        $blocked_raw = conf_get_param('ip_location_blocked_countries', '');
+        $blocked = array_filter(array_map('trim', explode(',', strtoupper($blocked_raw))));
+        if (!empty($blocked) && in_array(strtoupper($geo['country_code']), $blocked)) {
+            $is_blocked = 1;
+        }
+    }
+
     // Insertion dans le log
     $query = '
 INSERT INTO ' . $prefixeTable . 'ip_location_log
-  (ip, country, country_code, city, url, user_agent, is_bot, visit_date)
+  (ip, country, country_code, city, url, user_agent, is_bot, is_blocked, visit_date)
   VALUES (
     \'' . $ip . '\',
     \'' . pwg_db_real_escape_string($geo['country']) . '\',
@@ -135,9 +135,29 @@ INSERT INTO ' . $prefixeTable . 'ip_location_log
     \'' . pwg_db_real_escape_string($url) . '\',
     \'' . pwg_db_real_escape_string($user_agent) . '\',
     ' . $is_bot . ',
+    ' . $is_blocked . ',
     NOW()
   );';
     pwg_query($query);
+
+    // Vidage automatique : supprimer les plus anciennes entrées si dépassement du seuil
+    $max_records = (int)conf_get_param('ip_location_max_records', '10000');
+    if ($max_records > 0) {
+        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
+        list($count) = pwg_db_fetch_row($r);
+        if ($count > $max_records) {
+            $to_delete = $count - $max_records;
+            pwg_query('
+DELETE FROM ' . $prefixeTable . 'ip_location_log
+  ORDER BY visit_date ASC
+  LIMIT ' . $to_delete);
+        }
+    }
+
+    if ($is_blocked) {
+        header('HTTP/1.0 403 Forbidden');
+        exit;
+    }
 }
 
 function ip_location_is_bot($user_agent, $url, $ip, $prefixeTable)

@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_log (
     if (pwg_db_num_rows($col) == 0) {
         pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN is_bot TINYINT(1) NOT NULL DEFAULT 0 AFTER user_agent');
     }
+    $col = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log LIKE \'is_blocked\'');
+    if (pwg_db_num_rows($col) == 0) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN is_blocked TINYINT(1) NOT NULL DEFAULT 0 AFTER is_bot');
+    }
 
     pwg_query('
 CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_cache (

@@ -9,6 +9,7 @@
   .ipl-bot-row { background:#fff0f0; }
   .ipl-bot-row:hover { background:#ffe0e0 !important; }
   .ipl-bot-badge { color:#c00; font-weight:bold; font-size:0.8em; }
+  .ipl-blocked-badge { color:#800; font-weight:bold; font-size:0.8em; background:#fdd; padding:1px 4px; border-radius:3px; }
   .ipl-counters { margin:0 0 1.5em 20px; font-size:0.95em; text-align:left; }
   .ipl-counters span { margin-right:20px; }
   .ipl-config { margin:0 0 2em 20px; text-align:left; }
@@ -44,12 +45,19 @@
     <label><strong>{'IPs toujours autorisées'|@translate}</strong> (une par ligne) :</label><br>
     <textarea name="whitelist_ips" rows="5" style="width:400px;">{$WHITELIST_IPS|escape}</textarea>
   </p>
+  <p>
+    <label><strong>{'Vidage automatique'|@translate}</strong> &mdash; {'supprimer les plus anciennes entrées au-delà de'|@translate}
+      <input type="number" name="max_records" value="{$MAX_RECORDS}" min="0" style="width:80px;display:inline;"> {'enregistrements'|@translate}
+      <em style="font-size:0.85em;color:#666;">({'0 = désactivé'|@translate})</em>
+    </label>
+  </p>
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
 </form>
 
 <div class="ipl-counters">
   <span>{'Visites'|@translate} : <strong>{$TOTAL_ALL}</strong></span>
   <span style="color:#c00;">{'Bots détectés'|@translate} : <strong>{$TOTAL_BOTS}</strong></span>
+  <span style="color:#800;">{'IPs bloquées'|@translate} : <strong>{$TOTAL_BLOCKED}</strong></span>
   <span>{'Humains'|@translate} : <strong>{math equation="a - b" a=$TOTAL_ALL b=$TOTAL_BOTS}</strong></span>
 </div>
 
@@ -101,7 +109,7 @@
   {else}
     {foreach from=$LOGS item=log}
     <tr{if $log.is_bot} class="ipl-bot-row"{/if}>
-      <td>{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}</td>
+      <td>{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
       <td>{$log.ip|escape}</td>
       <td>{$log.country|escape}</td>
       <td>{$log.city|escape}</td>

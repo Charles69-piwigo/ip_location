@@ -17,9 +17,11 @@ DELETE FROM ' . $prefixeTable . 'ip_location_log
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $whitelist = trim($_POST['whitelist_ips'] ?? '');
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
-        conf_update_param('ip_location_blocked_countries', $blocked);
-        conf_update_param('ip_location_whitelist', $whitelist);
-        conf_update_param('ip_location_blocking_enabled', $blocking_enabled);
+        $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
+        conf_update_param('ip_location_blocked_countries', $blocked, true);
+        conf_update_param('ip_location_whitelist', $whitelist, true);
+        conf_update_param('ip_location_blocking_enabled', $blocking_enabled, true);
+        conf_update_param('ip_location_max_records', (string)$max_records, true);
         $page['infos'][] = l10n('Configuration enregistrée.');
     }
 }
@@ -31,6 +33,9 @@ list($total_all) = pwg_db_fetch_row($r);
 
 $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_bot = 1');
 list($total_bots) = pwg_db_fetch_row($r);
+
+$r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_blocked = 1');
+list($total_blocked) = pwg_db_fetch_row($r);
 
 // ── Statistiques par pays ─────────────────────────────────────────────────────
 
@@ -70,18 +75,21 @@ while ($row = pwg_db_fetch_assoc($result)) {
 $blocked_countries  = conf_get_param('ip_location_blocked_countries', '');
 $whitelist_ips      = conf_get_param('ip_location_whitelist', '');
 $blocking_enabled   = conf_get_param('ip_location_blocking_enabled', '0') === '1';
+$max_records        = (int)conf_get_param('ip_location_max_records', '10000');
 
 $template->assign([
     'BLOCKED_COUNTRIES'  => $blocked_countries,
     'WHITELIST_IPS'      => $whitelist_ips,
     'BLOCKING_ENABLED'   => $blocking_enabled,
+    'MAX_RECORDS'        => $max_records,
     'STATS'        => $stats,
     'LOGS'         => $logs,
     'TOTAL_PAGES'  => $total_pages,
     'CURRENT_PAGE' => $current_page,
     'BASE_URL'     => get_root_url() . 'admin.php?page=plugin-ip_location',
-    'TOTAL_ALL'    => $total_all,
-    'TOTAL_BOTS'   => $total_bots,
+    'TOTAL_ALL'     => $total_all,
+    'TOTAL_BOTS'    => $total_bots,
+    'TOTAL_BLOCKED' => $total_blocked,
 ]);
 
 $template->set_filename('ip_location_admin', IP_LOCATION_PATH . 'template/admin.tpl');
