@@ -11,38 +11,25 @@ function plugin_activate($plugin_id, $plugin_version, &$errors)
 
     pwg_query('
 CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_log (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  ip VARCHAR(45) NOT NULL,
-  country VARCHAR(64),
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  ip           VARCHAR(45)  NOT NULL,
+  country      VARCHAR(64),
   country_code CHAR(2),
-  city VARCHAR(64),
-  url VARCHAR(512),
-  user_agent VARCHAR(512),
-  is_bot TINYINT(1) NOT NULL DEFAULT 0,
-  visit_date DATETIME NOT NULL
+  city         VARCHAR(64),
+  url          VARCHAR(512),
+  user_agent   VARCHAR(512),
+  is_bot       TINYINT(1)   NOT NULL DEFAULT 0,
+  is_blocked   TINYINT(1)   NOT NULL DEFAULT 0,
+  visit_date   DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
-
-    // Migrations
-    $col = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log LIKE \'user_agent\'');
-    if (pwg_db_num_rows($col) == 0) {
-        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN user_agent VARCHAR(512) AFTER url');
-    }
-    $col = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log LIKE \'is_bot\'');
-    if (pwg_db_num_rows($col) == 0) {
-        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN is_bot TINYINT(1) NOT NULL DEFAULT 0 AFTER user_agent');
-    }
-    $col = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log LIKE \'is_blocked\'');
-    if (pwg_db_num_rows($col) == 0) {
-        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN is_blocked TINYINT(1) NOT NULL DEFAULT 0 AFTER is_bot');
-    }
 
     pwg_query('
 CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_cache (
-  ip VARCHAR(45) PRIMARY KEY,
-  country VARCHAR(64),
+  ip           VARCHAR(45)  PRIMARY KEY,
+  country      VARCHAR(64),
   country_code CHAR(2),
-  city VARCHAR(64),
-  resolved_at DATETIME NOT NULL
+  city         VARCHAR(64),
+  resolved_at  DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 }
 

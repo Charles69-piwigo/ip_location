@@ -1,6 +1,7 @@
 <style>
   .ipl-table { width:auto; border-collapse:collapse; margin:0 0 1em 20px; }
   .ipl-table th, .ipl-table td { text-align:left; padding:4px 12px 4px 0; white-space:nowrap; }
+  .ipl-table td.ipl-date { width:200px; min-width:155px; max-width:200px; }
   .ipl-table thead tr { border-bottom:2px solid #ccc; }
   .ipl-table tbody tr:hover { background:#f5f5f5; }
   .ipl-table td.ipl-url { max-width:300px; overflow:hidden; text-overflow:ellipsis; }
@@ -109,7 +110,7 @@
   {else}
     {foreach from=$LOGS item=log}
     <tr{if $log.is_bot} class="ipl-bot-row"{/if}>
-      <td>{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
+      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
       <td>{$log.ip|escape}</td>
       <td>{$log.country|escape}</td>
       <td>{$log.city|escape}</td>

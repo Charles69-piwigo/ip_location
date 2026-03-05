@@ -62,7 +62,7 @@ $total_pages = max(1, ceil($total_visits / $per_page));
 
 $logs = [];
 $result = pwg_query('
-SELECT id, visit_date, ip, country, city, url, user_agent, is_bot
+SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked
   FROM ' . $prefixeTable . 'ip_location_log
   ORDER BY visit_date DESC
   LIMIT ' . $per_page . ' OFFSET ' . $offset);
