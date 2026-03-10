@@ -56,7 +56,15 @@ $per_page     = 50;
 $current_page = isset($_GET['pnum']) ? max(1, (int)$_GET['pnum']) : 1;
 $offset       = ($current_page - 1) * $per_page;
 
-$total_result = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
+$filter = isset($_GET['filter']) && in_array($_GET['filter'], ['normal','bot','blocked']) ? $_GET['filter'] : 'all';
+$filter_where = [
+    'all'     => '',
+    'normal'  => 'WHERE is_bot = 0 AND is_blocked = 0',
+    'bot'     => 'WHERE is_bot = 1',
+    'blocked' => 'WHERE is_blocked = 1',
+][$filter];
+
+$total_result = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log ' . $filter_where);
 list($total_visits) = pwg_db_fetch_row($total_result);
 $total_pages = max(1, ceil($total_visits / $per_page));
 
@@ -64,6 +72,7 @@ $logs = [];
 $result = pwg_query('
 SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked
   FROM ' . $prefixeTable . 'ip_location_log
+  ' . $filter_where . '
   ORDER BY visit_date DESC
   LIMIT ' . $per_page . ' OFFSET ' . $offset);
 while ($row = pwg_db_fetch_assoc($result)) {
@@ -87,6 +96,7 @@ $template->assign([
     'TOTAL_PAGES'  => $total_pages,
     'CURRENT_PAGE' => $current_page,
     'BASE_URL'     => get_root_url() . 'admin.php?page=plugin-ip_location',
+    'FILTER'       => $filter,
     'TOTAL_ALL'     => $total_all,
     'TOTAL_BOTS'    => $total_bots,
     'TOTAL_BLOCKED' => $total_blocked,

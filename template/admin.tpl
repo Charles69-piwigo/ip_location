@@ -6,11 +6,14 @@
   .ipl-table tbody tr:hover { background:#f5f5f5; }
   .ipl-table td.ipl-url { max-width:300px; overflow:hidden; text-overflow:ellipsis; }
   .ipl-table td.ipl-ua  { max-width:250px; overflow:hidden; text-overflow:ellipsis; font-size:0.85em; color:#555; }
-  #content h3 { text-align:left; }
-  .ipl-bot-row { background:#fff0f0; }
+  #content h3 { text-align:left; padding-left:10px;}
+  .ipl-bot-row { background:#fff0f0 }
   .ipl-bot-row:hover { background:#ffe0e0 !important; }
   .ipl-bot-badge { color:#c00; font-weight:bold; font-size:0.8em; }
   .ipl-blocked-badge { color:#800; font-weight:bold; font-size:0.8em; background:#fdd; padding:1px 4px; border-radius:3px; }
+  .ipl-filters { margin:0 0 0.8em 20px; }
+  .ipl-filters a { margin-right:8px; padding:3px 10px; border:1px solid #ccc; border-radius:3px; text-decoration:none; color:#333; font-size:0.9em; }
+  .ipl-filters a.active { background:#555; color:#fff; border-color:#555; font-weight:bold; }
   .ipl-counters { margin:0 0 1.5em 20px; font-size:0.95em; text-align:left; }
   .ipl-counters span { margin-right:20px; }
   .ipl-config { margin:0 0 2em 20px; text-align:left; }
@@ -27,7 +30,7 @@
 </div>
 
 <!-- ── Configuration ────────────────────────────────────────────────────── -->
-<h3>{'Configuration'|@translate}</h3>
+<h3> {'Configuration'|@translate}</h3>
 
 <form method="post" action="" class="ipl-config">
   <input type="hidden" name="action" value="save_config">
@@ -93,6 +96,13 @@
 <!-- ── Journal des visites ──────────────────────────────────────────────── -->
 <h3>{'Journal des visites'|@translate}</h3>
 
+<div class="ipl-filters">
+  <a href="{$BASE_URL|escape}"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=normal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=bot"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=blocked"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
+</div>
+
 <table class="ipl-table">
   <thead>
     <tr>
@@ -129,7 +139,7 @@
 <div class="pagination" style="margin:10px 0;">
   {section name=p loop=$TOTAL_PAGES start=1}
     {assign var=pnum value=$smarty.section.p.index}
-    <a href="{$BASE_URL|escape}&amp;pnum={$pnum}"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
+    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}&amp;pnum={$pnum}"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
   {/section}
 </div>
 {/if}

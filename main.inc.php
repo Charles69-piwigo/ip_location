@@ -1,10 +1,16 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.1
+Version: 1.2
 Description: Log des visites des guests avec géolocalisation IP
 Plugin URI: ip_location
 Has Settings: webmaster
+*/
+// Versions
+/*
+    version 1.2 ajouté filtre et déf bot modifié 10/03/2026
+    version 1.1 css 
+    version 1.0 initial 05/03/2026
 */
 
 if (!defined('PHPWG_ROOT_PATH')) die('Hacking attempt!');
@@ -140,6 +146,21 @@ INSERT INTO ' . $prefixeTable . 'ip_location_log
   );';
     pwg_query($query);
 
+    // Marquage rétroactif : si >= 2 IPs distinctes ont visité la même URL dans les 10 dernières
+    // secondes, toutes ces entrées sont des bots — y compris la première qui avait échappé
+    $r = pwg_query('
+SELECT COUNT(DISTINCT ip) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE url = \'' . pwg_db_real_escape_string($url) . '\'
+    AND visit_date >= NOW() - INTERVAL 10 SECOND');
+    list($distinct_ips) = pwg_db_fetch_row($r);
+    if ($distinct_ips >= 2) {
+        pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_log
+  SET is_bot = 1
+  WHERE url = \'' . pwg_db_real_escape_string($url) . '\'
+    AND visit_date >= NOW() - INTERVAL 10 SECOND');
+    }
+
     // Vidage automatique : supprimer les plus anciennes entrées si dépassement du seuil
     $max_records = (int)conf_get_param('ip_location_max_records', '10000');
     if ($max_records > 0) {
@@ -177,12 +198,12 @@ function ip_location_is_bot($user_agent, $url, $ip, $prefixeTable)
         }
     }
 
-    // Visite en doublon : même URL dans la même seconde depuis une IP différente
+    // Visite en doublon : même URL depuis une IP différente dans les 10 dernières secondes
     $result = pwg_query('
 SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log
   WHERE url = \'' . pwg_db_real_escape_string($url) . '\'
     AND ip != \'' . pwg_db_real_escape_string($ip) . '\'
-    AND visit_date >= NOW() - INTERVAL 2 SECOND');
+    AND visit_date >= NOW() - INTERVAL 10 SECOND');
     list($count) = pwg_db_fetch_row($result);
     if ($count > 0) {
         return true;
