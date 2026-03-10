@@ -9,7 +9,7 @@
   <p>
     <label><strong>{'Pays bloqués'|@translate}</strong> (codes ISO séparés par virgule, ex: US,EG,CN) :</label><br>
     <input type="text" name="blocked_countries" value="{$BLOCKED_COUNTRIES|escape}"
-           style="width:400px;" placeholder="US,EG,CN">
+           style="width:400px;" placeholder="">
   </p>
   <p>
     <label><strong>{'IPs toujours autorisées'|@translate}</strong> (une par ligne) :</label><br>
@@ -29,4 +29,14 @@
     </label>
   </p>
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
+</form>
+
+<form method="post" action="" class="ipl-config" style="margin-top:1.5em;">
+  <input type="hidden" name="action" value="import_ips">
+  <p>
+    <label><strong>{'Import d\'IPs dans la blocklist'|@translate}</strong> &mdash;
+    {'une IP ou préfixe par ligne (ex: 82.97 ou 74.7.23.45 ou 74.7.0.0/24)'|@translate} :</label><br>
+    <textarea name="import_ips" rows="6" style="width:400px;" placeholder=""></textarea>
+  </p>
+  <button type="submit" class="buttonLike">{'Importer'|@translate}</button>
 </form>

@@ -46,6 +46,14 @@
     <li>{'La purge manuelle (section Purge) permet de vider tout le journal ou les entrées plus anciennes qu\'un nombre de jours donné.'|@translate}</li>
   </ul>
 
+  <h4>{'Import d\'IPs dans la blocklist'|@translate}</h4>
+  <ul>
+    <li>{'Le champ "Import d\'IPs" (onglet Configuration) permet d\'ajouter plusieurs IPs ou plages d\'un coup, une par ligne.'|@translate}</li>
+    <li>{'Formats acceptés : IP complète (<code>74.7.23.45</code>), préfixe (<code>82.97</code>), CIDR (<code>82.97.0.0/24</code>).'|@translate}</li>
+    <li>{'Les entrées déjà présentes dans la blocklist sont ignorées sans erreur.'|@translate}</li>
+    <li>{'Le .htaccess est mis à jour une seule fois après l\'import complet.'|@translate}</li>
+  </ul>
+
   <h4>{'Filtres du journal'|@translate}</h4>
   <ul>
     <li><strong>Tous</strong> {'→ toutes les entrées.'|@translate}</li>

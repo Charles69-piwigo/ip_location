@@ -90,10 +90,26 @@
 <h3>{'Journal des visites'|@translate}</h3>
 
 <div class="ipl-filters">
-  <a href="{$BASE_URL|escape}"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=normal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=bot"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=blocked"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
+  {if $COUNTRY_FILTER neq ''}
+    {assign var=country_qs value="&amp;country=`$COUNTRY_FILTER`"}
+  {else}
+    {assign var=country_qs value=''}
+  {/if}
+  <a href="{$BASE_URL|escape}{$country_qs}"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
+  &nbsp;|&nbsp;
+  <form method="get" action="admin.php" style="display:inline;margin:0;">
+    <input type="hidden" name="page" value="plugin-ip_location">
+    {if $FILTER neq 'all'}<input type="hidden" name="filter" value="{$FILTER|escape}">{/if}
+    <select name="country" onchange="this.form.submit()" style="font-size:0.88em;padding:2px 4px;">
+      <option value="">{'Tous les pays'|@translate}</option>
+      {foreach from=$COUNTRIES item=c}
+      <option value="{$c.country_code|escape}" {if $COUNTRY_FILTER eq $c.country_code}selected{/if}>{$c.country|escape} ({$c.visits})</option>
+      {/foreach}
+    </select>
+  </form>
 </div>
 
 <table class="ipl-table">
@@ -149,7 +165,7 @@
 <div class="pagination" style="margin:10px 0;">
   {section name=p loop=$TOTAL_PAGES start=1}
     {assign var=pnum value=$smarty.section.p.index}
-    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}&amp;pnum={$pnum}"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
+    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}&amp;pnum={$pnum}"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
   {/section}
 </div>
 {/if}

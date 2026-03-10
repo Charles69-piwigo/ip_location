@@ -52,6 +52,26 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, reason, blocked_at)
                 $page['infos'][] = sprintf(l10n('IP %s retirée de la blocklist.'), $ip);
             }
         }
+    } elseif ($_POST['action'] === 'import_ips') {
+        $lines  = explode("\n", str_replace("\r", '', $_POST['import_ips'] ?? ''));
+        $added  = 0;
+        $skipped = 0;
+        foreach ($lines as $line) {
+            $entry = trim($line);
+            if ($entry === '') continue;
+            // Accepte IPv4, préfixe IPv4 (ex: 82.97), CIDR, IPv6
+            if (!preg_match('/^[\d.:\/ a-fA-F]{2,50}$/', $entry)) { $skipped++; continue; }
+            $safe = pwg_db_real_escape_string($entry);
+            pwg_query('INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, reason, blocked_at)
+              VALUES (\'' . $safe . '\', \'import manuel\', NOW())
+              ON DUPLICATE KEY UPDATE blocked_at = blocked_at');
+            $added++;
+        }
+        if (!ip_location_write_htaccess()) {
+            $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+        } else {
+            $page['infos'][] = sprintf(l10n('%d IP(s) importée(s), %d ignorée(s).'), $added, $skipped);
+        }
     }
 }
 
@@ -79,6 +99,19 @@ while ($row = pwg_db_fetch_assoc($result)) {
     $stats[] = $row;
 }
 
+// ── Liste des pays pour filtre ────────────────────────────────────────────────
+
+$countries = [];
+$result = pwg_query('
+SELECT country, country_code, COUNT(*) AS visits
+  FROM ' . $prefixeTable . 'ip_location_log
+  WHERE country_code IS NOT NULL AND country_code != \'\'
+  GROUP BY country, country_code
+  ORDER BY country ASC');
+while ($row = pwg_db_fetch_assoc($result)) {
+    $countries[] = $row;
+}
+
 // ── Journal des visites (pagination 50) ───────────────────────────────────────
 
 $per_page     = 50;
@@ -86,12 +119,15 @@ $current_page = isset($_GET['pnum']) ? max(1, (int)$_GET['pnum']) : 1;
 $offset       = ($current_page - 1) * $per_page;
 
 $filter = isset($_GET['filter']) && in_array($_GET['filter'], ['normal','bot','blocked']) ? $_GET['filter'] : 'all';
-$filter_where = [
-    'all'     => '',
-    'normal'  => 'WHERE is_bot = 0 AND is_blocked = 0',
-    'bot'     => 'WHERE is_bot = 1',
-    'blocked' => 'WHERE is_blocked = 1',
-][$filter];
+$country_filter = isset($_GET['country']) ? strtoupper(trim($_GET['country'])) : '';
+if (!preg_match('/^[A-Z]{0,2}$/', $country_filter)) $country_filter = '';
+
+$where_parts = [];
+if ($filter === 'normal')  $where_parts[] = 'is_bot = 0 AND is_blocked = 0';
+if ($filter === 'bot')     $where_parts[] = 'is_bot = 1';
+if ($filter === 'blocked') $where_parts[] = 'is_blocked = 1';
+if ($country_filter !== '') $where_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
+$filter_where = empty($where_parts) ? '' : 'WHERE ' . implode(' AND ', $where_parts);
 
 $total_result = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log ' . $filter_where);
 list($total_visits) = pwg_db_fetch_row($total_result);
@@ -147,6 +183,8 @@ $template->assign([
     'CURRENT_PAGE'       => $current_page,
     'BASE_URL'           => get_root_url() . 'admin.php?page=plugin-ip_location',
     'FILTER'             => $filter,
+    'COUNTRY_FILTER'     => $country_filter,
+    'COUNTRIES'          => $countries,
     'TAB'                => $tab,
     'TOTAL_ALL'          => $total_all,
     'TOTAL_BOTS'         => $total_bots,
