@@ -17,12 +17,41 @@ DELETE FROM ' . $prefixeTable . 'ip_location_log
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $whitelist = trim($_POST['whitelist_ips'] ?? '');
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
+        $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
         conf_update_param('ip_location_blocked_countries', $blocked, true);
         conf_update_param('ip_location_whitelist', $whitelist, true);
         conf_update_param('ip_location_blocking_enabled', $blocking_enabled, true);
+        conf_update_param('ip_location_htaccess_enabled', $htaccess_enabled, true);
         conf_update_param('ip_location_max_records', (string)$max_records, true);
+        if (!ip_location_write_htaccess()) {
+            $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+        }
         $page['infos'][] = l10n('Configuration enregistrée.');
+    } elseif ($_POST['action'] === 'block_ip') {
+        $ip = trim($_POST['ip'] ?? '');
+        if ($ip) {
+            $reason = pwg_db_real_escape_string(trim($_POST['reason'] ?? ''));
+            pwg_query('
+INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, reason, blocked_at)
+  VALUES (\'' . pwg_db_real_escape_string($ip) . '\', \'' . $reason . '\', NOW())
+  ON DUPLICATE KEY UPDATE blocked_at = NOW(), reason = VALUES(reason)');
+            if (!ip_location_write_htaccess()) {
+                $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+            } else {
+                $page['infos'][] = sprintf(l10n('IP %s ajoutée à la blocklist.'), $ip);
+            }
+        }
+    } elseif ($_POST['action'] === 'unblock_ip') {
+        $ip = trim($_POST['ip'] ?? '');
+        if ($ip) {
+            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
+            if (!ip_location_write_htaccess()) {
+                $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+            } else {
+                $page['infos'][] = sprintf(l10n('IP %s retirée de la blocklist.'), $ip);
+            }
+        }
     }
 }
 
@@ -81,26 +110,51 @@ while ($row = pwg_db_fetch_assoc($result)) {
 
 // ── Rendu via template Piwigo ─────────────────────────────────────────────────
 
+$tab     = isset($_GET['tab']) && $_GET['tab'] === 'help' ? 'help' : 'config';
+$tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
+
 $blocked_countries  = conf_get_param('ip_location_blocked_countries', '');
 $whitelist_ips      = conf_get_param('ip_location_whitelist', '');
 $blocking_enabled   = conf_get_param('ip_location_blocking_enabled', '0') === '1';
+$htaccess_enabled   = conf_get_param('ip_location_htaccess_enabled', '0') === '1';
 $max_records        = (int)conf_get_param('ip_location_max_records', '10000');
+
+// ── Blocklist .htaccess ───────────────────────────────────────────────────────
+
+$blocklist = [];
+$result = pwg_query('SELECT ip, reason, blocked_at FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at DESC');
+while ($row = pwg_db_fetch_assoc($result)) {
+    $blocklist[] = $row;
+}
+$blocklist_ips = array_column($blocklist, 'ip');
+
+// Marquer les entrées du log dont l'IP est en blocklist
+foreach ($logs as &$log) {
+    $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
+}
+unset($log);
 
 $template->assign([
     'BLOCKED_COUNTRIES'  => $blocked_countries,
     'WHITELIST_IPS'      => $whitelist_ips,
     'BLOCKING_ENABLED'   => $blocking_enabled,
+    'HTACCESS_ENABLED'   => $htaccess_enabled,
     'MAX_RECORDS'        => $max_records,
-    'STATS'        => $stats,
-    'LOGS'         => $logs,
-    'TOTAL_PAGES'  => $total_pages,
-    'CURRENT_PAGE' => $current_page,
-    'BASE_URL'     => get_root_url() . 'admin.php?page=plugin-ip_location',
-    'FILTER'       => $filter,
-    'TOTAL_ALL'     => $total_all,
-    'TOTAL_BOTS'    => $total_bots,
-    'TOTAL_BLOCKED' => $total_blocked,
+    'BLOCKLIST'          => $blocklist,
+    'STATS'              => $stats,
+    'LOGS'               => $logs,
+    'TOTAL_PAGES'        => $total_pages,
+    'CURRENT_PAGE'       => $current_page,
+    'BASE_URL'           => get_root_url() . 'admin.php?page=plugin-ip_location',
+    'FILTER'             => $filter,
+    'TAB'                => $tab,
+    'TOTAL_ALL'          => $total_all,
+    'TOTAL_BOTS'         => $total_bots,
+    'TOTAL_BLOCKED'      => $total_blocked,
 ]);
+
+$template->set_filename('ip_location_tab', $tab_tpl);
+$template->assign_var_from_handle('TAB_CONTENT', 'ip_location_tab');
 
 $template->set_filename('ip_location_admin', IP_LOCATION_PATH . 'template/admin.tpl');
 $template->assign_var_from_handle('ADMIN_CONTENT', 'ip_location_admin');

@@ -1,13 +1,14 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.2
-Description: Log des visites des guests avec géolocalisation IP
+Version: 1.3
+Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: ip_location
 Has Settings: webmaster
 */
 // Versions
 /*
+    version 1.3 ajouté gestion htaccess + aide
     version 1.2 ajouté filtre et déf bot modifié 10/03/2026
     version 1.1 css 
     version 1.0 initial 05/03/2026
@@ -179,6 +180,44 @@ DELETE FROM ' . $prefixeTable . 'ip_location_log
         header('HTTP/1.0 403 Forbidden');
         exit;
     }
+}
+
+function ip_location_write_htaccess()
+{
+    global $prefixeTable;
+
+    $htaccess_path = PHPWG_ROOT_PATH . '.htaccess';
+
+    if (file_exists($htaccess_path)) {
+        if (!is_writable($htaccess_path)) return false;
+        $content = file_get_contents($htaccess_path);
+    } else {
+        if (!is_writable(PHPWG_ROOT_PATH)) return false;
+        $content = '';
+    }
+
+    // Supprimer la section existante
+    $content = preg_replace('/\n?# BEGIN ip_location\b.*?# END ip_location[^\n]*/s', '', $content);
+    $content = rtrim($content);
+
+    if (conf_get_param('ip_location_htaccess_enabled', '0') === '1') {
+        $result = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at ASC');
+        $ips = [];
+        while ($row = pwg_db_fetch_row($result)) {
+            $ips[] = $row[0];
+        }
+        if (!empty($ips)) {
+            $section = "\n\n# BEGIN ip_location\n<RequireAll>\n    Require all granted\n";
+            foreach ($ips as $ip) {
+                $section .= '    Require not ip ' . $ip . "\n";
+            }
+            $section .= "</RequireAll>\n# END ip_location";
+            $content .= $section;
+        }
+    }
+
+    file_put_contents($htaccess_path, $content);
+    return true;
 }
 
 function ip_location_is_bot($user_agent, $url, $ip, $prefixeTable)

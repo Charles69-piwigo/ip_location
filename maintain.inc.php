@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_cache (
   city         VARCHAR(64),
   resolved_at  DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
+
+    pwg_query('
+CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
+  ip           VARCHAR(45)  PRIMARY KEY,
+  reason       VARCHAR(255),
+  blocked_at   DATETIME     NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 }
 
 function plugin_deactivate()
@@ -44,4 +51,5 @@ function plugin_uninstall()
 
     pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_log');
     pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_cache');
+    pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_blocklist');
 }
