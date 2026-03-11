@@ -1,16 +1,18 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.3
+Version: 1.5
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: ip_location
 Has Settings: webmaster
 */
 // Versions
 /*
+    version 1.5 fallback multi-providers géolocalisation (ip-api.com > ipwho.is > geoplugin.net > ipapi.co)
+    version 1.4 config unifiée en une seule entrée _config
     version 1.3 ajouté gestion htaccess + aide
     version 1.2 ajouté filtre et déf bot modifié 10/03/2026
-    version 1.1 css 
+    version 1.1 css
     version 1.0 initial 05/03/2026
 */
 
@@ -26,6 +28,35 @@ define('IP_LOCATION_PATH', PHPWG_PLUGINS_PATH . 'ip_location/');
 
 // Chargement de la langue
 load_language('plugin.lang', IP_LOCATION_PATH . 'language/');
+
+/**
+ * Retourne la configuration du plugin (tableau, avec valeurs par défaut).
+ * Lit l'entrée unique 'ip_location' dans _config (valeur sérialisée).
+ */
+function ip_location_get_conf()
+{
+    global $conf;
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    $default = [
+        'blocked_countries' => '',
+        'whitelist'         => '',
+        'blocking_enabled'  => '0',
+        'htaccess_enabled'  => '0',
+        'max_records'       => 10000,
+    ];
+
+    if (!empty($conf['ip_location'])) {
+        $stored = @unserialize($conf['ip_location']);
+        if (is_array($stored)) {
+            $cache = array_merge($default, $stored);
+            return $cache;
+        }
+    }
+    $cache = $default;
+    return $cache;
+}
 
 // Hooks de visite
 add_event_handler('loc_begin_index',   'ip_location_log_visit');
@@ -54,7 +85,8 @@ function ip_location_log_visit()
     $ip_raw = $ip; // IP non échappée pour les comparaisons
 
     // Liste blanche d'IPs — toujours autorisées
-    $whitelist_raw = conf_get_param('ip_location_whitelist', '');
+    $plugin_conf  = ip_location_get_conf();
+    $whitelist_raw = $plugin_conf['whitelist'];
     $whitelist = array_filter(array_map('trim', explode("\n", $whitelist_raw)));
     if (in_array($ip_raw, $whitelist)) {
         return;
@@ -72,24 +104,61 @@ SELECT country, country_code, city
     if (pwg_db_num_rows($result) > 0) {
         $geo = pwg_db_fetch_assoc($result);
     } else {
-        // Appel à ip-api.com avec timeout 2 s
+        // Résolution géo avec fallback multi-providers (timeout 2s chacun)
         $context = stream_context_create([
-            'http' => [
-                'timeout' => 2,
-            ],
+            'http' => ['timeout' => 2],
+            'ssl'  => ['verify_peer' => false, 'verify_peer_name' => false],
         ]);
 
-        $api_url  = 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city';
-        $response = @file_get_contents($api_url, false, $context);
+        $providers = [
+            [
+                'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city',
+                'country'      => 'country',
+                'country_code' => 'countryCode',
+                'city'         => 'city',
+            ],
+            [
+                'url'          => 'https://ipwho.is/' . rawurlencode($ip),
+                'country'      => 'country',
+                'country_code' => 'country_code',
+                'city'         => 'city',
+                'success'      => 'success',
+            ],
+            [
+                'url'          => 'https://ssl.geoplugin.net/json.gp?ip=' . rawurlencode($ip),
+                'country'      => 'geoplugin_countryName',
+                'country_code' => 'geoplugin_countryCode',
+                'city'         => 'geoplugin_city',
+            ],
+            [
+                'url'          => 'https://ipapi.co/' . rawurlencode($ip) . '/json/',
+                'country'      => 'country_name',
+                'country_code' => 'country_code',
+                'city'         => 'city',
+            ],
+        ];
 
         $geo = ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
 
-        if ($response !== false) {
+        foreach ($providers as $provider) {
+            $response = @file_get_contents($provider['url'], false, $context);
+            if ($response === false) continue;
+
             $data = json_decode($response, true);
-            if (is_array($data) && isset($data['country'])) {
-                $geo['country']      = $data['country']     ?? 'Unknown';
-                $geo['country_code'] = $data['countryCode'] ?? '';
-                $geo['city']         = $data['city']        ?? 'Unknown';
+            if (!is_array($data)) continue;
+
+            // Vérification champ 'success' (ipwho.is retourne success=false si IP invalide)
+            if (isset($provider['success']) && empty($data[$provider['success']])) continue;
+
+            $country      = !empty($data[$provider['country']])      ? $data[$provider['country']]      : '';
+            $country_code = !empty($data[$provider['country_code']]) ? $data[$provider['country_code']] : '';
+            $city         = !empty($data[$provider['city']])         ? $data[$provider['city']]         : '';
+
+            if (!empty($country) && $country !== 'Unknown') {
+                $geo['country']      = $country;
+                $geo['country_code'] = $country_code;
+                $geo['city']         = !empty($city) ? $city : 'Unknown';
+                break; // Provider OK, on arrête
             }
         }
 
@@ -122,9 +191,8 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
 
     // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer)
     $is_blocked = 0;
-    if (conf_get_param('ip_location_blocking_enabled', '0') === '1') {
-        $blocked_raw = conf_get_param('ip_location_blocked_countries', '');
-        $blocked = array_filter(array_map('trim', explode(',', strtoupper($blocked_raw))));
+    if ($plugin_conf['blocking_enabled'] === '1') {
+        $blocked = array_filter(array_map('trim', explode(',', strtoupper($plugin_conf['blocked_countries']))));
         if (!empty($blocked) && in_array(strtoupper($geo['country_code']), $blocked)) {
             $is_blocked = 1;
         }
@@ -163,7 +231,7 @@ UPDATE ' . $prefixeTable . 'ip_location_log
     }
 
     // Vidage automatique : supprimer les plus anciennes entrées si dépassement du seuil
-    $max_records = (int)conf_get_param('ip_location_max_records', '10000');
+    $max_records = (int)$plugin_conf['max_records'];
     if ($max_records > 0) {
         $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
         list($count) = pwg_db_fetch_row($r);
@@ -200,7 +268,7 @@ function ip_location_write_htaccess()
     $content = preg_replace('/\n?# BEGIN ip_location\b.*?# END ip_location[^\n]*/s', '', $content);
     $content = rtrim($content);
 
-    if (conf_get_param('ip_location_htaccess_enabled', '0') === '1') {
+    if (ip_location_get_conf()['htaccess_enabled'] === '1') {
         $result = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at ASC');
         $ips = [];
         while ($row = pwg_db_fetch_row($result)) {

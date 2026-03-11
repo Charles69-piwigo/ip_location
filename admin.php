@@ -19,11 +19,13 @@ DELETE FROM ' . $prefixeTable . 'ip_location_log
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
         $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
-        conf_update_param('ip_location_blocked_countries', $blocked, true);
-        conf_update_param('ip_location_whitelist', $whitelist, true);
-        conf_update_param('ip_location_blocking_enabled', $blocking_enabled, true);
-        conf_update_param('ip_location_htaccess_enabled', $htaccess_enabled, true);
-        conf_update_param('ip_location_max_records', (string)$max_records, true);
+        conf_update_param('ip_location', serialize([
+            'blocked_countries' => $blocked,
+            'whitelist'         => $whitelist,
+            'blocking_enabled'  => $blocking_enabled,
+            'htaccess_enabled'  => $htaccess_enabled,
+            'max_records'       => $max_records,
+        ]));
         if (!ip_location_write_htaccess()) {
             $page['errors'][] = l10n('.htaccess non accessible en écriture.');
         }
@@ -149,11 +151,12 @@ while ($row = pwg_db_fetch_assoc($result)) {
 $tab     = isset($_GET['tab']) && $_GET['tab'] === 'help' ? 'help' : 'config';
 $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 
-$blocked_countries  = conf_get_param('ip_location_blocked_countries', '');
-$whitelist_ips      = conf_get_param('ip_location_whitelist', '');
-$blocking_enabled   = conf_get_param('ip_location_blocking_enabled', '0') === '1';
-$htaccess_enabled   = conf_get_param('ip_location_htaccess_enabled', '0') === '1';
-$max_records        = (int)conf_get_param('ip_location_max_records', '10000');
+$plugin_conf        = ip_location_get_conf();
+$blocked_countries  = $plugin_conf['blocked_countries'];
+$whitelist_ips      = $plugin_conf['whitelist'];
+$blocking_enabled   = $plugin_conf['blocking_enabled'] === '1';
+$htaccess_enabled   = $plugin_conf['htaccess_enabled'] === '1';
+$max_records        = (int)$plugin_conf['max_records'];
 
 // ── Blocklist .htaccess ───────────────────────────────────────────────────────
 

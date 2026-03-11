@@ -57,3 +57,4 @@ $lang['Blocage par pays']              = 'Country blocking';
 $lang['Blocage .htaccess (blocklist IP)'] = '.htaccess blocking (IP blocklist)';
 $lang['Liste blanche d\'IPs']          = 'IP whitelist';
 $lang['Filtres du journal']            = 'Log filters';
+$lang['Géolocalisation via fallback multi-providers'] = 'Geolocation uses a multi-provider fallback: ip-api.com → ipwho.is → geoplugin.net → ipapi.co. The first one to respond is used. Results are cached to avoid repeated calls.';

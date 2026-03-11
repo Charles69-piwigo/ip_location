@@ -6,7 +6,7 @@
   <h4>{'Enregistrement des visites'|@translate}</h4>
   <ul>
     <li>{'Seuls les visiteurs non connectés (guests) sont enregistrés.'|@translate}</li>
-    <li>{'La géolocalisation est effectuée via ip-api.com (gratuit, limité à 45 req/min). Les résultats sont mis en cache pour éviter des appels répétés.'|@translate}</li>
+    <li>{'Géolocalisation via fallback multi-providers'|@translate}</li>
     <li>{'Les pages enregistrées sont la page d\'accueil et les pages photos.'|@translate}</li>
   </ul>
 
