@@ -8,9 +8,14 @@ Has Settings: webmaster
 */
 // Versions
 /*
-    version 1.5 fallback multi-providers géolocalisation (ip-api.com > ipwho.is > geoplugin.net > ipapi.co)
-    version 1.4 config unifiée en une seule entrée _config
-    version 1.3 ajouté gestion htaccess + aide
+    version 1.5 11/03/2026
+        cache géo : expiry 30 jours + limite 5000 entrées
+        tableau IPs de .htaccess avec pays/ville, suppression éditeur textarea
+        fallback multi-providers géolocalisation (ip-api.com > ipwho.is > geoplugin.net > ipapi.co)
+    version 1.4 10/03/2026
+        config unifiée en une seule entrée _config
+    version 1.3 10/03/2026
+        ajouté gestion htaccess + aide
     version 1.2 ajouté filtre et déf bot modifié 10/03/2026
     version 1.1 css
     version 1.0 initial 05/03/2026
@@ -94,11 +99,19 @@ function ip_location_log_visit()
 
     $ip = pwg_db_real_escape_string($ip);
 
-    // Vérification du cache
+    // Blocklist manuelle — blocage immédiat par IP individuelle
+    $r = pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_blocklist WHERE ip = \'' . $ip . '\'');
+    if (pwg_db_num_rows($r) > 0) {
+        header('HTTP/1.0 403 Forbidden');
+        exit;
+    }
+
+    // Vérification du cache (entrées valides moins de 30 jours)
     $query = '
 SELECT country, country_code, city
   FROM ' . $prefixeTable . 'ip_location_cache
-  WHERE ip = \'' . $ip . '\';';
+  WHERE ip = \'' . $ip . '\'
+    AND resolved_at >= NOW() - INTERVAL 30 DAY;';
     $result = pwg_query($query);
 
     if (pwg_db_num_rows($result) > 0) {
@@ -179,6 +192,19 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
     city         = VALUES(city),
     resolved_at  = NOW();';
         pwg_query($query);
+
+        // Nettoyage du cache : supprimer les entrées > 30 jours
+        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
+  WHERE resolved_at < NOW() - INTERVAL 30 DAY');
+
+        // Limite de taille : garder les 5000 entrées les plus récentes
+        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_cache');
+        list($cache_count) = pwg_db_fetch_row($r);
+        if ($cache_count > 5000) {
+            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
+  ORDER BY resolved_at ASC
+  LIMIT ' . ($cache_count - 5000));
+        }
     }
 
     // Construction de l'URL visitée

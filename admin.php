@@ -4,75 +4,71 @@ defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
-    if ($_POST['action'] === 'purge_all') {
-        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_log');
-        $page['infos'][] = l10n('Log vidé avec succès.');
-    } elseif ($_POST['action'] === 'purge_old') {
-        $nb_days = isset($_POST['days']) ? max(1, (int)$_POST['days']) : 30;
-        pwg_query('
-DELETE FROM ' . $prefixeTable . 'ip_location_log
-  WHERE visit_date < DATE_SUB(NOW(), INTERVAL ' . $nb_days . ' DAY)');
-        $page['infos'][] = sprintf(l10n('Entrées de plus de %d jours supprimées.'), $nb_days);
+    if ($_POST['action'] === 'toggle_htaccess') {
+        $conf_cur = ip_location_get_conf();
+        $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, ['htaccess_enabled' => $htaccess_enabled])));
+        if (!ip_location_write_htaccess()) {
+            $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+        }
+        $page['infos'][] = l10n('Configuration enregistrée.');
+    } elseif ($_POST['action'] === 'purge_before_date') {
+        $date = trim($_POST['before_date'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_log
+  WHERE visit_date < \'' . pwg_db_real_escape_string($date) . '\'');
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged');
+        }
+    } elseif ($_POST['action'] === 'save_whitelist') {
+        $conf_cur = ip_location_get_conf();
+        $whitelist = trim($_POST['whitelist_ips'] ?? '');
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, ['whitelist' => $whitelist])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=whitelist_saved');
     } elseif ($_POST['action'] === 'save_config') {
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
-        $whitelist = trim($_POST['whitelist_ips'] ?? '');
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
         $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
-        conf_update_param('ip_location', serialize([
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'blocked_countries' => $blocked,
-            'whitelist'         => $whitelist,
             'blocking_enabled'  => $blocking_enabled,
             'htaccess_enabled'  => $htaccess_enabled,
             'max_records'       => $max_records,
-        ]));
+        ])));
         if (!ip_location_write_htaccess()) {
             $page['errors'][] = l10n('.htaccess non accessible en écriture.');
         }
         $page['infos'][] = l10n('Configuration enregistrée.');
     } elseif ($_POST['action'] === 'block_ip') {
-        $ip = trim($_POST['ip'] ?? '');
+        $ip      = trim($_POST['ip'] ?? '');
+        $country = trim($_POST['country'] ?? '');
+        $city    = trim($_POST['city'] ?? '');
         if ($ip) {
-            $reason = pwg_db_real_escape_string(trim($_POST['reason'] ?? ''));
-            pwg_query('
-INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, reason, blocked_at)
-  VALUES (\'' . pwg_db_real_escape_string($ip) . '\', \'' . $reason . '\', NOW())
-  ON DUPLICATE KEY UPDATE blocked_at = NOW(), reason = VALUES(reason)');
-            if (!ip_location_write_htaccess()) {
-                $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+            $whitelist_raw = ip_location_get_conf()['whitelist'] ?? '';
+            $whitelist = array_filter(array_map('trim', explode("\n", $whitelist_raw)));
+            if (in_array($ip, $whitelist)) {
+                $page['errors'][] = sprintf(l10n('IP %s est dans la liste blanche.'), $ip);
             } else {
-                $page['infos'][] = sprintf(l10n('IP %s ajoutée à la blocklist.'), $ip);
+                pwg_query('
+INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, blocked_at)
+  VALUES (
+    \'' . pwg_db_real_escape_string($ip) . '\',
+    \'' . pwg_db_real_escape_string($country) . '\',
+    \'' . pwg_db_real_escape_string($city) . '\',
+    NOW()
+  )
+  ON DUPLICATE KEY UPDATE blocked_at = NOW()');
+                ip_location_write_htaccess();
+                $page['infos'][] = sprintf(l10n('IP %s ajoutée au .htaccess.'), $ip);
             }
         }
     } elseif ($_POST['action'] === 'unblock_ip') {
         $ip = trim($_POST['ip'] ?? '');
         if ($ip) {
             pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
-            if (!ip_location_write_htaccess()) {
-                $page['errors'][] = l10n('.htaccess non accessible en écriture.');
-            } else {
-                $page['infos'][] = sprintf(l10n('IP %s retirée de la blocklist.'), $ip);
-            }
-        }
-    } elseif ($_POST['action'] === 'import_ips') {
-        $lines  = explode("\n", str_replace("\r", '', $_POST['import_ips'] ?? ''));
-        $added  = 0;
-        $skipped = 0;
-        foreach ($lines as $line) {
-            $entry = trim($line);
-            if ($entry === '') continue;
-            // Accepte IPv4, préfixe IPv4 (ex: 82.97), CIDR, IPv6
-            if (!preg_match('/^[\d.:\/ a-fA-F]{2,50}$/', $entry)) { $skipped++; continue; }
-            $safe = pwg_db_real_escape_string($entry);
-            pwg_query('INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, reason, blocked_at)
-              VALUES (\'' . $safe . '\', \'import manuel\', NOW())
-              ON DUPLICATE KEY UPDATE blocked_at = blocked_at');
-            $added++;
-        }
-        if (!ip_location_write_htaccess()) {
-            $page['errors'][] = l10n('.htaccess non accessible en écriture.');
-        } else {
-            $page['infos'][] = sprintf(l10n('%d IP(s) importée(s), %d ignorée(s).'), $added, $skipped);
+            ip_location_write_htaccess();
+            $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $ip);
         }
     }
 }
@@ -151,6 +147,11 @@ while ($row = pwg_db_fetch_assoc($result)) {
 $tab     = isset($_GET['tab']) && $_GET['tab'] === 'help' ? 'help' : 'config';
 $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 
+if (isset($_GET['msg'])) {
+    if ($_GET['msg'] === 'purged')          $page['infos'][] = l10n('Logs supprimés.');
+    if ($_GET['msg'] === 'whitelist_saved') $page['infos'][] = l10n('Liste blanche enregistrée.');
+}
+
 $plugin_conf        = ip_location_get_conf();
 $blocked_countries  = $plugin_conf['blocked_countries'];
 $whitelist_ips      = $plugin_conf['whitelist'];
@@ -158,10 +159,10 @@ $blocking_enabled   = $plugin_conf['blocking_enabled'] === '1';
 $htaccess_enabled   = $plugin_conf['htaccess_enabled'] === '1';
 $max_records        = (int)$plugin_conf['max_records'];
 
-// ── Blocklist .htaccess ───────────────────────────────────────────────────────
+// ── Blocklist ip_location_blocklist ───────────────────────────────────────────
 
 $blocklist = [];
-$result = pwg_query('SELECT ip, reason, blocked_at FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at DESC');
+$result = pwg_query('SELECT ip, country, city, blocked_at FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at DESC');
 while ($row = pwg_db_fetch_assoc($result)) {
     $blocklist[] = $row;
 }
@@ -188,10 +189,10 @@ $template->assign([
     'FILTER'             => $filter,
     'COUNTRY_FILTER'     => $country_filter,
     'COUNTRIES'          => $countries,
-    'TAB'                => $tab,
-    'TOTAL_ALL'          => $total_all,
-    'TOTAL_BOTS'         => $total_bots,
-    'TOTAL_BLOCKED'      => $total_blocked,
+    'TAB'           => $tab,
+    'TOTAL_ALL'     => $total_all,
+    'TOTAL_BOTS'    => $total_bots,
+    'TOTAL_BLOCKED' => $total_blocked,
 ]);
 
 $template->set_filename('ip_location_tab', $tab_tpl);

@@ -1,3 +1,73 @@
+<!-- ── IPs de .htaccess ───────────────────────────────────────────────────── -->
+<h3>{'IPs de .htaccess'|@translate}</h3>
+
+<div style="margin:0 0 1em 20px;">
+  <form method="post" action="" style="margin:0;">
+    <input type="hidden" name="action" value="toggle_htaccess">
+    <label>
+      <input type="checkbox" name="htaccess_enabled" value="1"{if $HTACCESS_ENABLED} checked{/if}
+             onchange="this.form.submit()">
+      <strong style="display:inline;">{'Activer le blocage .htaccess'|@translate}</strong>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'|@translate}</em>
+  </form>
+</div>
+
+{if $BLOCKLIST|@count == 0}
+<p style="margin-left:20px;color:#666;">{'Aucune IP dans le .htaccess.'|@translate}</p>
+{else}
+<table class="ipl-table">
+  <thead>
+    <tr>
+      <th>{'IP'|@translate}</th>
+      <th>{'Date'|@translate}</th>
+      <th>{'Pays'|@translate}</th>
+      <th>{'Ville'|@translate}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {foreach from=$BLOCKLIST item=bl}
+    <tr>
+      <td><strong>{$bl.ip|escape}</strong></td>
+      <td>{$bl.blocked_at|escape}</td>
+      <td>{$bl.country|escape}</td>
+      <td>{$bl.city|escape}</td>
+      <td>
+        <form method="post" action="" style="margin:0;">
+          <input type="hidden" name="action" value="unblock_ip">
+          <input type="hidden" name="ip" value="{$bl.ip|escape}">
+          <button type="submit" class="ipl-btn-unblock">{'Retirer du .htaccess'|@translate}</button>
+        </form>
+      </td>
+    </tr>
+  {/foreach}
+  </tbody>
+</table>
+{/if}
+
+<!-- Ajout manuel -->
+<form method="post" action="" style="margin:0.8em 0 1.5em 20px;">
+  <input type="hidden" name="action" value="block_ip">
+  <label style="display:inline;font-size:0.9em;">{'Ajouter une IP manuellement'|@translate} :</label>
+  <input type="text" name="ip" value="" placeholder="ex: 1.2.3.4 ou 45.35.0.0/16"
+         style="width:220px;display:inline;margin:0 6px;">
+  <button type="submit" class="buttonLike">{'Ajouter au .htaccess'|@translate}</button>
+</form>
+
+<!-- Liste blanche -->
+<form method="post" action="" class="ipl-config" style="margin:0 0 2em 20px;padding:0.8em;background:#fffbe6;border:1px solid #e8d;border-radius:4px;max-width:460px;">
+  <input type="hidden" name="action" value="save_whitelist">
+  <p style="margin:0 0 0.5em 0;">
+    <label><strong>{'IPs toujours autorisées'|@translate}</strong>
+      <em style="font-weight:normal;font-size:0.85em;color:#666;"> &mdash; {'une par ligne — ces IPs ne seront jamais bloquées'|@translate}</em>
+    </label>
+  </p>
+  <textarea name="whitelist_ips" rows="4" style="width:100%;display:block;margin:0 0 0.5em 0;">{$WHITELIST_IPS|escape}</textarea>
+  <button type="submit" class="buttonLike">{'Enregistrer'|@translate}</button>
+</form>
+
+<!-- ── Configuration ─────────────────────────────────────────────────────── -->
 <form method="post" action="" class="ipl-config">
   <input type="hidden" name="action" value="save_config">
   <p>
@@ -12,31 +82,10 @@
            style="width:400px;" placeholder="">
   </p>
   <p>
-    <label><strong>{'IPs toujours autorisées'|@translate}</strong> (une par ligne) :</label><br>
-    <textarea name="whitelist_ips" rows="5" style="width:400px;">{$WHITELIST_IPS|escape}</textarea>
-  </p>
-  <p>
-    <label class="ipl-inline">
-      <input type="checkbox" name="htaccess_enabled" value="1"{if $HTACCESS_ENABLED} checked{/if}>
-      <strong style="display:inline;">{'Activer le blocage .htaccess'|@translate}</strong>
-    </label>
-    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'|@translate}</em>
-  </p>
-  <p>
     <label><strong>{'Vidage automatique'|@translate}</strong> &mdash; {'supprimer les plus anciennes entrées au-delà de'|@translate}
       <input type="number" name="max_records" value="{$MAX_RECORDS}" min="0" style="width:80px;display:inline;"> {'enregistrements'|@translate}
       <em style="font-size:0.85em;color:#666;">({'0 = désactivé'|@translate})</em>
     </label>
   </p>
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
-</form>
-
-<form method="post" action="" class="ipl-config" style="margin-top:1.5em;">
-  <input type="hidden" name="action" value="import_ips">
-  <p>
-    <label><strong>{'Import d\'IPs dans la blocklist'|@translate}</strong> &mdash;
-    {'une IP ou préfixe par ligne (ex: 82.97 ou 74.7.23.45 ou 74.7.0.0/24)'|@translate} :</label><br>
-    <textarea name="import_ips" rows="6" style="width:400px;" placeholder=""></textarea>
-  </p>
-  <button type="submit" class="buttonLike">{'Importer'|@translate}</button>
 </form>

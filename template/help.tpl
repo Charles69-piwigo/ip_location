@@ -24,17 +24,23 @@
     <li>{'Les visites bloquées sont quand même enregistrées dans le journal (badge BLOQUÉ).'|@translate}</li>
   </ul>
 
-  <h4>{'Liste blanche d\'IPs (blocage par pays)'|@translate}</h4>
+  <h4>{'Liste blanche d\'IPs'|@translate}</h4>
   <ul>
     <li>{'Saisir une IP par ligne dans le champ "IPs toujours autorisées" de la configuration.'|@translate}</li>
-    <li>{'Ces IPs ne seront jamais bloquées par le blocage pays, même si leur pays est dans la liste.'|@translate}</li>
-    <li>{'Utile pour exclure votre propre IP lors des tests.'|@translate}</li>
+    <li>{'Ces IPs ne seront jamais bloquées par le blocage pays.'|@translate}</li>
+    <li>{'Il est également impossible de les ajouter à la blocklist .htaccess : un message d\'erreur s\'affiche si vous tentez de le faire.'|@translate}</li>
+    <li>{'Utile pour protéger votre propre IP afin de ne pas vous bloquer accidentellement.'|@translate}</li>
   </ul>
 
   <h4>{'Blocage .htaccess (blocklist IP)'|@translate}</h4>
   <ul>
-    <li>{'Cliquer sur Bloquer dans le journal ajoute l\'IP dans la blocklist et réécrit le .htaccess.'|@translate}</li>
-    <li>{'Le blocage Apache est plus efficace : la requête est rejetée avant que PHP ne soit chargé.'|@translate}</li>
+    <li>{'Dans le journal, chaque ligne dispose de deux boutons :'|@translate}
+      <ul>
+        <li><strong>{'Ajouter IP'|@translate}</strong> {'→ ajoute l\'adresse IP complète (ex : 47.146.49.25).'|@translate}</li>
+        <li><strong>{'Ajouter /16'|@translate}</strong> {'→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.'|@translate}</li>
+      </ul>
+    </li>
+    <li>{'Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.'|@translate}</li>
     <li>{'Décocher "Activer le blocage .htaccess" supprime la section du .htaccess sans vider la liste — utile pour observer sans bloquer.'|@translate}</li>
     <li>{'La section ajoutée dans le .htaccess est balisée'|@translate} <code># BEGIN ip_location</code> / <code># END ip_location</code>{'.'|@translate}</li>
   </ul>
@@ -43,15 +49,7 @@
   <ul>
     <li>{'À chaque visite enregistrée, si le nombre d\'entrées dépasse le seuil configuré, les plus anciennes sont supprimées.'|@translate}</li>
     <li>{'Mettre 0 pour désactiver le vidage automatique.'|@translate}</li>
-    <li>{'La purge manuelle (section Purge) permet de vider tout le journal ou les entrées plus anciennes qu\'un nombre de jours donné.'|@translate}</li>
-  </ul>
-
-  <h4>{'Import d\'IPs dans la blocklist'|@translate}</h4>
-  <ul>
-    <li>{'Le champ "Import d\'IPs" (onglet Configuration) permet d\'ajouter plusieurs IPs ou plages d\'un coup, une par ligne.'|@translate}</li>
-    <li>{'Formats acceptés : IP complète (<code>74.7.23.45</code>), préfixe (<code>82.97</code>), CIDR (<code>82.97.0.0/24</code>).'|@translate}</li>
-    <li>{'Les entrées déjà présentes dans la blocklist sont ignorées sans erreur.'|@translate}</li>
-    <li>{'Le .htaccess est mis à jour une seule fois après l\'import complet.'|@translate}</li>
+    <li>{'La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.'|@translate}</li>
   </ul>
 
   <h4>{'Filtres du journal'|@translate}</h4>

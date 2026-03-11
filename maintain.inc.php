@@ -61,9 +61,24 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_cache (
     pwg_query('
 CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   ip           VARCHAR(45)  PRIMARY KEY,
-  reason       VARCHAR(255),
+  country      VARCHAR(64),
+  city         VARCHAR(64),
   blocked_at   DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
+
+    // Migration v1.5 → v1.6 : remplacer reason par country + city
+    $cols = [];
+    $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
+    while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];
+    if (in_array('reason', $cols)) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist DROP COLUMN reason');
+    }
+    if (!in_array('country', $cols)) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist ADD COLUMN country VARCHAR(64) DEFAULT NULL AFTER ip');
+    }
+    if (!in_array('city', $cols)) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist ADD COLUMN city VARCHAR(64) DEFAULT NULL AFTER country');
+    }
 }
 
 function plugin_deactivate()

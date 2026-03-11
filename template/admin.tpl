@@ -37,6 +37,12 @@
   .ipl-config strong { display:block; }
   .ipl-config input[type="text"], .ipl-config textarea { display:block; margin:0; }
 </style>
+<script>
+if (window.location.search.indexOf('msg=') !== -1) {
+  var url = window.location.href.replace(/[?&]msg=[^&]*/g, '').replace(/\?&/, '?').replace(/[?&]$/, '');
+  history.replaceState(null, '', url);
+}
+</script>
 
 <div class="titrePage">
   <h2>{'IP Location'|@translate} &mdash; {'Journal des visites'|@translate}</h2>
@@ -115,7 +121,7 @@
 <table class="ipl-table">
   <thead>
     <tr>
-      <th>{'Blocklist'|@translate}</th>
+      <th>{'htaccess'|@translate}</th>
       <th>{'Date'|@translate}</th>
       <th>{'IP'|@translate}</th>
       <th>{'Pays'|@translate}</th>
@@ -135,14 +141,19 @@
           <form method="post" action="" style="margin:0;">
             <input type="hidden" name="action" value="unblock_ip">
             <input type="hidden" name="ip" value="{$log.ip|escape}">
-            <button type="submit" class="ipl-btn-unblock">{'Débloquer'|@translate}</button>
+            <button type="submit" class="ipl-btn-unblock">{'Retirer du .htaccess'|@translate}</button>
           </form>
         {else}
-          <form method="post" action="" style="margin:0;">
+          <form method="post" action="" style="margin:0;" id="blk_{$log.id}">
             <input type="hidden" name="action" value="block_ip">
-            <input type="hidden" name="ip" value="{$log.ip|escape}">
-            <button type="submit" class="ipl-btn-block">{'Bloquer'|@translate}</button>
-            {if $log.is_blocked}<br><em style="font-size:0.75em;color:#800;">{'bloqué par pays'|@translate}</em>{/if}
+            <input type="hidden" name="ip" id="blk_ip_{$log.id}" value="{$log.ip|escape}">
+            <input type="hidden" name="country" value="{$log.country|escape}">
+            <input type="hidden" name="city" value="{$log.city|escape}">
+            <button type="submit" class="ipl-btn-block" style="margin-bottom:2px;">{'Ajouter IP'|@translate}</button>
+            <button type="submit" class="ipl-btn-block"
+              onclick="document.getElementById('blk_ip_{$log.id}').value='{$log.ip|escape}'.split('.').slice(0,2).join('.');">
+              {'Ajouter /16'|@translate}
+            </button>
           </form>
         {/if}
       </td>
@@ -170,54 +181,13 @@
 </div>
 {/if}
 
-<!-- ── Blocklist .htaccess ───────────────────────────────────────────────── -->
-<h3>{'IPs bloquées (.htaccess)'|@translate}</h3>
+<!-- ── Gestion de l'historique ───────────────────────────────────────────── -->
+<h3>{'Gestion de l\'historique'|@translate}</h3>
 
-{if $BLOCKLIST|@count == 0}
-<p style="margin-left:20px;color:#666;">{'Aucune IP dans la blocklist.'|@translate}</p>
-{else}
-<table class="ipl-table">
-  <thead>
-    <tr>
-      <th>{'IP'|@translate}</th>
-      <th>{'Raison'|@translate}</th>
-      <th>{'Date de blocage'|@translate}</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-  {foreach from=$BLOCKLIST item=bl}
-    <tr>
-      <td><strong>{$bl.ip|escape}</strong></td>
-      <td>{$bl.reason|escape}</td>
-      <td>{$bl.blocked_at|escape}</td>
-      <td>
-        <form method="post" action="" style="margin:0;">
-          <input type="hidden" name="action" value="unblock_ip">
-          <input type="hidden" name="ip" value="{$bl.ip|escape}">
-          <button type="submit" class="ipl-btn-unblock">{'Débloquer'|@translate}</button>
-        </form>
-      </td>
-    </tr>
-  {/foreach}
-  </tbody>
-</table>
-{/if}
-
-<!-- ── Purge ─────────────────────────────────────────────────────────────── -->
-<h3>{'Purge'|@translate}</h3>
-
-<form method="post" action="" style="margin-bottom:10px;"
-      onsubmit="return confirm('{'Vider tout le log ?'|@translate}');">
-  <input type="hidden" name="action" value="purge_all">
-  <button type="submit" class="buttonLike">{'Vider tout'|@translate}</button>
-</form>
-
-<form method="post" action="">
-  <input type="hidden" name="action" value="purge_old">
-  {'Purge par ancienneté'|@translate} :
-  <input type="number" name="days" value="30" min="1" style="width:60px;">
-  {'jours'|@translate}
+<form method="post" action="" style="margin-left:20px;">
+  <input type="hidden" name="action" value="purge_before_date">
+  {'Supprimer les logs avant le'|@translate}
+  <input type="date" name="before_date" style="display:inline;margin:0 6px;">
   <button type="submit" class="buttonLike">{'Supprimer'|@translate}</button>
 </form>
 {/if}
