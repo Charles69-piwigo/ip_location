@@ -4,42 +4,34 @@ defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
-    if ($_POST['action'] === 'toggle_htaccess') {
-        $conf_cur = ip_location_get_conf();
-        $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
-        conf_update_param('ip_location', serialize(array_merge($conf_cur, ['htaccess_enabled' => $htaccess_enabled])));
-        if (!ip_location_write_htaccess()) {
-            $page['errors'][] = l10n('.htaccess non accessible en écriture.');
-        }
-        $page['infos'][] = l10n('Configuration enregistrée.');
-    } elseif ($_POST['action'] === 'purge_before_date') {
+    if ($_POST['action'] === 'purge_before_date') {
         $date = trim($_POST['before_date'] ?? '');
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_log
   WHERE visit_date < \'' . pwg_db_real_escape_string($date) . '\'');
             redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged');
         }
-    } elseif ($_POST['action'] === 'save_whitelist') {
-        $conf_cur = ip_location_get_conf();
+    } elseif ($_POST['action'] === 'save_htaccess_config') {
+        $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $whitelist = trim($_POST['whitelist_ips'] ?? '');
-        conf_update_param('ip_location', serialize(array_merge($conf_cur, ['whitelist' => $whitelist])));
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=whitelist_saved');
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'htaccess_enabled' => $htaccess_enabled,
+            'whitelist'        => $whitelist,
+        ])));
+        $htaccess_ok = ip_location_write_htaccess();
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . ($htaccess_ok ? 'config_saved' : 'htaccess_error'));
     } elseif ($_POST['action'] === 'save_config') {
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
-        $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'blocked_countries' => $blocked,
             'blocking_enabled'  => $blocking_enabled,
-            'htaccess_enabled'  => $htaccess_enabled,
             'max_records'       => $max_records,
         ])));
-        if (!ip_location_write_htaccess()) {
-            $page['errors'][] = l10n('.htaccess non accessible en écriture.');
-        }
-        $page['infos'][] = l10n('Configuration enregistrée.');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'block_ip') {
         $ip      = trim($_POST['ip'] ?? '');
         $country = trim($_POST['country'] ?? '');
@@ -60,7 +52,7 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, block
   )
   ON DUPLICATE KEY UPDATE blocked_at = NOW()');
                 ip_location_write_htaccess();
-                $page['infos'][] = sprintf(l10n('IP %s ajoutée au .htaccess.'), $ip);
+                redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_blocked&ip=' . urlencode($ip));
             }
         }
     } elseif ($_POST['action'] === 'unblock_ip') {
@@ -68,7 +60,7 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, block
         if ($ip) {
             pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
             ip_location_write_htaccess();
-            $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $ip);
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_unblocked&ip=' . urlencode($ip));
         }
     }
 }
@@ -148,8 +140,11 @@ $tab     = isset($_GET['tab']) && $_GET['tab'] === 'help' ? 'help' : 'config';
 $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 
 if (isset($_GET['msg'])) {
-    if ($_GET['msg'] === 'purged')          $page['infos'][] = l10n('Logs supprimés.');
-    if ($_GET['msg'] === 'whitelist_saved') $page['infos'][] = l10n('Liste blanche enregistrée.');
+    if ($_GET['msg'] === 'purged')       $page['infos'][] = l10n('Logs supprimés.');
+    if ($_GET['msg'] === 'config_saved') $page['infos'][] = l10n('Configuration enregistrée.');
+    if ($_GET['msg'] === 'htaccess_error')  $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+    if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s ajoutée au .htaccess.'), $_GET['ip'] ?? '');
+    if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $_GET['ip'] ?? '');
 }
 
 $plugin_conf        = ip_location_get_conf();

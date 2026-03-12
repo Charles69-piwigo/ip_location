@@ -27,7 +27,7 @@ function plugin_activate($plugin_id, $plugin_version, &$errors)
             'whitelist'         => conf_get_param('ip_location_whitelist', ''),
             'blocking_enabled'  => conf_get_param('ip_location_blocking_enabled', '0'),
             'htaccess_enabled'  => conf_get_param('ip_location_htaccess_enabled', '0'),
-            'max_records'       => (int)conf_get_param('ip_location_max_records', 10000),
+            'max_records'       => (int)conf_get_param('ip_location_max_records', 5000),
         ];
         conf_update_param('ip_location', serialize($migrated));
         foreach ($old_params as $param) {
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   blocked_at   DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
-    // Migration v1.5 → v1.6 : remplacer reason par country + city
+    // Migration v1.4 → v1.5 : remplacer reason par country + city
     $cols = [];
     $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
     while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];

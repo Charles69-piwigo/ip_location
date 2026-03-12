@@ -1,13 +1,16 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.5
+Version: 1.6
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: ip_location
 Has Settings: webmaster
 */
 // Versions
 /*
+    version 1.6 12/03/2026
+        restructuration de la page admin
+        curl au lieu de ...
     version 1.5 11/03/2026
         cache géo : expiry 30 jours + limite 5000 entrées
         tableau IPs de .htaccess avec pays/ville, suppression éditeur textarea
@@ -25,11 +28,16 @@ if (!defined('PHPWG_ROOT_PATH')) die('Hacking attempt!');
 
 define('IP_LOCATION_PATH', PHPWG_PLUGINS_PATH . 'ip_location/');
 
-// Debug  pour activer les log
-//error_reporting(E_ALL);
-//ini_set('display_errors', 0);
-//ini_set('log_errors', 1);
-//ini_set('error_log', PHPWG_ROOT_PATH . 'plugins/ip_location/ip_location_debug.log');
+// Debug — décommenter pour activer les logs
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+$_ipl_log = PHPWG_ROOT_PATH . 'plugins/ip_location/ip_location_debug.log';
+if (file_exists($_ipl_log) && filesize($_ipl_log) > 256 * 1024) {
+    file_put_contents($_ipl_log, ''); // vider le fichier au-delà de 256 Ko
+}
+ini_set('error_log', $_ipl_log);
+unset($_ipl_log);
 
 // Chargement de la langue
 load_language('plugin.lang', IP_LOCATION_PATH . 'language/');
@@ -66,6 +74,38 @@ function ip_location_get_conf()
 // Hooks de visite
 add_event_handler('loc_begin_index',   'ip_location_log_visit');
 add_event_handler('loc_begin_picture', 'ip_location_log_visit');
+
+/**
+ * Requête HTTP GET avec cURL (préféré) ou file_get_contents en fallback.
+ * Timeout 3s. Retourne le body ou false.
+ */
+function ip_location_http_get($url)
+{
+    if (function_exists('curl_init')) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 3,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_USERAGENT      => 'ip_location-piwigo/1.0',
+        ]);
+        $response = curl_exec($ch);
+        $err      = curl_errno($ch);
+        curl_close($ch);
+        return ($err === 0 && $response !== false) ? $response : false;
+    }
+
+    // Fallback file_get_contents
+    $context = stream_context_create([
+        'http' => ['timeout' => 3],
+        'ssl'  => ['verify_peer' => false, 'verify_peer_name' => false],
+    ]);
+    return @file_get_contents($url, false, $context);
+}
 
 /**
  * Enregistre la visite d'un guest avec géolocalisation
@@ -117,12 +157,7 @@ SELECT country, country_code, city
     if (pwg_db_num_rows($result) > 0) {
         $geo = pwg_db_fetch_assoc($result);
     } else {
-        // Résolution géo avec fallback multi-providers (timeout 2s chacun)
-        $context = stream_context_create([
-            'http' => ['timeout' => 2],
-            'ssl'  => ['verify_peer' => false, 'verify_peer_name' => false],
-        ]);
-
+        // Résolution géo avec fallback multi-providers
         $providers = [
             [
                 'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city',
@@ -154,7 +189,7 @@ SELECT country, country_code, city
         $geo = ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
 
         foreach ($providers as $provider) {
-            $response = @file_get_contents($provider['url'], false, $context);
+            $response = ip_location_http_get($provider['url']);
             if ($response === false) continue;
 
             $data = json_decode($response, true);

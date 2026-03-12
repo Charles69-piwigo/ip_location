@@ -1,18 +1,15 @@
-<!-- ── IPs de .htaccess ───────────────────────────────────────────────────── -->
-<h3>{'IPs de .htaccess'|@translate}</h3>
+<!-- ── Section 1 : Blocage .htaccess ─────────────────────────────────────── -->
+<h3>{'Blocage .htaccess'|@translate}</h3>
 
-<div style="margin:0 0 1em 20px;">
-  <form method="post" action="" style="margin:0;">
-    <input type="hidden" name="action" value="toggle_htaccess">
-    <label>
-      <input type="checkbox" name="htaccess_enabled" value="1"{if $HTACCESS_ENABLED} checked{/if}
-             onchange="this.form.submit()">
-      <strong style="display:inline;">{'Activer le blocage .htaccess'|@translate}</strong>
-    </label>
-    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'|@translate}</em>
-  </form>
+<div style="margin:0 0 1em 20px;text-align:left;">
+  <label class="ipl-inline">
+    <input type="checkbox" name="htaccess_enabled" value="1" form="form_htaccess_config"{if $HTACCESS_ENABLED} checked{/if}>
+    <strong style="display:inline;">{'Activer le blocage .htaccess'|@translate}</strong>
+  </label>
+  <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'|@translate}</em>
 </div>
 
+<!-- Tableau des IPs bloquées -->
 {if $BLOCKLIST|@count == 0}
 <p style="margin-left:20px;color:#666;">{'Aucune IP dans le .htaccess.'|@translate}</p>
 {else}
@@ -56,18 +53,20 @@
 </form>
 
 <!-- Liste blanche -->
-<form method="post" action="" class="ipl-config" style="margin:0 0 2em 20px;padding:0.8em;background:#fffbe6;border:1px solid #e8d;border-radius:4px;max-width:460px;">
-  <input type="hidden" name="action" value="save_whitelist">
-  <p style="margin:0 0 0.5em 0;">
+<form id="form_htaccess_config" method="post" action="" class="ipl-config">
+  <input type="hidden" name="action" value="save_htaccess_config">
+  <p style="margin-top:1em;">
     <label><strong>{'IPs toujours autorisées'|@translate}</strong>
       <em style="font-weight:normal;font-size:0.85em;color:#666;"> &mdash; {'une par ligne — ces IPs ne seront jamais bloquées'|@translate}</em>
     </label>
+    <textarea name="whitelist_ips" rows="4" style="width:400px;display:block;margin:0.3em 0 0.5em 0;">{$WHITELIST_IPS|escape}</textarea>
   </p>
-  <textarea name="whitelist_ips" rows="4" style="width:100%;display:block;margin:0 0 0.5em 0;">{$WHITELIST_IPS|escape}</textarea>
-  <button type="submit" class="buttonLike">{'Enregistrer'|@translate}</button>
+  <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
 </form>
 
-<!-- ── Configuration ─────────────────────────────────────────────────────── -->
+<!-- ── Section 2 : Blocage par pays ──────────────────────────────────────── -->
+<h3 style="margin-top:2em;">{'Blocage par pays'|@translate}</h3>
+
 <form method="post" action="" class="ipl-config">
   <input type="hidden" name="action" value="save_config">
   <p>

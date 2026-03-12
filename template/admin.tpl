@@ -15,7 +15,7 @@
   .ipl-btn-block:hover { background:#900; }
   .ipl-btn-unblock { font-size:0.8em; padding:2px 7px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; }
   .ipl-btn-unblock:hover { background:#333; }
-  .ipl-filters { margin:0 0 0.8em 20px; }
+  .ipl-filters { margin:0 0 0.8em 20px; text-align:left; }
   .ipl-filters a { margin-right:8px; padding:3px 10px; border:1px solid #ccc; border-radius:3px; text-decoration:none; color:#333; font-size:0.9em; }
   .ipl-filters a.active { background:#555; color:#fff; border-color:#555; font-weight:bold; }
   .ipl-tabs { margin:0 0 0 10px; border-bottom:2px solid #ccc; text-align:left; }
