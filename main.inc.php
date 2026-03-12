@@ -1,13 +1,16 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.6
+Version: 1.6a
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: ip_location
 Has Settings: webmaster
 */
 // Versions
 /*
+    version 1.6b 12/03/2026
+    version 1.6a 12/03/2026
+        ajouté freeipapi.com
     version 1.6 12/03/2026
         restructuration de la page admin
         curl au lieu de ...
@@ -86,17 +89,23 @@ function ip_location_http_get($url)
         curl_setopt_array($ch, [
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 3,
-            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 3,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_USERAGENT      => 'ip_location-piwigo/1.0',
         ]);
         $response = curl_exec($ch);
-        $err      = curl_errno($ch);
+        $errno    = curl_errno($ch);
+        $errmsg   = curl_error($ch);
         curl_close($ch);
-        return ($err === 0 && $response !== false) ? $response : false;
+        if ($errno !== 0 || $response === false) {
+            error_log('[ip_location] cURL error on ' . $url . ' : [' . $errno . '] ' . $errmsg);
+            return false;
+        }
+        return $response;
     }
 
     // Fallback file_get_contents
@@ -158,12 +167,25 @@ SELECT country, country_code, city
         $geo = pwg_db_fetch_assoc($result);
     } else {
         // Résolution géo avec fallback multi-providers
+
+            // DEBUG TEMPORAIRE — à retirer après test
+            //$ip_raw = '82.65.135.221';
+            //$ip = '82.65.135.221';
+
+
+
         $providers = [
             [
                 'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city',
                 'country'      => 'country',
                 'country_code' => 'countryCode',
                 'city'         => 'city',
+            ],
+            [
+                'url'          => 'https://free.freeipapi.com/api/json/' . rawurlencode($ip),
+                'country'      => 'countryName',
+                'country_code' => 'countryCode',
+                'city'         => 'cityName',
             ],
             [
                 'url'          => 'https://ipwho.is/' . rawurlencode($ip),
@@ -190,13 +212,23 @@ SELECT country, country_code, city
 
         foreach ($providers as $provider) {
             $response = ip_location_http_get($provider['url']);
-            if ($response === false) continue;
+            if ($response === false) {
+                error_log('[ip_location] Provider FAILED: ' . $provider['url']);
+                continue;
+            }
+            error_log('[ip_location] Provider: ' . $provider['url'] . ' | Response: ' . substr($response, 0, 200));
 
             $data = json_decode($response, true);
-            if (!is_array($data)) continue;
+            if (!is_array($data)) {
+                error_log('[ip_location] Provider INVALID JSON: ' . $provider['url'] . ' | Body: ' . substr($response, 0, 300));
+                continue;
+            }
 
             // Vérification champ 'success' (ipwho.is retourne success=false si IP invalide)
-            if (isset($provider['success']) && empty($data[$provider['success']])) continue;
+            if (isset($provider['success']) && empty($data[$provider['success']])) {
+                error_log('[ip_location] Provider REJECTED: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
+                continue;
+            }
 
             $country      = !empty($data[$provider['country']])      ? $data[$provider['country']]      : '';
             $country_code = !empty($data[$provider['country_code']]) ? $data[$provider['country_code']] : '';
@@ -208,6 +240,7 @@ SELECT country, country_code, city
                 $geo['city']         = !empty($city) ? $city : 'Unknown';
                 break; // Provider OK, on arrête
             }
+            error_log('[ip_location] Provider NO COUNTRY: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
         }
 
         // Mise en cache
