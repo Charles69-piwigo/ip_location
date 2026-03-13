@@ -4,7 +4,10 @@ defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
-    if ($_POST['action'] === 'purge_before_date') {
+    if ($_POST['action'] === 'purge_cache') {
+        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=cache_purged');
+    } elseif ($_POST['action'] === 'purge_before_date') {
         $date = trim($_POST['before_date'] ?? '');
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_log
@@ -140,6 +143,7 @@ $tab     = isset($_GET['tab']) && $_GET['tab'] === 'help' ? 'help' : 'config';
 $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 
 if (isset($_GET['msg'])) {
+    if ($_GET['msg'] === 'cache_purged') $page['infos'][] = l10n('Cache de géolocalisation vidé.');
     if ($_GET['msg'] === 'purged')       $page['infos'][] = l10n('Logs supprimés.');
     if ($_GET['msg'] === 'config_saved') $page['infos'][] = l10n('Configuration enregistrée.');
     if ($_GET['msg'] === 'htaccess_error')  $page['errors'][] = l10n('.htaccess non accessible en écriture.');

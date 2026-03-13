@@ -1,6 +1,7 @@
+
+<h3>{'Configuration'|@translate}</h3>
 <!-- ── Section 1 : Blocage .htaccess ─────────────────────────────────────── -->
 <h3>{'Blocage .htaccess'|@translate}</h3>
-
 <div style="margin:0 0 1em 20px;text-align:left;">
   <label class="ipl-inline">
     <input type="checkbox" name="htaccess_enabled" value="1" form="form_htaccess_config"{if $HTACCESS_ENABLED} checked{/if}>

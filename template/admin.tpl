@@ -190,4 +190,14 @@ if (window.location.search.indexOf('msg=') !== -1) {
   <input type="date" name="before_date" style="display:inline;margin:0 6px;">
   <button type="submit" class="buttonLike">{'Supprimer'|@translate}</button>
 </form>
+
+<!-- ── Vidage du cache de géolocalisation ───────────────────────────────── -->
+<h3>{'Cache de géolocalisation'|@translate}</h3>
+
+<form method="post" action="" style="margin-left:20px;">
+  <input type="hidden" name="action" value="purge_cache">
+  <button type="submit" class="buttonLike" onclick="return confirm('Vider tout le cache de géolocalisation ?');">{'Vider le cache'|@translate}</button>
+  <span style="margin-left:10px;color:#777;font-size:0.9em;">{'Forcer la résolution géographique de toutes les IPs lors de leur prochaine visite.'|@translate}</span>
+</form>
+
 {/if}

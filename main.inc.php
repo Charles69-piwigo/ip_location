@@ -1,13 +1,14 @@
 <?php
 /*
 Plugin Name: IP Location
-Version: 1.6a
+Version: 1.6b
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: ip_location
 Has Settings: webmaster
 */
 // Versions
 /*
+    version 1.6c 13/03/2026
     version 1.6b 12/03/2026
     version 1.6a 12/03/2026
         ajouté freeipapi.com
@@ -243,7 +244,10 @@ SELECT country, country_code, city
             error_log('[ip_location] Provider NO COUNTRY: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
         }
 
-        // Mise en cache
+        // Mise en cache (uniquement si résolution réussie)
+        if ($geo['country'] === 'Unknown') {
+            error_log('[ip_location] Cache SKIP (Unknown) for IP: ' . $ip);
+        } else {
         $query = '
 INSERT INTO ' . $prefixeTable . 'ip_location_cache
   (ip, country, country_code, city, resolved_at)
@@ -273,6 +277,7 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
   ORDER BY resolved_at ASC
   LIMIT ' . ($cache_count - 5000));
         }
+        } // fin if country !== Unknown
     }
 
     // Construction de l'URL visitée
