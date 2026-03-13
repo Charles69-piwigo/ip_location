@@ -22,8 +22,9 @@ if (isset($_POST['action'])) {
             'htaccess_enabled' => $htaccess_enabled,
             'whitelist'        => $whitelist,
         ])));
-        $htaccess_ok = ip_location_write_htaccess();
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . ($htaccess_ok ? 'config_saved' : 'htaccess_error'));
+        $htaccess_result = ip_location_write_htaccess($htaccess_enabled);
+        $msg = ($htaccess_result === true) ? 'config_saved' : ($htaccess_result === 'missing' ? 'htaccess_missing' : 'htaccess_error');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . $msg);
     } elseif ($_POST['action'] === 'save_config') {
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
@@ -146,7 +147,8 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'cache_purged') $page['infos'][] = l10n('Cache de géolocalisation vidé.');
     if ($_GET['msg'] === 'purged')       $page['infos'][] = l10n('Logs supprimés.');
     if ($_GET['msg'] === 'config_saved') $page['infos'][] = l10n('Configuration enregistrée.');
-    if ($_GET['msg'] === 'htaccess_error')  $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+    if ($_GET['msg'] === 'htaccess_error')   $page['errors'][] = l10n('.htaccess non accessible en écriture.');
+    if ($_GET['msg'] === 'htaccess_missing') $page['errors'][] = l10n('Fichier .htaccess inexistant : vous devez le créer manuellement à la racine de Piwigo.');
     if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s ajoutée au .htaccess.'), $_GET['ip'] ?? '');
     if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $_GET['ip'] ?? '');
 }
