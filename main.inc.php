@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.7
+Version: 1.7a
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,7 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 1.7a activé langue UK
     version 1.7 ajouté URI
     version 1.6e 13/03/2026
         log commenté - 1ère diffusion
@@ -62,8 +63,15 @@ ini_set('error_log', $_ipl_log);
 unset($_ipl_log);
 */
 
-// Chargement de la langue
-load_language('plugin.lang', IP_LOCATION_PATH . 'language/');
+
+//===================== CHARGEMENT DES LANGUES , UK PAR DEFAUT ==================
+// Charger d'abord l'anglais comme base
+load_language('plugin.lang', IP_LOCATION_PATH, array('language' => 'en_UK', 'no_fallback' => true));
+// Puis charger la langue de l'utilisateur (qui écrasera l'anglais si c'est du français)
+load_language('plugin.lang', IP_LOCATION_PATH);
+//=================================================================================
+
+
 
 /**
  * Retourne la configuration du plugin (tableau, avec valeurs par défaut).
