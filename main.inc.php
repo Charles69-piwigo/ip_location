@@ -1,15 +1,17 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.6e
+Version: 1.7a
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
-Plugin URI:
+Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
 Has Settings: webmaster
 */
 
 // Versions
 /*
+    version 1.7a activé langue UK
+    version 1.7 ajouté URI
     version 1.6e 13/03/2026
         log commenté - 1ère diffusion
     version 1.6 12/03/2026
@@ -61,8 +63,15 @@ ini_set('error_log', $_ipl_log);
 unset($_ipl_log);
 */
 
-// Chargement de la langue
-load_language('plugin.lang', IP_LOCATION_PATH . 'language/');
+
+//===================== CHARGEMENT DES LANGUES , UK PAR DEFAUT ==================
+// Charger d'abord l'anglais comme base
+load_language('plugin.lang', IP_LOCATION_PATH, array('language' => 'en_UK', 'no_fallback' => true));
+// Puis charger la langue de l'utilisateur (qui écrasera l'anglais si c'est du français)
+load_language('plugin.lang', IP_LOCATION_PATH);
+//=================================================================================
+
+
 
 /**
  * Retourne la configuration du plugin (tableau, avec valeurs par défaut).
@@ -367,7 +376,7 @@ DELETE FROM ' . $prefixeTable . 'ip_location_log
     }
 }
 
-function ip_location_write_htaccess()
+function ip_location_write_htaccess($htaccess_enabled = null)
 {
     global $prefixeTable;
 
@@ -377,7 +386,7 @@ function ip_location_write_htaccess()
         if (!is_writable($htaccess_path)) return false;
         $content = file_get_contents($htaccess_path);
     } else {
-        if (!is_writable(PHPWG_ROOT_PATH)) return false;
+        if (!is_writable(PHPWG_ROOT_PATH)) return 'missing';
         $content = '';
     }
 
@@ -385,7 +394,10 @@ function ip_location_write_htaccess()
     $content = preg_replace('/\n?# BEGIN ip_location\b.*?# END ip_location[^\n]*/s', '', $content);
     $content = rtrim($content);
 
-    if (ip_location_get_conf()['htaccess_enabled'] === '1') {
+    if ($htaccess_enabled === null) {
+        $htaccess_enabled = ip_location_get_conf()['htaccess_enabled'];
+    }
+    if ($htaccess_enabled === '1') {
         $result = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at ASC');
         $ips = [];
         while ($row = pwg_db_fetch_row($result)) {

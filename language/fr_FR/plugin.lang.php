@@ -78,3 +78,27 @@ $lang['→ ajoute l\'adresse IP complète (ex : 47.146.49.25).'] = '→ ajoute l
 $lang['→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.'] = '→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.';
 $lang['Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.'] = 'Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.';
 $lang['La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.'] = 'La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.';
+
+// Contenu des paragraphes de la page Aide
+$lang['Le plugin IP Location enregistre les visites des visiteurs anonymes (guests) avec leur géolocalisation, détecte les bots et offre plusieurs mécanismes de blocage.'] = 'Le plugin IP Location enregistre les visites des visiteurs anonymes (guests) avec leur géolocalisation, détecte les bots et offre plusieurs mécanismes de blocage.';
+$lang['Seuls les visiteurs non connectés (guests) sont enregistrés.'] = 'Seuls les visiteurs non connectés (guests) sont enregistrés.';
+$lang['Les pages enregistrées sont la page d\'accueil et les pages photos.'] = 'Les pages enregistrées sont la page d\'accueil et les pages photos.';
+$lang['User-Agent vide'] = 'User-Agent vide';
+$lang['→ marqué bot.'] = '→ marqué bot.';
+$lang['Mots-clés dans le User-Agent'] = 'Mots-clés dans le User-Agent';
+$lang['→ bot, crawler, spider, scraper, curl, wget, python, etc.'] = '→ bot, crawler, spider, scraper, curl, wget, python, etc.';
+$lang['Visites synchronisées'] = 'Visites synchronisées';
+$lang['→ si la même URL est visitée par 2 IPs différentes dans les 10 secondes, les deux entrées sont marquées bots (marquage rétroactif).'] = '→ si la même URL est visitée par 2 IPs différentes dans les 10 secondes, les deux entrées sont marquées bots (marquage rétroactif).';
+$lang['Saisir les codes ISO des pays à bloquer (ex : US,CN,EG).'] = 'Saisir les codes ISO des pays à bloquer (ex : US,CN,EG).';
+$lang['Le blocage se fait en PHP après géolocalisation : Apache charge quand même la page avant de renvoyer un 403.'] = 'Le blocage se fait en PHP après géolocalisation : Apache charge quand même la page avant de renvoyer un 403.';
+$lang['Les visites bloquées sont quand même enregistrées dans le journal (badge BLOQUÉ).'] = 'Les visites bloquées sont quand même enregistrées dans le journal (badge BLOQUÉ).';
+$lang['Saisir une IP par ligne dans le champ "IPs toujours autorisées" de la configuration.'] = 'Saisir une IP par ligne dans le champ "IPs toujours autorisées" de la configuration.';
+$lang['Décocher "Activer le blocage .htaccess" supprime la section du .htaccess sans vider la liste — utile pour observer sans bloquer.'] = 'Décocher "Activer le blocage .htaccess" supprime la section du .htaccess sans vider la liste — utile pour observer sans bloquer.';
+$lang['La section ajoutée dans le .htaccess est balisée'] = 'La section ajoutée dans le .htaccess est balisée';
+$lang['.'] = '.';
+$lang['À chaque visite enregistrée, si le nombre d\'entrées dépasse le seuil configuré, les plus anciennes sont supprimées.'] = 'À chaque visite enregistrée, si le nombre d\'entrées dépasse le seuil configuré, les plus anciennes sont supprimées.';
+$lang['Mettre 0 pour désactiver le vidage automatique.'] = 'Mettre 0 pour désactiver le vidage automatique.';
+$lang['→ toutes les entrées.'] = '→ toutes les entrées.';
+$lang['→ visiteurs humains non bloqués.'] = '→ visiteurs humains non bloqués.';
+$lang['→ entrées détectées comme bots.'] = '→ entrées détectées comme bots.';
+$lang['→ entrées bloquées par le blocage pays.'] = '→ entrées bloquées par le blocage pays.';
