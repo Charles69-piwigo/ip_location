@@ -1,2 +1,0 @@
-[13-Mar-2026 05:32:02 Europe/Brussels] PHP Warning:  Undefined array key "HTTP_USER_AGENT" in /volume1/web/photodev2/plugins/AMenuManager/amm_pip.class.inc.php on line 422
-[13-Mar-2026 05:32:02 Europe/Brussels] PHP Deprecated:  preg_match(): Passing null to parameter #2 ($subject) of type string is deprecated in /volume1/web/photodev2/plugins/AMenuManager/amm_pip.class.inc.php on line 422

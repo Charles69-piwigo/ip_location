@@ -1,18 +1,20 @@
 <?php
 /*
-Plugin Name: IP Location
-Version: 1.6b
+Plugin Name: ip_location
+Version: 1.6e
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
-Plugin URI: ip_location
+Plugin URI:
+Author: Charles69 
 Has Settings: webmaster
 */
+
 // Versions
 /*
-    version 1.6c 13/03/2026
-    version 1.6b 12/03/2026
-    version 1.6a 12/03/2026
-        ajouté freeipapi.com
+    version 1.6e 13/03/2026
+        log commenté - 1ère diffusion
     version 1.6 12/03/2026
+        ajouté logs
+        ajouté freeipapi.com
         restructuration de la page admin
         curl au lieu de ...
     version 1.5 11/03/2026
@@ -30,9 +32,24 @@ Has Settings: webmaster
 
 if (!defined('PHPWG_ROOT_PATH')) die('Hacking attempt!');
 
+if (basename(dirname(__FILE__)) != 'ip_location')
+{
+  add_event_handler('init', 'ip_location_error');
+  function ip_location_error()
+  {
+    global $page;
+    $page['errors'][] = 'Désactiver le plugin et renommer le répertoire "ip_location"';
+  }
+  return;
+}
+
+
+
+// Plugin constants
 define('IP_LOCATION_PATH', PHPWG_PLUGINS_PATH . 'ip_location/');
 
-// Debug — décommenter pour activer les logs
+// Debug — décommenter pour activer les logs =============================
+/*
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
@@ -42,6 +59,7 @@ if (file_exists($_ipl_log) && filesize($_ipl_log) > 256 * 1024) {
 }
 ini_set('error_log', $_ipl_log);
 unset($_ipl_log);
+*/
 
 // Chargement de la langue
 load_language('plugin.lang', IP_LOCATION_PATH . 'language/');
@@ -103,7 +121,7 @@ function ip_location_http_get($url)
         $errmsg   = curl_error($ch);
         curl_close($ch);
         if ($errno !== 0 || $response === false) {
-            error_log('[ip_location] cURL error on ' . $url . ' : [' . $errno . '] ' . $errmsg);
+            //error_log('[ip_location] cURL error on ' . $url . ' : [' . $errno . '] ' . $errmsg);
             return false;
         }
         return $response;
@@ -214,20 +232,20 @@ SELECT country, country_code, city
         foreach ($providers as $provider) {
             $response = ip_location_http_get($provider['url']);
             if ($response === false) {
-                error_log('[ip_location] Provider FAILED: ' . $provider['url']);
+                //error_log('[ip_location] Provider FAILED: ' . $provider['url']);
                 continue;
             }
-            error_log('[ip_location] Provider: ' . $provider['url'] . ' | Response: ' . substr($response, 0, 200));
+            //error_log('[ip_location] Provider: ' . $provider['url'] . ' | Response: ' . substr($response, 0, 200));
 
             $data = json_decode($response, true);
             if (!is_array($data)) {
-                error_log('[ip_location] Provider INVALID JSON: ' . $provider['url'] . ' | Body: ' . substr($response, 0, 300));
+                //error_log('[ip_location] Provider INVALID JSON: ' . $provider['url'] . ' | Body: ' . substr($response, 0, 300));
                 continue;
             }
 
             // Vérification champ 'success' (ipwho.is retourne success=false si IP invalide)
             if (isset($provider['success']) && empty($data[$provider['success']])) {
-                error_log('[ip_location] Provider REJECTED: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
+                //error_log('[ip_location] Provider REJECTED: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
                 continue;
             }
 
@@ -241,12 +259,12 @@ SELECT country, country_code, city
                 $geo['city']         = !empty($city) ? $city : 'Unknown';
                 break; // Provider OK, on arrête
             }
-            error_log('[ip_location] Provider NO COUNTRY: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
+            //error_log('[ip_location] Provider NO COUNTRY: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
         }
 
         // Mise en cache (uniquement si résolution réussie)
         if ($geo['country'] === 'Unknown') {
-            error_log('[ip_location] Cache SKIP (Unknown) for IP: ' . $ip);
+            //error_log('[ip_location] Cache SKIP (Unknown) for IP: ' . $ip);
         } else {
         $query = '
 INSERT INTO ' . $prefixeTable . 'ip_location_cache
