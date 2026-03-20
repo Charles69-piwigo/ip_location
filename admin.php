@@ -25,6 +25,13 @@ if (isset($_POST['action'])) {
         $htaccess_result = ip_location_write_htaccess($htaccess_enabled);
         $msg = ($htaccess_result === true) ? 'config_saved' : ($htaccess_result === 'missing' ? 'htaccess_missing' : 'htaccess_error');
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . $msg);
+    } elseif ($_POST['action'] === 'save_url_config') {
+        $keywords = trim($_POST['blocked_url_keywords'] ?? '');
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'blocked_url_keywords' => $keywords,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_config') {
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
@@ -153,12 +160,15 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $_GET['ip'] ?? '');
 }
 
-$plugin_conf        = ip_location_get_conf();
-$blocked_countries  = $plugin_conf['blocked_countries'];
-$whitelist_ips      = $plugin_conf['whitelist'];
-$blocking_enabled   = $plugin_conf['blocking_enabled'] === '1';
-$htaccess_enabled   = $plugin_conf['htaccess_enabled'] === '1';
-$max_records        = (int)$plugin_conf['max_records'];
+$plugin_conf           = ip_location_get_conf();
+$blocked_countries     = $plugin_conf['blocked_countries'];
+$blocked_url_keywords  = $plugin_conf['blocked_url_keywords'] ?? '';
+$whitelist_ips         = $plugin_conf['whitelist'];
+$blocking_enabled      = $plugin_conf['blocking_enabled'] === '1';
+$htaccess_enabled      = $plugin_conf['htaccess_enabled'] === '1';
+$max_records           = (int)$plugin_conf['max_records'];
+$server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false
+                      && stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'apache') === false;
 
 // ── Blocklist ip_location_blocklist ───────────────────────────────────────────
 
@@ -176,10 +186,12 @@ foreach ($logs as &$log) {
 unset($log);
 
 $template->assign([
-    'BLOCKED_COUNTRIES'  => $blocked_countries,
-    'WHITELIST_IPS'      => $whitelist_ips,
+    'BLOCKED_COUNTRIES'     => $blocked_countries,
+    'BLOCKED_URL_KEYWORDS'  => $blocked_url_keywords,
+    'WHITELIST_IPS'         => $whitelist_ips,
     'BLOCKING_ENABLED'   => $blocking_enabled,
     'HTACCESS_ENABLED'   => $htaccess_enabled,
+    'SERVER_IS_NGINX'    => $server_is_nginx,
     'MAX_RECORDS'        => $max_records,
     'BLOCKLIST'          => $blocklist,
     'STATS'              => $stats,

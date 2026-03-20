@@ -93,7 +93,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 </table>
 
 <!-- ── Journal des visites ──────────────────────────────────────────────── -->
-<h3>{'Journal des visites'|@translate}</h3>
+<h3 id="ipl-journal">{'Journal des visites'|@translate}</h3>
 
 <div class="ipl-filters">
   {if $COUNTRY_FILTER neq ''}
@@ -101,15 +101,15 @@ if (window.location.search.indexOf('msg=') !== -1) {
   {else}
     {assign var=country_qs value=''}
   {/if}
-  <a href="{$BASE_URL|escape}{$country_qs}"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
+  <a href="{$BASE_URL|escape}{$country_qs}#ipl-journal"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}#ipl-journal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}#ipl-journal"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
   &nbsp;|&nbsp;
   <form method="get" action="admin.php" style="display:inline;margin:0;">
     <input type="hidden" name="page" value="plugin-ip_location">
     {if $FILTER neq 'all'}<input type="hidden" name="filter" value="{$FILTER|escape}">{/if}
-    <select name="country" onchange="this.form.submit()" style="font-size:0.88em;padding:2px 4px;">
+    <select name="country" onchange="this.form.action='admin.php#ipl-journal';this.form.submit()" style="font-size:0.88em;padding:2px 4px;">
       <option value="">{'Tous les pays'|@translate}</option>
       {foreach from=$COUNTRIES item=c}
       <option value="{$c.country_code|escape}" {if $COUNTRY_FILTER eq $c.country_code}selected{/if}>{$c.country|escape} ({$c.visits})</option>
@@ -151,7 +151,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <input type="hidden" name="city" value="{$log.city|escape}">
             <button type="submit" class="ipl-btn-block" style="margin-bottom:2px;">{'Ajouter IP'|@translate}</button>
             <button type="submit" class="ipl-btn-block"
-              onclick="document.getElementById('blk_ip_{$log.id}').value='{$log.ip|escape}'.split('.').slice(0,2).join('.');">
+              onclick="var p='{$log.ip|escape}'.split('.');document.getElementById('blk_ip_{$log.id}').value=p[0]+'.'+p[1]+'.0.0/16';">
               {'Ajouter /16'|@translate}
             </button>
           </form>
@@ -176,7 +176,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 <div class="pagination" style="margin:10px 0;">
   {section name=p loop=$TOTAL_PAGES start=1}
     {assign var=pnum value=$smarty.section.p.index}
-    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}&amp;pnum={$pnum}"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
+    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}&amp;pnum={$pnum}#ipl-journal"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
   {/section}
 </div>
 {/if}

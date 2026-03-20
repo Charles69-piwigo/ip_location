@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.7a
+Version: 1.8a
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,12 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 1.8a - 27/03/2026
+        ajouté avertissement nginx
+        syntaxe courte IP/16 remplacée par X.Y.0.0/16
+    version 1.8 - 25/03/2026
+        ajouté Blocage par URL
+        divers UX
     version 1.7a activé langue UK
     version 1.7 ajouté URI
     version 1.6e 13/03/2026
@@ -84,11 +90,12 @@ function ip_location_get_conf()
     if ($cache !== null) return $cache;
 
     $default = [
-        'blocked_countries' => '',
-        'whitelist'         => '',
-        'blocking_enabled'  => '0',
-        'htaccess_enabled'  => '0',
-        'max_records'       => 10000,
+        'blocked_countries'    => '',
+        'blocked_url_keywords' => '',
+        'whitelist'            => '',
+        'blocking_enabled'     => '0',
+        'htaccess_enabled'     => '0',
+        'max_records'          => 10000,
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -317,10 +324,24 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
 
     // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer)
     $is_blocked = 0;
+
+    // Blocage par pays
     if ($plugin_conf['blocking_enabled'] === '1') {
         $blocked = array_filter(array_map('trim', explode(',', strtoupper($plugin_conf['blocked_countries']))));
         if (!empty($blocked) && in_array(strtoupper($geo['country_code']), $blocked)) {
             $is_blocked = 1;
+        }
+    }
+
+    // Blocage par mot-clé dans l'URL
+    if (!$is_blocked && !empty($plugin_conf['blocked_url_keywords'])) {
+        $url_keywords = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
+        $url_lower = strtolower($url);
+        foreach ($url_keywords as $kw) {
+            if (strpos($url_lower, strtolower($kw)) !== false) {
+                $is_blocked = 1;
+                break;
+            }
         }
     }
 
