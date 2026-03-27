@@ -167,6 +167,8 @@ $whitelist_ips         = $plugin_conf['whitelist'];
 $blocking_enabled      = $plugin_conf['blocking_enabled'] === '1';
 $htaccess_enabled      = $plugin_conf['htaccess_enabled'] === '1';
 $max_records           = (int)$plugin_conf['max_records'];
+$server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false
+                      && stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'apache') === false;
 
 // ── Blocklist ip_location_blocklist ───────────────────────────────────────────
 
@@ -189,6 +191,7 @@ $template->assign([
     'WHITELIST_IPS'         => $whitelist_ips,
     'BLOCKING_ENABLED'   => $blocking_enabled,
     'HTACCESS_ENABLED'   => $htaccess_enabled,
+    'SERVER_IS_NGINX'    => $server_is_nginx,
     'MAX_RECORDS'        => $max_records,
     'BLOCKLIST'          => $blocklist,
     'STATS'              => $stats,

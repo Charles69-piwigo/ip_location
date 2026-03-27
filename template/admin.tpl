@@ -151,7 +151,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <input type="hidden" name="city" value="{$log.city|escape}">
             <button type="submit" class="ipl-btn-block" style="margin-bottom:2px;">{'Ajouter IP'|@translate}</button>
             <button type="submit" class="ipl-btn-block"
-              onclick="document.getElementById('blk_ip_{$log.id}').value='{$log.ip|escape}'.split('.').slice(0,2).join('.');">
+              onclick="var p='{$log.ip|escape}'.split('.');document.getElementById('blk_ip_{$log.id}').value=p[0]+'.'+p[1]+'.0.0/16';">
               {'Ajouter /16'|@translate}
             </button>
           </form>

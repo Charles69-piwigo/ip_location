@@ -34,6 +34,7 @@ $lang['supprimer les plus anciennes entrées au-delà de'] = 'supprimer les plus
 $lang['enregistrements']                             = 'enregistrements';
 $lang['0 = désactivé']                               = '0 = désactivé';
 $lang['Activer le blocage .htaccess']  = 'Activer le blocage .htaccess';
+$lang['Serveur nginx détecté : le fichier .htaccess est ignoré'] = 'Serveur nginx détecté : le fichier .htaccess est ignoré';
 $lang['Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'] = 'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.';
 $lang['Aucune IP dans le .htaccess.']        = 'Aucune IP dans le .htaccess.';
 $lang['Date de blocage']               = 'Date de blocage';

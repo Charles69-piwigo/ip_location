@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.8
+Version: 1.8a
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,7 +10,10 @@ Has Settings: webmaster
 
 // Versions
 /*
-    version 1.8 - 20/03/2026
+    version 1.8a - 27/03/2026
+        ajouté avertissement nginx
+        syntaxe courte IP/16 remplacée par X.Y.0.0/16
+    version 1.8 - 25/03/2026
         ajouté Blocage par URL
         divers UX
     version 1.7a activé langue UK

@@ -1,7 +1,7 @@
 
 <h3>{'Configuration'|@translate}</h3>
 <!-- ── Section 1 : Blocage .htaccess ─────────────────────────────────────── -->
-<h3>{'Blocage .htaccess'|@translate}</h3>
+<h3>{'Blocage .htaccess'|@translate}{if $SERVER_IS_NGINX} <span style="font-size:0.75em;font-weight:normal;color:#c0392b;">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</h3>
 <div style="margin:0 0 1em 20px;text-align:left;">
   <label class="ipl-inline">
     <input type="checkbox" name="htaccess_enabled" value="1" form="form_htaccess_config"{if $HTACCESS_ENABLED} checked{/if}>
@@ -45,7 +45,8 @@
 {/if}
 
 <!-- Ajout manuel -->
-<form method="post" action="" style="margin:0.8em 0 1.5em 20px;">
+<form method="post" action="" style="margin:0.8em 0 1.5em 20px;"
+  onsubmit="var f=this.elements['ip'],v=f.value.trim();if(/^\d+\.\d+$/.test(v))f.value=v+'.0.0/16';">
   <input type="hidden" name="action" value="block_ip">
   <label style="display:inline;font-size:0.9em;">{'Ajouter une IP manuellement'|@translate} :</label>
   <input type="text" name="ip" value="" placeholder="ex: 1.2.3.4 ou 45.35.0.0/16"
