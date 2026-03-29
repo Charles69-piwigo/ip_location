@@ -1,5 +1,26 @@
 <?php
 $lang['IP Location']              = 'IP Location';
+
+// Visitor statistics
+$lang['Statistiques visiteurs']   = 'Visitor statistics';
+$lang['Afficher les visites']     = 'Show visitor stats';
+$lang['Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.'] = 'Shows a "Visitors" button on all site pages, visible to everyone.';
+$lang['Période de calcul']        = 'Period';
+$lang['Semaine (7 jours)']        = 'Week (7 days)';
+$lang['Quinzaine (15 jours)']     = 'Fortnight (15 days)';
+$lang['Mois (30 jours)']          = 'Month (30 days)';
+$lang['Trimestre (90 jours)']     = 'Quarter (90 days)';
+$lang['Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).'] = 'Counts only album/photo visits preceded by a homepage visit (±30 min).';
+$lang['Visiteurs']                = 'Visits';
+$lang['Nombre']                   = 'Count';
+$lang['cette semaine']            = 'this week';
+$lang['ces deux semaines']        = 'this fortnight';
+$lang['ce mois']                  = 'this month';
+$lang['ce trimestre']             = 'this quarter';
+$lang['Total']                    = 'Total';
+$lang['Chargement…']              = 'Loading…';
+$lang['Erreur de chargement.']    = 'Loading error.';
+$lang['Rafraîchir']               = 'Refresh';
 $lang['Journal des visites']      = 'Visit log';
 $lang['Statistiques par pays']    = 'Statistics by country';
 $lang['Pays']                     = 'Country';
@@ -66,6 +87,7 @@ $lang['Filtres du journal']            = 'Log filters';
 $lang['Géolocalisation via fallback multi-providers'] = 'Geolocation uses a multi-provider fallback: ip-api.com → ipwho.is → geoplugin.net → ipapi.co. The first one to respond is used. Results are cached to avoid repeated calls.';
 $lang['Purge des visites bloquées par pays'] = 'Purge blocked visits by country';
 $lang['Tous les pays']                       = 'All countries';
+$lang['Filtrer']                             = 'Filter';
 $lang['Gestion de l\'historique']      = 'History management';
 $lang['Supprimer les logs avant le']   = 'Delete logs before';
 $lang['Logs supprimés avant le %s.']   = 'Logs deleted before %s.';
@@ -80,8 +102,9 @@ $lang['Il est également impossible de les ajouter à la blocklist .htaccess : u
 $lang['Utile pour protéger votre propre IP afin de ne pas vous bloquer accidentellement.'] = 'Useful to protect your own IP so you don\'t accidentally block yourself.';
 $lang['Dans le journal, chaque ligne dispose de deux boutons :'] = 'In the log, each row has two buttons:';
 $lang['→ ajoute l\'adresse IP complète (ex : 47.146.49.25).'] = '→ adds the full IP address (e.g. 47.146.49.25).';
-$lang['→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.'] = '→ adds only the first two octets (e.g. 47.146), blocking the entire /16 range — useful against bots that rotate IPs within the same subnet.';
+$lang['→ ajoute la plage complète au format CIDR (ex : 47.146.0.0/16), bloquant ainsi tout le sous-réseau — utile contre des bots qui changent régulièrement d\'IP dans la même plage.'] = '→ adds the full CIDR range (e.g. 47.146.0.0/16), blocking the entire subnet — useful against bots that rotate IPs within the same range.';
 $lang['Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.'] = 'Apache-level blocking is more efficient than country blocking: the request is rejected before PHP is loaded.';
+$lang['Sous nginx pur (sans Apache en backend), le fichier .htaccess est ignoré et le blocage IP n\'a aucun effet. Les NAS Synology utilisent Apache en backend et sont compatibles.'] = 'On pure nginx (without Apache as backend), the .htaccess file is ignored and IP blocking has no effect. Synology NAS devices use Apache as backend and are compatible.';
 $lang['La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.'] = 'The manual purge (History management section) lets you delete entries older than a given date.';
 
 // Help page — paragraph content missing from en_UK

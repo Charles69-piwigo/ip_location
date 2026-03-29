@@ -1,5 +1,26 @@
 <?php
 $lang['IP Location']              = 'IP Location';
+
+// Statistiques visiteurs
+$lang['Statistiques visiteurs']   = 'Statistiques visiteurs';
+$lang['Afficher les visites']     = 'Afficher les visites';
+$lang['Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.'] = 'Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.';
+$lang['Période de calcul']        = 'Période de calcul';
+$lang['Semaine (7 jours)']        = 'Semaine (7 jours)';
+$lang['Quinzaine (15 jours)']     = 'Quinzaine (15 jours)';
+$lang['Mois (30 jours)']          = 'Mois (30 jours)';
+$lang['Trimestre (90 jours)']     = 'Trimestre (90 jours)';
+$lang['Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).'] = 'Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).';
+$lang['Visiteurs']                = 'Visites';
+$lang['Nombre']                   = 'Nombre';
+$lang['cette semaine']            = 'cette semaine';
+$lang['ces deux semaines']        = 'ces deux semaines';
+$lang['ce mois']                  = 'ce mois';
+$lang['ce trimestre']             = 'ce trimestre';
+$lang['Total']                    = 'Total';
+$lang['Chargement…']              = 'Chargement…';
+$lang['Erreur de chargement.']    = 'Erreur de chargement.';
+$lang['Rafraîchir']               = 'Rafraîchir';
 $lang['Journal des visites']      = 'Journal des visites';
 $lang['Statistiques par pays']    = 'Statistiques par pays';
 $lang['Pays']                     = 'Pays';
@@ -66,6 +87,7 @@ $lang['Filtres du journal']            = 'Filtres du journal';
 $lang['Géolocalisation via fallback multi-providers'] = 'La géolocalisation est effectuée via plusieurs providers en cascade : ip-api.com → ipwho.is → geoplugin.net → ipapi.co. Le premier qui répond est utilisé. Les résultats sont mis en cache pour éviter des appels répétés.';
 $lang['Purge des visites bloquées par pays'] = 'Purge des visites bloquées par pays';
 $lang['Tous les pays']                       = 'Tous les pays';
+$lang['Filtrer']                             = 'Filtrer';
 $lang['Gestion de l\'historique']      = 'Gestion de l\'historique';
 $lang['Supprimer les logs avant le']   = 'Supprimer les logs avant le';
 $lang['Logs supprimés avant le %s.']   = 'Logs supprimés avant le %s.';
@@ -80,8 +102,9 @@ $lang['Il est également impossible de les ajouter à la blocklist .htaccess : u
 $lang['Utile pour protéger votre propre IP afin de ne pas vous bloquer accidentellement.'] = 'Utile pour protéger votre propre IP afin de ne pas vous bloquer accidentellement.';
 $lang['Dans le journal, chaque ligne dispose de deux boutons :'] = 'Dans le journal, chaque ligne dispose de deux boutons :';
 $lang['→ ajoute l\'adresse IP complète (ex : 47.146.49.25).'] = '→ ajoute l\'adresse IP complète (ex : 47.146.49.25).';
-$lang['→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.'] = '→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.';
+$lang['→ ajoute la plage complète au format CIDR (ex : 47.146.0.0/16), bloquant ainsi tout le sous-réseau — utile contre des bots qui changent régulièrement d\'IP dans la même plage.'] = '→ ajoute la plage complète au format CIDR (ex : 47.146.0.0/16), bloquant ainsi tout le sous-réseau — utile contre des bots qui changent régulièrement d\'IP dans la même plage.';
 $lang['Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.'] = 'Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.';
+$lang['Sous nginx pur (sans Apache en backend), le fichier .htaccess est ignoré et le blocage IP n\'a aucun effet. Les NAS Synology utilisent Apache en backend et sont compatibles.'] = 'Sous nginx pur (sans Apache en backend), le fichier .htaccess est ignoré et le blocage IP n\'a aucun effet. Les NAS Synology utilisent Apache en backend et sont compatibles.';
 $lang['La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.'] = 'La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.';
 
 // Contenu des paragraphes de la page Aide

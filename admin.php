@@ -14,6 +14,16 @@ if (isset($_POST['action'])) {
   WHERE visit_date < \'' . pwg_db_real_escape_string($date) . '\'');
             redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged');
         }
+    } elseif ($_POST['action'] === 'save_visitors_config') {
+        $visitors_enabled = isset($_POST['visitors_enabled']) ? '1' : '0';
+        $visitors_period  = in_array($_POST['visitors_period'] ?? '', ['week', 'fortnight', 'month', 'quarter'])
+                            ? $_POST['visitors_period'] : 'week';
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'visitors_enabled' => $visitors_enabled,
+            'visitors_period'  => $visitors_period,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_htaccess_config') {
         $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $whitelist = trim($_POST['whitelist_ips'] ?? '');
@@ -123,11 +133,16 @@ $filter = isset($_GET['filter']) && in_array($_GET['filter'], ['normal','bot','b
 $country_filter = isset($_GET['country']) ? strtoupper(trim($_GET['country'])) : '';
 if (!preg_match('/^[A-Z]{0,2}$/', $country_filter)) $country_filter = '';
 
+$date_from = isset($_GET['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from']) ? $_GET['date_from'] : '';
+$date_to   = isset($_GET['date_to'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'])   ? $_GET['date_to']   : '';
+
 $where_parts = [];
 if ($filter === 'normal')  $where_parts[] = 'is_bot = 0 AND is_blocked = 0';
 if ($filter === 'bot')     $where_parts[] = 'is_bot = 1';
 if ($filter === 'blocked') $where_parts[] = 'is_blocked = 1';
 if ($country_filter !== '') $where_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
+if ($date_from !== '') $where_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
+if ($date_to   !== '') $where_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
 $filter_where = empty($where_parts) ? '' : 'WHERE ' . implode(' AND ', $where_parts);
 
 $total_result = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log ' . $filter_where);
@@ -166,6 +181,8 @@ $blocked_url_keywords  = $plugin_conf['blocked_url_keywords'] ?? '';
 $whitelist_ips         = $plugin_conf['whitelist'];
 $blocking_enabled      = $plugin_conf['blocking_enabled'] === '1';
 $htaccess_enabled      = $plugin_conf['htaccess_enabled'] === '1';
+$visitors_enabled      = $plugin_conf['visitors_enabled'] === '1';
+$visitors_period       = $plugin_conf['visitors_period'] ?? 'week';
 $max_records           = (int)$plugin_conf['max_records'];
 $server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false
                       && stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'apache') === false;
@@ -186,6 +203,8 @@ foreach ($logs as &$log) {
 unset($log);
 
 $template->assign([
+    'VISITORS_ENABLED'      => $visitors_enabled,
+    'VISITORS_PERIOD'       => $visitors_period,
     'BLOCKED_COUNTRIES'     => $blocked_countries,
     'BLOCKED_URL_KEYWORDS'  => $blocked_url_keywords,
     'WHITELIST_IPS'         => $whitelist_ips,
@@ -201,6 +220,8 @@ $template->assign([
     'BASE_URL'           => get_root_url() . 'admin.php?page=plugin-ip_location',
     'FILTER'             => $filter,
     'COUNTRY_FILTER'     => $country_filter,
+    'DATE_FROM'          => $date_from,
+    'DATE_TO'            => $date_to,
     'COUNTRIES'          => $countries,
     'TAB'           => $tab,
     'TOTAL_ALL'     => $total_all,

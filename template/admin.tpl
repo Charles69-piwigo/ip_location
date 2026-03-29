@@ -1,5 +1,5 @@
 <style>
-  .ipl-table { width:auto; border-collapse:collapse; margin:0 0 1em 20px; }
+  .ipl-table { width:auto; border-collapse:collapse; margin:0 0 1em 20px; font-size:0.8rem; }
   .ipl-table th, .ipl-table td { text-align:left; padding:4px 12px 4px 0; white-space:nowrap; }
   .ipl-table td.ipl-date { width:200px; min-width:155px; max-width:200px; }
   .ipl-table thead tr { border-bottom:2px solid #ccc; }
@@ -101,10 +101,13 @@ if (window.location.search.indexOf('msg=') !== -1) {
   {else}
     {assign var=country_qs value=''}
   {/if}
-  <a href="{$BASE_URL|escape}{$country_qs}#ipl-journal"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}#ipl-journal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}#ipl-journal"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
+  {assign var=date_qs value=''}
+  {if $DATE_FROM neq ''}{assign var=date_qs value="`$date_qs`&amp;date_from=`$DATE_FROM`"}{/if}
+  {if $DATE_TO   neq ''}{assign var=date_qs value="`$date_qs`&amp;date_to=`$DATE_TO`"}{/if}
+  <a href="{$BASE_URL|escape}{$country_qs}{$date_qs}#ipl-journal"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}{$date_qs}#ipl-journal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}{$date_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}{$date_qs}#ipl-journal"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
   &nbsp;|&nbsp;
   <form method="get" action="admin.php" style="display:inline;margin:0;">
     <input type="hidden" name="page" value="plugin-ip_location">
@@ -115,6 +118,21 @@ if (window.location.search.indexOf('msg=') !== -1) {
       <option value="{$c.country_code|escape}" {if $COUNTRY_FILTER eq $c.country_code}selected{/if}>{$c.country|escape} ({$c.visits})</option>
       {/foreach}
     </select>
+    {if $DATE_FROM neq ''}<input type="hidden" name="date_from" value="{$DATE_FROM|escape}">{/if}
+    {if $DATE_TO   neq ''}<input type="hidden" name="date_to"   value="{$DATE_TO|escape}">{/if}
+  </form>
+  &nbsp;|&nbsp;
+  <form method="get" action="admin.php#ipl-journal" style="display:inline;margin:0;">
+    <input type="hidden" name="page" value="plugin-ip_location">
+    {if $FILTER neq 'all'}<input type="hidden" name="filter" value="{$FILTER|escape}">{/if}
+    {if $COUNTRY_FILTER neq ''}<input type="hidden" name="country" value="{$COUNTRY_FILTER|escape}">{/if}
+    <input type="date" name="date_from" value="{$DATE_FROM|escape}" style="font-size:0.88em;padding:2px 4px;">
+    <span style="font-size:0.88em;color:#666;">→</span>
+    <input type="date" name="date_to"   value="{$DATE_TO|escape}"   style="font-size:0.88em;padding:2px 4px;">
+    <button type="submit" style="font-size:0.85em;padding:2px 8px;">{'Filtrer'|@translate}</button>
+    {if $DATE_FROM neq '' or $DATE_TO neq ''}
+      <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}#ipl-journal" style="font-size:0.85em;margin-left:4px;">✕</a>
+    {/if}
   </form>
 </div>
 
@@ -176,7 +194,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 <div class="pagination" style="margin:10px 0;">
   {section name=p loop=$TOTAL_PAGES start=1}
     {assign var=pnum value=$smarty.section.p.index}
-    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}&amp;pnum={$pnum}#ipl-journal"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
+    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}{$date_qs}&amp;pnum={$pnum}#ipl-journal"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
   {/section}
 </div>
 {/if}

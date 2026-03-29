@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.8a
+Version: 1.9c
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,9 +10,19 @@ Has Settings: webmaster
 
 // Versions
 /*
-    version 1.8a - 27/03/2026
+    version 1.9c - 23/05/2026
+        remplacé visiteurs par visites
+        ajouté quinzaine
+        corrigé taille police
+    version 1.9b - 22/05/2026
+        box vide Kat
+    version 1.9a - 22/05/2026
+        affichage des visites dans le menu principal
+    version 1.9 - 29/03/2026
         ajouté avertissement nginx
         syntaxe courte IP/16 remplacée par X.Y.0.0/16
+        curl_close remplacé par unset
+        filtre date
     version 1.8 - 25/03/2026
         ajouté Blocage par URL
         divers UX
@@ -96,6 +106,8 @@ function ip_location_get_conf()
         'blocking_enabled'     => '0',
         'htaccess_enabled'     => '0',
         'max_records'          => 10000,
+        'visitors_enabled'     => '0',
+        'visitors_period'      => 'week',
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -112,6 +124,190 @@ function ip_location_get_conf()
 // Hooks de visite
 add_event_handler('loc_begin_index',   'ip_location_log_visit');
 add_event_handler('loc_begin_picture', 'ip_location_log_visit');
+
+// ─── Blockmanager : bouton dans la barre de navigation ────────────────────
+add_event_handler('blockmanager_register_blocks', 'ip_location_register_visitors_block');
+add_event_handler('blockmanager_apply',           'ip_location_apply_visitors_block');
+
+function ip_location_register_visitors_block($menu_ref_arr)
+{
+    $plugin_conf = ip_location_get_conf();
+    if (empty($plugin_conf['visitors_enabled'])) return;
+
+    $menu = &$menu_ref_arr[0];
+    if ($menu->get_id() != 'menubar') return;
+    $menu->register_block(new RegisteredBlock('mbIplVisitors', 'Visitors', 'IPL'));
+}
+
+function ip_location_apply_visitors_block($menu_ref_arr)
+{
+    global $template, $user;
+    $plugin_conf = ip_location_get_conf();
+    if (empty($plugin_conf['visitors_enabled'])) return;
+
+    $menu = &$menu_ref_arr[0];
+    if ($menu->get_id() != 'menubar') return;
+    $block = $menu->get_block('mbIplVisitors');
+    if (!$block) return;
+
+    $template->assign('IPL_VIS_LBL', l10n('Visiteurs'));
+    $template->set_template_dir(IP_LOCATION_PATH . 'template/');
+
+    $theme = isset($user['theme']) ? $user['theme'] : '';
+    if (in_array($theme, ['bootstrap_darkroom', 'bootstrapdefault'])) {
+        $block->template = 'visitors_bootstrap.tpl';
+    } elseif ($theme === 'smartpocket') {
+        $block->template = 'visitors_smartpocket.tpl';
+    } else {
+        $block->template = 'visitors_default.tpl';
+    }
+}
+
+// ─── Panel flottant + JS (toutes les pages publiques) ─────────────────────
+add_event_handler('loc_after_page_header', 'ip_location_inject_visitors_panel');
+
+function ip_location_inject_visitors_panel()
+{
+    $plugin_conf = ip_location_get_conf();
+    if (empty($plugin_conf['visitors_enabled'])) return;
+
+    $ajax_url      = json_encode(get_root_url() . 'plugins/ip_location/ajax_visitors.php');
+    $flag_base_url = json_encode(get_root_url() . 'plugins/ip_location/image/');
+    $period_labels = json_encode(array(
+        'week'      => l10n('cette semaine'),
+        'fortnight' => l10n('ces deux semaines'),
+        'month'     => l10n('ce mois'),
+        'quarter'   => l10n('ce trimestre'),
+    ));
+    // Chaînes pour HTML (htmlspecialchars) et pour JS (json_encode séparé)
+    $r_visitors = l10n('Visiteurs');
+    $r_count    = l10n('Nombre');
+    $r_country  = l10n('Pays');
+    $r_nodata   = l10n('Aucune donnée.');
+    $r_loading  = l10n('Chargement…');
+    $r_error    = l10n('Erreur de chargement.');
+    $r_total    = l10n('Total');
+
+    $h = function($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
+    $j = function($s) { return json_encode($s); };
+?>
+<div id="ipl-vis-panel" style="display:none;position:fixed;z-index:9999;background:#fff;color:#222;border:1px solid #bbb;border-radius:0 0 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.28);width:320px;max-height:430px;overflow:hidden;font-size:.88em;font-family:sans-serif;">
+  <div style="background:#444;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;white-space:nowrap;gap:8px;">
+    <span><?php echo $h($r_visitors); ?> &mdash; <span id="ipl-vis-period"></span></span>
+    <span>
+      <a id="ipl-sc" style="color:#fff;font-weight:bold;text-decoration:none;cursor:pointer;font-size:.82em;" onclick="iplVisSort('count')"><?php echo $h($r_count); ?></a>
+      <a id="ipl-sk" style="color:#888;text-decoration:none;cursor:pointer;font-size:.82em;margin-left:8px;" onclick="iplVisSort('country')"><?php echo $h($r_country); ?></a>
+      <a style="color:#aaa;text-decoration:none;cursor:pointer;font-size:.9em;margin-left:10px;" onclick="iplVisRefresh()" title="<?php echo $h(l10n('Rafraîchir')); ?>">&#8635;</a>
+    </span>
+  </div>
+  <div id="ipl-vis-body" style="overflow-y:auto;max-height:370px;"><div style="text-align:center;padding:20px;color:#888;"><?php echo $h($r_loading); ?></div></div>
+  <div id="ipl-vis-footer" style="padding:5px 10px;border-top:1px solid #eee;font-size:.82em;color:#777;text-align:right;"></div>
+</div>
+<script>
+(function(){
+var _v={data:null,period:null,sort:'count',
+  ajax:<?php echo $ajax_url; ?>,
+  flags:<?php echo $flag_base_url; ?>,
+  labels:<?php echo $period_labels; ?>,
+  nodata:<?php echo $j($r_nodata); ?>,
+  error:<?php echo $j($r_error); ?>,
+  loading:<?php echo $j($r_loading); ?>,
+  total:<?php echo $j($r_total); ?>
+};
+
+window.iplVisToggle=function(anchorEl){
+  var p=document.getElementById('ipl-vis-panel');
+  if(p.style.display!=='none'){p.style.display='none';return;}
+  // Positionner sous l'élément déclencheur (nav item ou lien)
+  var anchor=anchorEl||document.getElementById('ipl-vis-nav-item');
+  if(anchor){
+    var r=anchor.getBoundingClientRect();
+    var pw=p.offsetWidth||320,dw=document.documentElement.clientWidth;
+    p.style.top=r.bottom+'px';
+    // Aligner le bord gauche du panel sur le bord gauche de l'ancre,
+    // mais si ça déborde à droite, aligner les bords droits.
+    var left=r.left;
+    if(left+pw>dw-4)left=r.right-pw;
+    p.style.left=Math.max(left,4)+'px';
+    p.style.right='auto';
+  } else {
+    p.style.top='44px';p.style.right='12px';p.style.left='auto';
+  }
+  p.style.display='block';
+  // Revérifier le TTL à chaque ouverture (même si données déjà en mémoire)
+  try{
+    var c=JSON.parse(sessionStorage.getItem('ipl_vis')||'null');
+    if(c&&c.ts&&(Date.now()-c.ts)<600000){
+      _v.data=c.rows;_v.period=c.period;iplVisRender();return;
+    } else {
+      _v.data=null;
+      try{sessionStorage.removeItem('ipl_vis');}catch(e2){}
+    }
+  }catch(e){}
+  iplVisFetch();
+};
+
+window.iplVisRefresh=function(){
+  _v.data=null;
+  try{sessionStorage.removeItem('ipl_vis');}catch(e){}
+  iplVisFetch();
+};
+
+function iplVisFetch(){
+  document.getElementById('ipl-vis-body').innerHTML='<div style="text-align:center;padding:20px;color:#888;">&#9203; '+_v.loading+'</div>';
+  var x=new XMLHttpRequest();
+  x.open('GET',_v.ajax);
+  x.onload=function(){
+    if(x.status===200){
+      try{
+        var d=JSON.parse(x.responseText);
+        if(d.rows){
+          _v.data=d.rows;_v.period=d.period||'week';
+          try{sessionStorage.setItem('ipl_vis',JSON.stringify({rows:_v.data,period:_v.period,ts:Date.now()}));}catch(e){}
+          iplVisRender();
+        }else{iplVisErr();}
+      }catch(e){iplVisErr();}
+    }else{iplVisErr();}
+  };
+  x.onerror=function(){iplVisErr();};
+  x.send();
+}
+
+function iplVisRender(){
+  var rows=(_v.data||[]).slice();
+  if(_v.sort==='country')rows.sort(function(a,b){return(a.country||'').localeCompare(b.country||'');});
+  else rows.sort(function(a,b){return(b.visit_count|0)-(a.visit_count|0);});
+  var lbl=_v.labels[_v.period]||_v.period;
+  document.getElementById('ipl-vis-period').textContent=lbl;
+  var total=0,html='';
+  for(var i=0;i<rows.length;i++){
+    var r=rows[i];
+    var code=r.country_code||'';
+    var flag=code?'<img style="width:16px;height:11px;margin-right:6px;vertical-align:middle;" src="'+_v.flags+code+'.png" alt="">':'<span style="display:inline-block;width:22px;"></span>';
+    html+='<div style="display:flex;align-items:center;padding:3px 10px;border-bottom:1px solid #f2f2f2;">'+flag+'<span style="flex:1;">'+esc(r.country||'?')+'</span><span style="font-weight:bold;min-width:32px;text-align:right;">'+(r.visit_count|0)+'</span></div>';
+    total+=(r.visit_count|0);
+  }
+  document.getElementById('ipl-vis-body').innerHTML=html||('<div style="padding:14px;text-align:center;color:#aaa;">'+_v.nodata+'</div>');
+  document.getElementById('ipl-vis-footer').textContent=_v.total+' : '+total;
+  document.getElementById('ipl-sc').style.color=_v.sort==='count'?'#fff':'#888';
+  document.getElementById('ipl-sk').style.color=_v.sort==='country'?'#fff':'#888';
+}
+
+function iplVisErr(){document.getElementById('ipl-vis-body').innerHTML='<div style="padding:14px;text-align:center;color:#c00;">'+_v.error+'</div>';}
+
+window.iplVisSort=function(by){_v.sort=by;if(_v.data!==null)iplVisRender();};
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+document.addEventListener('click',function(e){
+  var p=document.getElementById('ipl-vis-panel');
+  var n=document.getElementById('ipl-vis-nav-item');
+  if(p&&p.style.display!=='none'&&!p.contains(e.target)&&(!n||!n.contains(e.target)))p.style.display='none';
+});
+})();
+</script>
+<?php
+}
 
 /**
  * Requête HTTP GET avec cURL (préféré) ou file_get_contents en fallback.
@@ -135,7 +331,7 @@ function ip_location_http_get($url)
         $response = curl_exec($ch);
         $errno    = curl_errno($ch);
         $errmsg   = curl_error($ch);
-        curl_close($ch);
+        unset($ch);
         if ($errno !== 0 || $response === false) {
             //error_log('[ip_location] cURL error on ' . $url . ' : [' . $errno . '] ' . $errmsg);
             return false;

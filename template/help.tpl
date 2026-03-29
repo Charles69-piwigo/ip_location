@@ -37,10 +37,11 @@
     <li>{'Dans le journal, chaque ligne dispose de deux boutons :'|@translate}
       <ul>
         <li><strong>{'Ajouter IP'|@translate}</strong> {'→ ajoute l\'adresse IP complète (ex : 47.146.49.25).'|@translate}</li>
-        <li><strong>{'Ajouter /16'|@translate}</strong> {'→ ajoute seulement les deux premiers octets (ex : 47.146), bloquant ainsi toute la plage /16 — utile contre des bots qui changent régulièrement d\'IP dans le même sous-réseau.'|@translate}</li>
+        <li><strong>{'Ajouter /16'|@translate}</strong> {'→ ajoute la plage complète au format CIDR (ex : 47.146.0.0/16), bloquant ainsi tout le sous-réseau — utile contre des bots qui changent régulièrement d\'IP dans la même plage.'|@translate}</li>
       </ul>
     </li>
     <li>{'Le blocage Apache est plus efficace que le blocage par pays : la requête est rejetée avant que PHP ne soit chargé.'|@translate}</li>
+    <li>{'Sous nginx pur (sans Apache en backend), le fichier .htaccess est ignoré et le blocage IP n\'a aucun effet. Les NAS Synology utilisent Apache en backend et sont compatibles.'|@translate}</li>
     <li>{'Décocher "Activer le blocage .htaccess" supprime la section du .htaccess sans vider la liste — utile pour observer sans bloquer.'|@translate}</li>
     <li>{'La section ajoutée dans le .htaccess est balisée'|@translate} <code># BEGIN ip_location</code> / <code># END ip_location</code>{'.'|@translate}</li>
   </ul>
