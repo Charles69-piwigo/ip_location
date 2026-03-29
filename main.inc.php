@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.8a
+Version: 1.9
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,9 +10,11 @@ Has Settings: webmaster
 
 // Versions
 /*
-    version 1.8a - 27/03/2026
+    version 1.9 - 29/03/2026
         ajouté avertissement nginx
         syntaxe courte IP/16 remplacée par X.Y.0.0/16
+        curl_close remplacé par unset
+        filtre date
     version 1.8 - 25/03/2026
         ajouté Blocage par URL
         divers UX
@@ -135,7 +137,7 @@ function ip_location_http_get($url)
         $response = curl_exec($ch);
         $errno    = curl_errno($ch);
         $errmsg   = curl_error($ch);
-        curl_close($ch);
+        unset($ch);
         if ($errno !== 0 || $response === false) {
             //error_log('[ip_location] cURL error on ' . $url . ' : [' . $errno . '] ' . $errmsg);
             return false;
