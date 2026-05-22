@@ -1,5 +1,24 @@
 <?php
 $lang['IP Location']              = 'IP Location';
+
+// Statistiques visiteurs
+$lang['Statistiques visiteurs']   = 'Statistiques visiteurs';
+$lang['Afficher les visites']     = 'Afficher les visites';
+$lang['Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.'] = 'Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.';
+$lang['Période de calcul']        = 'Période de calcul';
+$lang['Semaine (7 jours)']        = 'Semaine (7 jours)';
+$lang['Mois (30 jours)']          = 'Mois (30 jours)';
+$lang['Trimestre (90 jours)']     = 'Trimestre (90 jours)';
+$lang['Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).'] = 'Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).';
+$lang['Visiteurs']                = 'Visiteurs';
+$lang['Nombre']                   = 'Nombre';
+$lang['cette semaine']            = 'cette semaine';
+$lang['ce mois']                  = 'ce mois';
+$lang['ce trimestre']             = 'ce trimestre';
+$lang['Total']                    = 'Total';
+$lang['Chargement…']              = 'Chargement…';
+$lang['Erreur de chargement.']    = 'Erreur de chargement.';
+$lang['Rafraîchir']               = 'Rafraîchir';
 $lang['Journal des visites']      = 'Journal des visites';
 $lang['Statistiques par pays']    = 'Statistiques par pays';
 $lang['Pays']                     = 'Pays';

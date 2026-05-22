@@ -14,6 +14,16 @@ if (isset($_POST['action'])) {
   WHERE visit_date < \'' . pwg_db_real_escape_string($date) . '\'');
             redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged');
         }
+    } elseif ($_POST['action'] === 'save_visitors_config') {
+        $visitors_enabled = isset($_POST['visitors_enabled']) ? '1' : '0';
+        $visitors_period  = in_array($_POST['visitors_period'] ?? '', ['week', 'month', 'quarter'])
+                            ? $_POST['visitors_period'] : 'week';
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'visitors_enabled' => $visitors_enabled,
+            'visitors_period'  => $visitors_period,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_htaccess_config') {
         $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
         $whitelist = trim($_POST['whitelist_ips'] ?? '');
@@ -171,6 +181,8 @@ $blocked_url_keywords  = $plugin_conf['blocked_url_keywords'] ?? '';
 $whitelist_ips         = $plugin_conf['whitelist'];
 $blocking_enabled      = $plugin_conf['blocking_enabled'] === '1';
 $htaccess_enabled      = $plugin_conf['htaccess_enabled'] === '1';
+$visitors_enabled      = $plugin_conf['visitors_enabled'] === '1';
+$visitors_period       = $plugin_conf['visitors_period'] ?? 'week';
 $max_records           = (int)$plugin_conf['max_records'];
 $server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false
                       && stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'apache') === false;
@@ -191,6 +203,8 @@ foreach ($logs as &$log) {
 unset($log);
 
 $template->assign([
+    'VISITORS_ENABLED'      => $visitors_enabled,
+    'VISITORS_PERIOD'       => $visitors_period,
     'BLOCKED_COUNTRIES'     => $blocked_countries,
     'BLOCKED_URL_KEYWORDS'  => $blocked_url_keywords,
     'WHITELIST_IPS'         => $whitelist_ips,

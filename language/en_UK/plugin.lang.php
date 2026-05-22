@@ -1,5 +1,24 @@
 <?php
 $lang['IP Location']              = 'IP Location';
+
+// Visitor statistics
+$lang['Statistiques visiteurs']   = 'Visitor statistics';
+$lang['Afficher les visites']     = 'Show visitor stats';
+$lang['Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.'] = 'Shows a "Visitors" button on all site pages, visible to everyone.';
+$lang['Période de calcul']        = 'Period';
+$lang['Semaine (7 jours)']        = 'Week (7 days)';
+$lang['Mois (30 jours)']          = 'Month (30 days)';
+$lang['Trimestre (90 jours)']     = 'Quarter (90 days)';
+$lang['Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).'] = 'Counts only album/photo visits preceded by a homepage visit (±30 min).';
+$lang['Visiteurs']                = 'Visitors';
+$lang['Nombre']                   = 'Count';
+$lang['cette semaine']            = 'this week';
+$lang['ce mois']                  = 'this month';
+$lang['ce trimestre']             = 'this quarter';
+$lang['Total']                    = 'Total';
+$lang['Chargement…']              = 'Loading…';
+$lang['Erreur de chargement.']    = 'Loading error.';
+$lang['Rafraîchir']               = 'Refresh';
 $lang['Journal des visites']      = 'Visit log';
 $lang['Statistiques par pays']    = 'Statistics by country';
 $lang['Pays']                     = 'Country';

@@ -1,5 +1,30 @@
 
 <h3>{'Configuration'|@translate}</h3>
+
+<!-- ── Section 0 : Statistiques visiteurs ────────────────────────────────── -->
+<h3>{'Statistiques visiteurs'|@translate}</h3>
+<form method="post" action="" class="ipl-config">
+  <input type="hidden" name="action" value="save_visitors_config">
+  <p>
+    <label class="ipl-inline">
+      <input type="checkbox" name="visitors_enabled" value="1"{if $VISITORS_ENABLED} checked{/if}>
+      <strong style="display:inline;">{'Afficher les visites'|@translate}</strong>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Affiche un bouton "Visiteurs" sur toutes les pages du site, visible par tous.'|@translate}</em>
+  </p>
+  <p>
+    <label><strong>{'Période de calcul'|@translate}</strong>
+      <select name="visitors_period" style="margin-left:10px;">
+        <option value="week"{if $VISITORS_PERIOD eq 'week'} selected{/if}>{'Semaine (7 jours)'|@translate}</option>
+        <option value="month"{if $VISITORS_PERIOD eq 'month'} selected{/if}>{'Mois (30 jours)'|@translate}</option>
+        <option value="quarter"{if $VISITORS_PERIOD eq 'quarter'} selected{/if}>{'Trimestre (90 jours)'|@translate}</option>
+      </select>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).'|@translate}</em>
+  </p>
+  <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
+</form>
+
 <!-- ── Section 1 : Blocage .htaccess ─────────────────────────────────────── -->
 <h3>{'Blocage .htaccess'|@translate}{if $SERVER_IS_NGINX} <span style="font-size:0.75em;font-weight:normal;color:#c0392b;">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</h3>
 <div style="margin:0 0 1em 20px;text-align:left;">
