@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.9a
+Version: 1.9b
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,8 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 1.9b - 22/05/2026
+        box vide Kat
     version 1.9a - 22/05/2026
         affichage des visites dans le menu principal
     version 1.9 - 29/03/2026
@@ -184,7 +186,7 @@ function ip_location_inject_visitors_panel()
     $h = function($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
     $j = function($s) { return json_encode($s); };
 ?>
-<div id="ipl-vis-panel" style="display:none;position:fixed;z-index:9999;background:#fff;border:1px solid #bbb;border-radius:0 0 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.28);width:320px;max-height:430px;overflow:hidden;font-size:.88em;font-family:sans-serif;">
+<div id="ipl-vis-panel" style="display:none;position:fixed;z-index:9999;background:#fff;color:#222;border:1px solid #bbb;border-radius:0 0 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.28);width:320px;max-height:430px;overflow:hidden;font-size:.88em;font-family:sans-serif;">
   <div style="background:#444;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;white-space:nowrap;gap:8px;">
     <span><?php echo $h($r_visitors); ?> &mdash; <span id="ipl-vis-period"></span></span>
     <span>

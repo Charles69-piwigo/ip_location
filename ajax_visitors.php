@@ -26,7 +26,7 @@ SELECT l1.country_code, MIN(l1.country) AS country, COUNT(*) AS visit_count
    AND l1.is_bot        = 0
    AND l1.is_blocked    = 0
    AND l1.country_code != ''
-   AND l1.url REGEXP '(index|picture)[.]php[?]/(category/[0-9]+|[0-9]+/category/)'
+   AND l1.url REGEXP '/category/[0-9]+|/[0-9]+/category/'
    AND EXISTS (
          SELECT 1
            FROM {$prefixeTable}ip_location_log l2
