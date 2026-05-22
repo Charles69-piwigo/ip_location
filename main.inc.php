@@ -215,10 +215,12 @@ window.iplVisToggle=function(anchorEl){
   var anchor=anchorEl||document.getElementById('ipl-vis-nav-item');
   if(anchor){
     var r=anchor.getBoundingClientRect();
-    var pw=270,dw=document.documentElement.clientWidth;
+    var pw=p.offsetWidth||320,dw=document.documentElement.clientWidth;
     p.style.top=r.bottom+'px';
+    // Aligner le bord gauche du panel sur le bord gauche de l'ancre,
+    // mais si ça déborde à droite, aligner les bords droits.
     var left=r.left;
-    if(left+pw>dw-6)left=dw-pw-6;
+    if(left+pw>dw-4)left=r.right-pw;
     p.style.left=Math.max(left,4)+'px';
     p.style.right='auto';
   } else {
