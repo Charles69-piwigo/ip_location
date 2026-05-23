@@ -12,7 +12,7 @@ if (empty($plugin_conf['visitors_enabled'])) {
     exit;
 }
 
-$period_map = array('week' => '7 DAY', 'month' => '30 DAY', 'quarter' => '90 DAY');
+$period_map = array('week' => '7 DAY', 'fortnight' => '15 DAY', 'month' => '30 DAY', 'quarter' => '90 DAY');
 $period_key = isset($plugin_conf['visitors_period']) ? $plugin_conf['visitors_period'] : 'week';
 if (!array_key_exists($period_key, $period_map)) $period_key = 'week';
 $interval = $period_map[$period_key];

@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.9b
+Version: 1.9c
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,10 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 1.9c - 23/05/2026
+        remplacé visiteurs par visites
+        ajouté quinzaine
+        corrigé taille police
     version 1.9b - 22/05/2026
         box vide Kat
     version 1.9a - 22/05/2026
@@ -170,9 +174,10 @@ function ip_location_inject_visitors_panel()
     $ajax_url      = json_encode(get_root_url() . 'plugins/ip_location/ajax_visitors.php');
     $flag_base_url = json_encode(get_root_url() . 'plugins/ip_location/image/');
     $period_labels = json_encode(array(
-        'week'    => l10n('cette semaine'),
-        'month'   => l10n('ce mois'),
-        'quarter' => l10n('ce trimestre'),
+        'week'      => l10n('cette semaine'),
+        'fortnight' => l10n('ces deux semaines'),
+        'month'     => l10n('ce mois'),
+        'quarter'   => l10n('ce trimestre'),
     ));
     // Chaînes pour HTML (htmlspecialchars) et pour JS (json_encode séparé)
     $r_visitors = l10n('Visiteurs');

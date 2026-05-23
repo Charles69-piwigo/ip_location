@@ -1,5 +1,5 @@
 <style>
-  .ipl-table { width:auto; border-collapse:collapse; margin:0 0 1em 20px; }
+  .ipl-table { width:auto; border-collapse:collapse; margin:0 0 1em 20px; font-size:0.8rem; }
   .ipl-table th, .ipl-table td { text-align:left; padding:4px 12px 4px 0; white-space:nowrap; }
   .ipl-table td.ipl-date { width:200px; min-width:155px; max-width:200px; }
   .ipl-table thead tr { border-bottom:2px solid #ccc; }

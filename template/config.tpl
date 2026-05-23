@@ -16,6 +16,7 @@
     <label><strong>{'Période de calcul'|@translate}</strong>
       <select name="visitors_period" style="margin-left:10px;">
         <option value="week"{if $VISITORS_PERIOD eq 'week'} selected{/if}>{'Semaine (7 jours)'|@translate}</option>
+        <option value="fortnight"{if $VISITORS_PERIOD eq 'fortnight'} selected{/if}>{'Quinzaine (15 jours)'|@translate}</option>
         <option value="month"{if $VISITORS_PERIOD eq 'month'} selected{/if}>{'Mois (30 jours)'|@translate}</option>
         <option value="quarter"{if $VISITORS_PERIOD eq 'quarter'} selected{/if}>{'Trimestre (90 jours)'|@translate}</option>
       </select>

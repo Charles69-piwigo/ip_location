@@ -16,7 +16,7 @@ if (isset($_POST['action'])) {
         }
     } elseif ($_POST['action'] === 'save_visitors_config') {
         $visitors_enabled = isset($_POST['visitors_enabled']) ? '1' : '0';
-        $visitors_period  = in_array($_POST['visitors_period'] ?? '', ['week', 'month', 'quarter'])
+        $visitors_period  = in_array($_POST['visitors_period'] ?? '', ['week', 'fortnight', 'month', 'quarter'])
                             ? $_POST['visitors_period'] : 'week';
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
