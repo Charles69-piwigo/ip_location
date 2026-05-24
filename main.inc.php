@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 1.9c
+Version: 2.0
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,12 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.0 - 24/05/2026
+        clarifié notion d'accès vs visites
+        filtre sur IP dans le journal des visites
+        mise à jour de l'aide
+        avertissement qd nb enregistrement inf à la période
+        
     version 1.9c - 23/05/2026
         remplacé visiteurs par visites
         ajouté quinzaine
@@ -175,7 +181,7 @@ function ip_location_inject_visitors_panel()
     $flag_base_url = json_encode(get_root_url() . 'plugins/ip_location/image/');
     $period_labels = json_encode(array(
         'week'      => l10n('cette semaine'),
-        'fortnight' => l10n('ces deux semaines'),
+        'fortnight' => l10n('cette quinzaine'),
         'month'     => l10n('ce mois'),
         'quarter'   => l10n('ce trimestre'),
     ));
@@ -187,13 +193,14 @@ function ip_location_inject_visitors_panel()
     $r_loading  = l10n('Chargement…');
     $r_error    = l10n('Erreur de chargement.');
     $r_total    = l10n('Total');
+    $r_warn     = l10n('Couverture incomplète');
 
     $h = function($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
     $j = function($s) { return json_encode($s); };
 ?>
 <div id="ipl-vis-panel" style="display:none;position:fixed;z-index:9999;background:#fff;color:#222;border:1px solid #bbb;border-radius:0 0 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.28);width:320px;max-height:430px;overflow:hidden;font-size:.88em;font-family:sans-serif;">
   <div style="background:#444;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;white-space:nowrap;gap:8px;">
-    <span><?php echo $h($r_visitors); ?> &mdash; <span id="ipl-vis-period"></span></span>
+    <span><?php echo $h($r_visitors); ?> <span id="ipl-vis-period"></span></span>
     <span>
       <a id="ipl-sc" style="color:#fff;font-weight:bold;text-decoration:none;cursor:pointer;font-size:.82em;" onclick="iplVisSort('count')"><?php echo $h($r_count); ?></a>
       <a id="ipl-sk" style="color:#888;text-decoration:none;cursor:pointer;font-size:.82em;margin-left:8px;" onclick="iplVisSort('country')"><?php echo $h($r_country); ?></a>
@@ -205,14 +212,15 @@ function ip_location_inject_visitors_panel()
 </div>
 <script>
 (function(){
-var _v={data:null,period:null,sort:'count',
+var _v={data:null,period:null,sort:'count',coverage_days:null,period_days:null,
   ajax:<?php echo $ajax_url; ?>,
   flags:<?php echo $flag_base_url; ?>,
   labels:<?php echo $period_labels; ?>,
   nodata:<?php echo $j($r_nodata); ?>,
   error:<?php echo $j($r_error); ?>,
   loading:<?php echo $j($r_loading); ?>,
-  total:<?php echo $j($r_total); ?>
+  total:<?php echo $j($r_total); ?>,
+  warn:<?php echo $j($r_warn); ?>
 };
 
 window.iplVisToggle=function(anchorEl){
@@ -238,7 +246,7 @@ window.iplVisToggle=function(anchorEl){
   try{
     var c=JSON.parse(sessionStorage.getItem('ipl_vis')||'null');
     if(c&&c.ts&&(Date.now()-c.ts)<600000){
-      _v.data=c.rows;_v.period=c.period;iplVisRender();return;
+      _v.data=c.rows;_v.period=c.period;_v.coverage_days=c.coverage_days||null;_v.period_days=c.period_days||null;iplVisRender();return;
     } else {
       _v.data=null;
       try{sessionStorage.removeItem('ipl_vis');}catch(e2){}
@@ -262,8 +270,8 @@ function iplVisFetch(){
       try{
         var d=JSON.parse(x.responseText);
         if(d.rows){
-          _v.data=d.rows;_v.period=d.period||'week';
-          try{sessionStorage.setItem('ipl_vis',JSON.stringify({rows:_v.data,period:_v.period,ts:Date.now()}));}catch(e){}
+          _v.data=d.rows;_v.period=d.period||'week';_v.coverage_days=d.coverage_days||null;_v.period_days=d.period_days||null;
+          try{sessionStorage.setItem('ipl_vis',JSON.stringify({rows:_v.data,period:_v.period,coverage_days:_v.coverage_days,period_days:_v.period_days,ts:Date.now()}));}catch(e){}
           iplVisRender();
         }else{iplVisErr();}
       }catch(e){iplVisErr();}
@@ -278,7 +286,12 @@ function iplVisRender(){
   if(_v.sort==='country')rows.sort(function(a,b){return(a.country||'').localeCompare(b.country||'');});
   else rows.sort(function(a,b){return(b.visit_count|0)-(a.visit_count|0);});
   var lbl=_v.labels[_v.period]||_v.period;
-  document.getElementById('ipl-vis-period').textContent=lbl;
+  if(_v.coverage_days&&_v.period_days&&_v.coverage_days<_v.period_days){
+    var tip=esc(_v.warn)+' : '+_v.coverage_days+' j / '+_v.period_days+' j';
+    document.getElementById('ipl-vis-period').innerHTML=esc(lbl)+' <span title="'+tip+'" style="color:#f90;cursor:help;">⚠</span>';
+  }else{
+    document.getElementById('ipl-vis-period').textContent=lbl;
+  }
   var total=0,html='';
   for(var i=0;i<rows.length;i++){
     var r=rows[i];

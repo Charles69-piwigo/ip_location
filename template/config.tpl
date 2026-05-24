@@ -135,7 +135,7 @@
   <input type="hidden" name="action" value="save_url_config">
   <p>
     <label><strong>{'Mots-clés bloqués dans l\'URL'|@translate}</strong>
-      <em style="font-weight:normal;font-size:0.85em;color:#666;"> &mdash; {'un par ligne — toute visite dont l\'URL contient un de ces mots sera bloquée'|@translate}</em>
+      <em style="font-weight:normal;font-size:0.85em;color:#666;"> &mdash; {'un par ligne — tout accès dont l\'URL contient un de ces mots sera bloqué'|@translate}</em>
     </label>
     <textarea name="blocked_url_keywords" rows="5" style="width:400px;display:block;margin:0.3em 0 0.5em 0;" placeholder="">{$BLOCKED_URL_KEYWORDS|escape}</textarea>
   </p>

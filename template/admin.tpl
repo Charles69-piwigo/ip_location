@@ -45,7 +45,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 </script>
 
 <div class="titrePage">
-  <h2>{'IP Location'|@translate} &mdash; {'Journal des visites'|@translate}</h2>
+  <h2>{'IP Location'|@translate} &mdash; {'Journal des accès'|@translate}</h2>
 </div>
 
 <!-- ── Onglets ────────────────────────────────────────────────────────── -->
@@ -58,7 +58,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 
 {if $TAB eq 'config'}
 <div class="ipl-counters">
-  <span>{'Visites'|@translate} : <strong>{$TOTAL_ALL}</strong></span>
+  <span>{'Accès'|@translate} : <strong>{$TOTAL_ALL}</strong></span>
   <span style="color:#c00;">{'Bots détectés'|@translate} : <strong>{$TOTAL_BOTS}</strong></span>
   <span style="color:#800;">{'IPs bloquées'|@translate} : <strong>{$TOTAL_BLOCKED}</strong></span>
   <span>{'Humains'|@translate} : <strong>{math equation="a - b" a=$TOTAL_ALL b=$TOTAL_BOTS}</strong></span>
@@ -72,7 +72,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
     <tr>
       <th>{'Pays'|@translate}</th>
       <th>{'Code'|@translate}</th>
-      <th>{'Visites'|@translate}</th>
+      <th>{'Accès'|@translate}</th>
       <th>{'Bots'|@translate}</th>
     </tr>
   </thead>
@@ -93,7 +93,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 </table>
 
 <!-- ── Journal des visites ──────────────────────────────────────────────── -->
-<h3 id="ipl-journal">{'Journal des visites'|@translate}</h3>
+<h3 id="ipl-journal">{'Journal des accès'|@translate}</h3>
 
 <div class="ipl-filters">
   {if $COUNTRY_FILTER neq ''}
@@ -104,10 +104,15 @@ if (window.location.search.indexOf('msg=') !== -1) {
   {assign var=date_qs value=''}
   {if $DATE_FROM neq ''}{assign var=date_qs value="`$date_qs`&amp;date_from=`$DATE_FROM`"}{/if}
   {if $DATE_TO   neq ''}{assign var=date_qs value="`$date_qs`&amp;date_to=`$DATE_TO`"}{/if}
-  <a href="{$BASE_URL|escape}{$country_qs}{$date_qs}#ipl-journal"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}{$date_qs}#ipl-journal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}{$date_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}{$date_qs}#ipl-journal"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
+  {if $IP_FILTER neq ''}
+    {assign var=ip_qs value="&amp;ip_filter=`$IP_FILTER`"}
+  {else}
+    {assign var=ip_qs value=''}
+  {/if}
+  <a href="{$BASE_URL|escape}{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
   &nbsp;|&nbsp;
   <form method="get" action="admin.php" style="display:inline;margin:0;">
     <input type="hidden" name="page" value="plugin-ip_location">
@@ -120,6 +125,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
     </select>
     {if $DATE_FROM neq ''}<input type="hidden" name="date_from" value="{$DATE_FROM|escape}">{/if}
     {if $DATE_TO   neq ''}<input type="hidden" name="date_to"   value="{$DATE_TO|escape}">{/if}
+    {if $IP_FILTER neq ''}<input type="hidden" name="ip_filter" value="{$IP_FILTER|escape}">{/if}
   </form>
   &nbsp;|&nbsp;
   <form method="get" action="admin.php#ipl-journal" style="display:inline;margin:0;">
@@ -131,7 +137,22 @@ if (window.location.search.indexOf('msg=') !== -1) {
     <input type="date" name="date_to"   value="{$DATE_TO|escape}"   style="font-size:0.88em;padding:2px 4px;">
     <button type="submit" style="font-size:0.85em;padding:2px 8px;">{'Filtrer'|@translate}</button>
     {if $DATE_FROM neq '' or $DATE_TO neq ''}
-      <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}#ipl-journal" style="font-size:0.85em;margin-left:4px;">✕</a>
+      <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}{$ip_qs}#ipl-journal" style="font-size:0.85em;margin-left:4px;">✕</a>
+    {/if}
+    {if $IP_FILTER neq ''}<input type="hidden" name="ip_filter" value="{$IP_FILTER|escape}">{/if}
+  </form>
+  &nbsp;|&nbsp;
+  <form method="get" action="admin.php#ipl-journal" style="display:inline;margin:0;">
+    <input type="hidden" name="page" value="plugin-ip_location">
+    {if $FILTER neq 'all'}<input type="hidden" name="filter" value="{$FILTER|escape}">{/if}
+    {if $COUNTRY_FILTER neq ''}<input type="hidden" name="country" value="{$COUNTRY_FILTER|escape}">{/if}
+    {if $DATE_FROM neq ''}<input type="hidden" name="date_from" value="{$DATE_FROM|escape}">{/if}
+    {if $DATE_TO   neq ''}<input type="hidden" name="date_to"   value="{$DATE_TO|escape}">{/if}
+    <span style="font-size:0.88em;color:#666;">IP&nbsp;</span>
+    <input type="text" name="ip_filter" value="{$IP_FILTER|escape}" placeholder="ex: 47.146…" style="font-size:0.88em;padding:2px 4px;width:110px;">
+    <button type="submit" style="font-size:0.85em;padding:2px 8px;">{'Filtrer'|@translate}</button>
+    {if $IP_FILTER neq ''}
+      <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}{$date_qs}#ipl-journal" style="font-size:0.85em;margin-left:4px;">✕</a>
     {/if}
   </form>
 </div>
@@ -150,7 +171,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
   </thead>
   <tbody>
   {if $LOGS|@count == 0}
-    <tr><td colspan="7">{'Aucune visite enregistrée.'|@translate}</td></tr>
+    <tr><td colspan="7">{'Aucun accès enregistré.'|@translate}</td></tr>
   {else}
     {foreach from=$LOGS item=log}
     <tr{if $log.is_bot} class="ipl-bot-row"{/if}>
@@ -194,7 +215,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 <div class="pagination" style="margin:10px 0;">
   {section name=p loop=$TOTAL_PAGES start=1}
     {assign var=pnum value=$smarty.section.p.index}
-    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}{$date_qs}&amp;pnum={$pnum}#ipl-journal"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
+    <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}{$date_qs}{$ip_qs}&amp;pnum={$pnum}#ipl-journal"{if $pnum == $CURRENT_PAGE} style="font-weight:bold;"{/if}>{$pnum}</a>
   {/section}
 </div>
 {/if}
