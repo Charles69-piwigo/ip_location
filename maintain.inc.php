@@ -27,7 +27,7 @@ function plugin_activate($plugin_id, $plugin_version, &$errors)
             'whitelist'         => conf_get_param('ip_location_whitelist', ''),
             'blocking_enabled'  => conf_get_param('ip_location_blocking_enabled', '0'),
             'htaccess_enabled'  => conf_get_param('ip_location_htaccess_enabled', '0'),
-            'max_records'       => (int)conf_get_param('ip_location_max_records', 5000),
+            'max_records'       => (int)conf_get_param('ip_location_max_records', 50000),
         ];
         conf_update_param('ip_location', serialize($migrated));
         foreach ($old_params as $param) {

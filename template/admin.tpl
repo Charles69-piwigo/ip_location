@@ -149,7 +149,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
     {if $DATE_FROM neq ''}<input type="hidden" name="date_from" value="{$DATE_FROM|escape}">{/if}
     {if $DATE_TO   neq ''}<input type="hidden" name="date_to"   value="{$DATE_TO|escape}">{/if}
     <span style="font-size:0.88em;color:#666;">IP&nbsp;</span>
-    <input type="text" name="ip_filter" value="{$IP_FILTER|escape}" placeholder="ex: 47.146…" style="font-size:0.88em;padding:2px 4px;width:110px;">
+    <input type="text" name="ip_filter" value="{$IP_FILTER|escape}" placeholder="" style="font-size:0.88em;padding:2px 4px;width:110px;">
     <button type="submit" style="font-size:0.85em;padding:2px 8px;">{'Filtrer'|@translate}</button>
     {if $IP_FILTER neq ''}
       <a href="{$BASE_URL|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{$country_qs}{$date_qs}#ipl-journal" style="font-size:0.85em;margin-left:4px;">✕</a>
