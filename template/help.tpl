@@ -1,9 +1,12 @@
 <div class="ipl-help">
 
   <h4>{'Présentation'|@translate}</h4>
-  <p>{'Le plugin IP Location enregistre les visites des visiteurs anonymes (guests) avec leur géolocalisation, détecte les bots et offre plusieurs mécanismes de blocage.'|@translate}</p>
+  <p>{'Le plugin IP Location enregistre les accès des visiteurs anonymes (guests) avec leur géolocalisation, détecte les bots et offre plusieurs mécanismes de blocage.'|@translate}</p>
 
-  <h4>{'Enregistrement des visites'|@translate}</h4>
+  <h4>{'Statistiques des visites'|@translate}</h4>
+  <p>{'Sont comptabilisées comme une visite chaque accès à un album et/ou une photo, à condition qu\'il y ait une connexion à l\'accueil du site dans un délai de ± une demi-heure.'|@translate}</p>
+
+  <h4>{'Enregistrement des accès'|@translate}</h4>
   <ul>
     <li>{'Seuls les visiteurs non connectés (guests) sont enregistrés.'|@translate}</li>
     <li>{'Géolocalisation via fallback multi-providers'|@translate}</li>
@@ -14,14 +17,14 @@
   <ul>
     <li><strong>{'User-Agent vide'|@translate}</strong> {'→ marqué bot.'|@translate}</li>
     <li><strong>{'Mots-clés dans le User-Agent'|@translate}</strong> {'→ bot, crawler, spider, scraper, curl, wget, python, etc.'|@translate}</li>
-    <li><strong>{'Visites synchronisées'|@translate}</strong> {'→ si la même URL est visitée par 2 IPs différentes dans les 10 secondes, les deux entrées sont marquées bots (marquage rétroactif).'|@translate}</li>
+    <li><strong>{'Accès synchronisés'|@translate}</strong> {'→ si la même URL est visitée par 2 IPs différentes dans les 10 secondes, les deux entrées sont marquées bots (marquage rétroactif).'|@translate}</li>
   </ul>
 
   <h4>{'Blocage par pays'|@translate}</h4>
   <ul>
     <li>{'Saisir les codes ISO des pays à bloquer (ex : US,CN,EG).'|@translate}</li>
     <li>{'Le blocage se fait en PHP après géolocalisation : Apache charge quand même la page avant de renvoyer un 403.'|@translate}</li>
-    <li>{'Les visites bloquées sont quand même enregistrées dans le journal (badge BLOQUÉ).'|@translate}</li>
+    <li>{'Les accès bloqués sont quand même enregistrés dans le journal (badge BLOQUÉ).'|@translate}</li>
   </ul>
 
   <h4>{'Liste blanche d\'IPs'|@translate}</h4>
@@ -48,7 +51,7 @@
 
   <h4>{'Vidage automatique'|@translate}</h4>
   <ul>
-    <li>{'À chaque visite enregistrée, si le nombre d\'entrées dépasse le seuil configuré, les plus anciennes sont supprimées.'|@translate}</li>
+    <li>{'À chaque accès enregistré, si le nombre d\'entrées dépasse le seuil configuré, les plus anciennes sont supprimées.'|@translate}</li>
     <li>{'Mettre 0 pour désactiver le vidage automatique.'|@translate}</li>
     <li>{'La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.'|@translate}</li>
   </ul>

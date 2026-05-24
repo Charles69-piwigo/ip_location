@@ -135,6 +135,7 @@ if (!preg_match('/^[A-Z]{0,2}$/', $country_filter)) $country_filter = '';
 
 $date_from = isset($_GET['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from']) ? $_GET['date_from'] : '';
 $date_to   = isset($_GET['date_to'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'])   ? $_GET['date_to']   : '';
+$ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', trim($_GET['ip_filter'])) : '';
 
 $where_parts = [];
 if ($filter === 'normal')  $where_parts[] = 'is_bot = 0 AND is_blocked = 0';
@@ -143,6 +144,7 @@ if ($filter === 'blocked') $where_parts[] = 'is_blocked = 1';
 if ($country_filter !== '') $where_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
 if ($date_from !== '') $where_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
 if ($date_to   !== '') $where_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
+if ($ip_filter !== '')  $where_parts[] = "ip LIKE '" . pwg_db_real_escape_string($ip_filter) . "%'";
 $filter_where = empty($where_parts) ? '' : 'WHERE ' . implode(' AND ', $where_parts);
 
 $total_result = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log ' . $filter_where);
@@ -222,6 +224,7 @@ $template->assign([
     'COUNTRY_FILTER'     => $country_filter,
     'DATE_FROM'          => $date_from,
     'DATE_TO'            => $date_to,
+    'IP_FILTER'          => $ip_filter,
     'COUNTRIES'          => $countries,
     'TAB'           => $tab,
     'TOTAL_ALL'     => $total_all,
