@@ -131,6 +131,9 @@ function ip_location_get_conf()
 add_event_handler('loc_begin_index',   'ip_location_log_visit');
 add_event_handler('loc_begin_picture', 'ip_location_log_visit');
 
+// Logger les photos vues via PhotoSwipe (navigation JS sans rechargement)
+add_event_handler('loc_after_page_header', 'ip_location_inject_pswp_logger');
+
 // ─── Blockmanager : bouton dans la barre de navigation ────────────────────
 add_event_handler('blockmanager_register_blocks', 'ip_location_register_visitors_block');
 add_event_handler('blockmanager_apply',           'ip_location_apply_visitors_block');
@@ -361,9 +364,48 @@ function ip_location_http_get($url)
 }
 
 /**
- * Enregistre la visite d'un guest avec géolocalisation
+ * Injecte un wrapper du constructeur PhotoSwipe pour logger les vues en diaporama.
+ * Utilise DOMContentLoaded (footer_scripts déjà exécutés à ce moment).
  */
-function ip_location_log_visit()
+function ip_location_inject_pswp_logger()
+{
+    $ajax_log_url = json_encode(get_root_url() . 'plugins/ip_location/ajax_log.php');
+?>
+<script>
+(function(){
+var _logUrl=<?php echo $ajax_log_url; ?>;
+document.addEventListener('DOMContentLoaded',function(){
+  if(typeof PhotoSwipe==='undefined') return;
+  var _O=PhotoSwipe;
+  window.PhotoSwipe=function(el,ui,items,opts){
+    var inst=new _O(el,ui,items,opts);
+    function doLog(item){
+      if(!item||!item.href) return;
+      var x=new XMLHttpRequest();
+      x.open('GET',_logUrl+'?url='+encodeURIComponent(item.href),true);
+      x.send();
+    }
+    // Première photo affichée
+    inst.listen('initialZoomInEnd',function(){ doLog(inst.currItem); });
+    // Navigation vers une autre photo
+    inst.listen('afterChange',function(){ doLog(inst.currItem); });
+    return inst;
+  };
+});
+})();
+</script>
+<?php
+}
+
+/**
+ * Enregistre la visite d'un guest avec géolocalisation.
+ *
+ * @param string|null $override_url  URL à loguer (null = URL de la requête courante).
+ *                                   Utilisé par ajax_log.php pour les vues PhotoSwipe.
+ * @param bool        $do_block      Si true, envoie un 403 et exit en cas de blocage.
+ *                                   Mettre à false depuis ajax_log.php.
+ */
+function ip_location_log_visit($override_url = null, $do_block = true)
 {
     global $user, $prefixeTable;
 
@@ -524,8 +566,12 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
     }
 
     // Construction de l'URL visitée
-    $scheme     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $url        = $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    if ($override_url !== null && is_string($override_url)) {
+        $url = $override_url;
+    } else {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $url    = $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    }
     $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
 
     // Détection bot
@@ -600,7 +646,7 @@ DELETE FROM ' . $prefixeTable . 'ip_location_log
         }
     }
 
-    if ($is_blocked) {
+    if ($is_blocked && $do_block) {
         header('HTTP/1.0 403 Forbidden');
         exit;
     }

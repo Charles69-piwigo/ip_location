@@ -31,8 +31,10 @@ if (!empty($oldest_row['oldest'])) {
     }
 }
 
-// Visites humaines : accès album (index.php?/category/NNN) ou photo (index.php?/NNN/category/MMM)
-// avec passage par la page d'accueil (url sans ?/) dans les 30 min avant ou après.
+// Visites humaines : toute page photo (picture.php) ou page index avec section (?/...)
+// précédée ou suivie d'une page d'entrée (accueil sans ?/, ou entrée directe ?/section)
+// dans les 30 min avant ou après.
+// Sections couvertes : category, list, recent_pics, most_visited, best_rated, tag, search, favorites, etc.
 $result = pwg_query("
 SELECT l1.country_code, MIN(l1.country) AS country, COUNT(*) AS visit_count
   FROM {$prefixeTable}ip_location_log l1
@@ -40,12 +42,15 @@ SELECT l1.country_code, MIN(l1.country) AS country, COUNT(*) AS visit_count
    AND l1.is_bot        = 0
    AND l1.is_blocked    = 0
    AND l1.country_code != ''
-   AND l1.url REGEXP '/category/[0-9]+|/[0-9]+/category/'
+   AND (
+         l1.url LIKE '%/picture.php%'
+      OR l1.url REGEXP '/category/[0-9]+|/list/[0-9]|/recent_pics|/most_visited|/best_rated|/tag/[0-9]|/search/[0-9]|/favorites'
+   )
    AND EXISTS (
          SELECT 1
            FROM {$prefixeTable}ip_location_log l2
-          WHERE l2.ip = l1.ip
-            AND l2.url NOT LIKE '%?/%'
+          WHERE l2.ip  = l1.ip
+            AND l2.url != l1.url
             AND l2.visit_date BETWEEN
                 DATE_SUB(l1.visit_date, INTERVAL 30 MINUTE)
                 AND DATE_ADD(l1.visit_date, INTERVAL 30 MINUTE)
