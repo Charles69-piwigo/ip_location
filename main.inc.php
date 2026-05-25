@@ -182,6 +182,9 @@ add_event_handler('loc_after_page_header', 'ip_location_inject_visitors_panel');
 
 function ip_location_inject_visitors_panel()
 {
+    // Pages admin uniquement pour les admins — le panel visiteurs est réservé aux pages publiques
+    if (defined('IN_ADMIN') && IN_ADMIN) return;
+
     $plugin_conf = ip_location_get_conf();
     if (empty($plugin_conf['visitors_enabled'])) return;
 
@@ -374,6 +377,9 @@ function ip_location_http_get($url)
  */
 function ip_location_inject_pswp_logger()
 {
+    // Pages admin uniquement pour les admins — rien à logger ni à injecter
+    if (defined('IN_ADMIN') && IN_ADMIN) return;
+
     $ajax_log_url = json_encode(get_root_url() . 'plugins/ip_location/ajax_log.php');
 ?>
 <script>
