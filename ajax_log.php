@@ -1,7 +1,7 @@
 <?php
 /**
  * Endpoint AJAX : logge une URL visitée via PhotoSwipe (sans rechargement de page).
- * Appelé par le listener JS afterChange / initialZoomInEnd du wrapper PhotoSwipe.
+ * Appelé par le listener JS afterChange / initialZoomInEnd du wrapper PhotoSwipe.xx
  */
 if (!defined('PHPWG_ROOT_PATH')) {
     define('PHPWG_ROOT_PATH', dirname(dirname(dirname(__FILE__))) . '/');
