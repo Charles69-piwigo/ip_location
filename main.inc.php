@@ -639,19 +639,43 @@ function ip_location_download_guard()
         }
         // Pays hors allowlist → blocage
         ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 1, $prefixeTable);
-        header('HTTP/1.0 403 Forbidden');
-        exit;
+        ip_location_download_denied_response();
     }
 
     // Géo indisponible : appliquer download_geo_fail_mode
     if ($plugin_conf['download_geo_fail_mode'] === 'closed') {
         ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 1, $prefixeTable);
-        header('HTTP/1.0 403 Forbidden');
-        exit;
+        ip_location_download_denied_response();
     }
 
     // fail-open (défaut) : laisser passer, mais journaliser pour mesurer la fréquence réelle
     ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 0, $prefixeTable);
+}
+
+/**
+ * Page 403 minimale (HTML autonome, sans ressource externe) pour un téléchargement
+ * refusé par ip_location_download_guard(). Le statut HTTP reste 403 (pas de simulation
+ * de succès) ; seul le corps de réponse est personnalisé. Termine toujours par exit.
+ */
+function ip_location_download_denied_response()
+{
+    global $user;
+
+    // Pas de rechargement de langue ici : load_plugins() (common.inc.php) s'exécute avant
+    // trigger_notify('init'), donc la langue du plugin (chargée en tête de main.inc.php) est déjà en place.
+    $msg = l10n('ipl_download_denied');
+    $lang_code = isset($user['language']) ? substr($user['language'], 0, 2) : 'en';
+
+    http_response_code(403);
+    header('Content-Type: text/html; charset=UTF-8');
+
+    echo '<!DOCTYPE html><html lang="' . htmlspecialchars($lang_code) . '"><head><meta charset="UTF-8">'
+       . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+       . '<title>' . htmlspecialchars($msg) . '</title></head>'
+       . '<body style="font-family:sans-serif;text-align:center;padding:3em;color:#333">'
+       . '<h1 style="font-size:1.4em">' . htmlspecialchars($msg) . '</h1>'
+       . '</body></html>';
+    exit;
 }
 
 /**
