@@ -188,11 +188,11 @@
   <p>
     <label><strong>{'En cas d\'échec de géolocalisation'|@translate}</strong>
       <select name="download_geo_fail_mode" style="margin-left:10px;">
-        <option value="open"{if $DOWNLOAD_GEO_FAIL_MODE eq 'open'} selected{/if}>{'Autoriser (recommandé)'|@translate}</option>
-        <option value="closed"{if $DOWNLOAD_GEO_FAIL_MODE eq 'closed'} selected{/if}>{'Bloquer'|@translate}</option>
+        <option value="open"{if $DOWNLOAD_GEO_FAIL_MODE eq 'open'} selected{/if}>{'Autoriser'|@translate}</option>
+        <option value="closed"{if $DOWNLOAD_GEO_FAIL_MODE eq 'closed'} selected{/if}>{'Bloquer (recommandé)'|@translate}</option>
       </select>
     </label>
-    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Chaque passage "Autoriser" est journalisé (non bloqué) afin de mesurer sa fréquence réelle — voir la section Aide.'|@translate}</em>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'"Bloquer" (par défaut) refuse le téléchargement si la géolocalisation échoue — c\'est précisément le cas lors d\'un afflux de robots qui sature les fournisseurs de géolocalisation. "Autoriser" laisse passer et journalise (non bloqué) pour mesurer la fréquence réelle des échecs — voir la section Aide.'|@translate}</em>
   </p>
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
 </form>

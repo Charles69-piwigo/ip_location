@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 2.4
+Version: 2.5
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,16 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.5 - 27/07/2026
+        fix sécurité : le blocage pays des téléchargements passe fail-closed par
+        défaut (download_geo_fail_mode = 'closed') — un échec de géolocalisation
+        bloque désormais le téléchargement au lieu de le laisser passer
+        le guard download ignore la cache géo négative (2h) introduite en v2.4 :
+        un 'Unknown' figé ne fonde plus jamais une décision de blocage, une
+        nouvelle tentative re-résout toujours en direct (resolve_geo() accepte
+        un paramètre $use_negative_cache, false pour le guard, true ailleurs)
+        aide : mise à jour de la section Filtre pays sur les téléchargements
+
     version 2.4 - 27/07/2026
         fix perf géo : court-circuit immédiat des IP privées/réservées (réseau
         local) dans resolve_geo(), plus jamais envoyées aux providers
@@ -145,7 +155,7 @@ function ip_location_get_conf()
         'visitors_period'      => 'week',
         'download_filter_enabled'    => '0',
         'download_allowed_countries' => '',
-        'download_geo_fail_mode'     => 'open',
+        'download_geo_fail_mode'     => 'closed',
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -444,16 +454,21 @@ document.addEventListener('DOMContentLoaded',function(){
 /**
  * Résout la géolocalisation d'une IP : court-circuit immédiat pour une IP privée/réservée
  * (jamais géolocalisable, jamais mise en cache), sinon cache (30 jours pour un succès,
- * 2 h pour un 'Unknown') puis providers en cascade (ip-api.com → freeipapi.com →
- * ipwho.is → geoplugin.net → ipapi.co). Le cache est alimenté dans tous les cas (y
- * compris les échecs, pour éviter de re-solliciter les providers en boucle) et
- * nettoyé (30 jours + limite 5000 entrées).
+ * 2 h pour un 'Unknown' — voir $use_negative_cache) puis providers en cascade
+ * (ip-api.com → freeipapi.com → ipwho.is → geoplugin.net → ipapi.co). Le cache est
+ * alimenté dans tous les cas (y compris les échecs) et nettoyé (30 jours + limite 5000).
  *
- * @param string $ip           IP déjà échappée pour SQL (pwg_db_real_escape_string).
+ * @param string $ip                 IP déjà échappée pour SQL (pwg_db_real_escape_string).
  * @param string $prefixeTable
+ * @param bool   $use_negative_cache Si false, ignore les entrées 'Unknown' en cache (mais
+ *                                   les écrit quand même) : force une résolution live à
+ *                                   chaque appel. Utilisé par ip_location_download_guard()
+ *                                   pour qu'un 'Unknown' figé jusqu'à 2h ne fonde jamais
+ *                                   une décision de blocage (désarmerait le filtre pendant
+ *                                   un flood qui sature justement les providers).
  * @return array ['country' => ..., 'country_code' => ..., 'city' => ...] ('Unknown' si échec).
  */
-function ip_location_resolve_geo($ip, $prefixeTable)
+function ip_location_resolve_geo($ip, $prefixeTable, $use_negative_cache = true)
 {
     // IP privée / réservée / loopback (ex: réseau local 192.168.x) — non géolocalisable :
     // retour immédiat, aucun appel réseau. filter_var tolère une IP déjà échappée
@@ -462,15 +477,17 @@ function ip_location_resolve_geo($ip, $prefixeTable)
         return ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
     }
 
-    // Vérification du cache (30 jours pour une résolution réussie, 2 h pour un échec
-    // 'Unknown' — laisse une chance de re-tenter une IP publique temporairement en échec)
+    // Vérification du cache (30 jours pour une résolution réussie ; 2 h pour un échec
+    // 'Unknown', uniquement si $use_negative_cache — sinon on ignore les entrées négatives
+    // et on retente une résolution live)
     $query = '
 SELECT country, country_code, city
   FROM ' . $prefixeTable . 'ip_location_cache
   WHERE ip = \'' . $ip . '\'
     AND (
-          (country <> \'Unknown\' AND resolved_at >= NOW() - INTERVAL 30 DAY)
-       OR (country =  \'Unknown\' AND resolved_at >= NOW() - INTERVAL 2 HOUR)
+          (country <> \'Unknown\' AND resolved_at >= NOW() - INTERVAL 30 DAY)'
+    . ($use_negative_cache ? '
+       OR (country =  \'Unknown\' AND resolved_at >= NOW() - INTERVAL 2 HOUR)' : '') . '
         );';
     $result = pwg_query($query);
 
@@ -655,8 +672,11 @@ function ip_location_download_guard()
 
     $ip = pwg_db_real_escape_string($ip_raw);
 
-    // 7. Géo
-    $geo    = ip_location_resolve_geo($ip, $prefixeTable);
+    // 7. Géo — cache négative ignorée sur ce chemin ($use_negative_cache=false) : un
+    // 'Unknown' figé jusqu'à 2h ne doit jamais fonder une décision de blocage download
+    // (désarmerait le filtre pendant un flood de scrapers, qui sature justement les
+    // providers). Le chemin pages (log_visit) garde le bénéfice perf de la cache négative.
+    $geo    = ip_location_resolve_geo($ip, $prefixeTable, false);
     $geo_ok = ($geo['country'] !== 'Unknown');
 
     $scheme     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -674,8 +694,10 @@ function ip_location_download_guard()
         ip_location_download_denied_response();
     }
 
-    // Géo indisponible : appliquer download_geo_fail_mode
-    if ($plugin_conf['download_geo_fail_mode'] === 'closed') {
+    // Géo indisponible : appliquer download_geo_fail_mode.
+    // 'closed' est le comportement par défaut effectif — tout ce qui n'est pas
+    // explicitement 'open' est traité comme fail-closed (bloquer).
+    if ($plugin_conf['download_geo_fail_mode'] !== 'open') {
         ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 1, $prefixeTable);
         ip_location_download_denied_response();
     }

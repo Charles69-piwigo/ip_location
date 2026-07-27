@@ -45,7 +45,7 @@ if (isset($_POST['action'])) {
     } elseif ($_POST['action'] === 'save_download_config') {
         $download_filter_enabled    = isset($_POST['download_filter_enabled']) ? '1' : '0';
         $download_allowed_countries = strtoupper(trim($_POST['download_allowed_countries'] ?? ''));
-        $download_geo_fail_mode     = ($_POST['download_geo_fail_mode'] ?? '') === 'closed' ? 'closed' : 'open';
+        $download_geo_fail_mode     = ($_POST['download_geo_fail_mode'] ?? '') === 'open' ? 'open' : 'closed';
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'download_filter_enabled'    => $download_filter_enabled,

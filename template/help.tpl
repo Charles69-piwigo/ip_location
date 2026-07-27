@@ -57,7 +57,9 @@
     <li>{'Le blocage se fait très tôt (évènement init), avant que Piwigo n\'enregistre l\'accès dans son historique : un téléchargement bloqué ne laisse donc aucune trace dans l\'historique standard de Piwigo.'|@translate}</li>
     <li>{'Conçu pour contrer les rafales de proxies résidentiels à usage unique (une IP différente à chaque tentative) : le blocage par IP ou par liste noire de pays serait inefficace dans ce cas, d\'où le choix d\'une liste blanche.'|@translate}</li>
     <li>{'Une IP présente dans la liste blanche du plugin n\'est jamais bloquée par ce filtre, quel que soit son pays.'|@translate}</li>
-    <li>{'Si la géolocalisation échoue (providers indisponibles), le mode "Autoriser" (par défaut) laisse passer le téléchargement mais l\'enregistre quand même dans le journal, afin de mesurer la fréquence réelle des échecs. Le mode "Bloquer" refuse par prudence dans ce cas.'|@translate}</li>
+    <li>{'Si la géolocalisation échoue (providers indisponibles ou saturés), le mode "Bloquer" (par défaut) refuse le téléchargement par prudence — c\'est précisément ce qui se produit lors d\'un afflux de robots qui sature les fournisseurs de géolocalisation, il ne faut donc pas laisser passer dans ce cas. Le mode "Autoriser" laisse passer le téléchargement mais l\'enregistre quand même dans le journal, afin de mesurer la fréquence réelle des échecs.'|@translate}</li>
+    <li>{'Ce chemin ignore volontairement le cache négatif de 2h utilisé ailleurs pour la performance : un échec de géolocalisation ne reste jamais figé pour une décision de blocage download, une nouvelle tentative re-résout toujours en direct.'|@translate}</li>
+    <li>{'En mode "Bloquer", un visiteur légitime dont la géolocalisation échoue transitoirement se verra aussi refuser le téléchargement. Si besoin, ajoutez-le (ou ajoutez-vous) à la liste blanche d\'IPs, qui reste toujours prioritaire.'|@translate}</li>
     <li>{'Ces tentatives de téléchargement apparaissent dans le journal des accès comme des entrées normales.'|@translate}
       <pre style="background:#f6f6f6;padding:8px 10px;font-size:0.82em;overflow-x:auto;">SELECT DATE(visit_date) AS jour,
        SUM(is_blocked = 0) AS passes_fail_open,
@@ -68,6 +70,7 @@ GROUP BY DATE(visit_date)
 ORDER BY jour DESC;</pre>
     </li>
     <li>{'Pistes de repli non implémentées ici, à envisager si les passages "Autoriser" s\'avèrent fréquents : détection de rafale (une même photo demandée par plusieurs IP en quelques secondes), ou retrait de la permission de téléchargement HD au groupe Invités.'|@translate}</li>
+    <li>{'En mode "Bloquer" (par défaut), un afflux de robots qui sature les fournisseurs de géolocalisation entraîne aussi le blocage de vrais visiteurs arrivant au même moment — effet secondaire assumé, le blocage prime sur la disponibilité dans ce cas précis. Pistes non implémentées pour l\'atténuer : réordonner la cascade de providers pour ne pas dépendre d\'un seul en premier, ajouter un provider sans quota strict, ou à terme une base de géolocalisation locale (sans réseau, immunisée au flood, mais plus lourde à déployer).'|@translate}</li>
     <li><strong>{'Limite connue'|@translate}</strong> {'→ le filtre ne couvre pas les téléchargements par format alternatif (paramètre "format" de action.php, nécessite l\'option Piwigo "enable_formats"). Sur cette installation, cette option est désactivée, donc sans impact ; à revoir si elle est activée un jour.'|@translate}</li>
   </ul>
 
