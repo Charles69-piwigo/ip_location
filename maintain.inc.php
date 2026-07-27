@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_log (
   user_agent   VARCHAR(512),
   is_bot       TINYINT(1)   NOT NULL DEFAULT 0,
   is_blocked   TINYINT(1)   NOT NULL DEFAULT 0,
+  log_type     VARCHAR(16)  DEFAULT NULL,
   visit_date   DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
@@ -78,6 +79,15 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
     }
     if (!in_array('city', $cols)) {
         pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist ADD COLUMN city VARCHAR(64) DEFAULT NULL AFTER country');
+    }
+
+    // Migration v2.1a → v2.2 : ajout de la colonne log_type (filtre pays téléchargements)
+    $cols = [];
+    $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log');
+    while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];
+    if (!in_array('log_type', $cols)) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
+  ADD COLUMN log_type VARCHAR(16) DEFAULT NULL');
     }
 }
 

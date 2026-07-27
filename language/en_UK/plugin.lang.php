@@ -133,3 +133,24 @@ $lang['→ toutes les entrées.'] = '→ all entries.';
 $lang['→ visiteurs humains non bloqués.'] = '→ non-blocked human visitors.';
 $lang['→ entrées détectées comme bots.'] = '→ entries detected as bots.';
 $lang['→ entrées bloquées par le blocage pays.'] = '→ entries blocked by country blocking.';
+
+// Country filter on downloads
+$lang['Filtre pays sur les téléchargements'] = 'Country filter on downloads';
+$lang['Activer le filtre pays sur les téléchargements'] = 'Enable country filter on downloads';
+$lang['Fonctionne en liste blanche : seuls les téléchargements d\'originaux provenant des pays listés ci-dessous sont autorisés. Liste vide = filtre inactif.'] = 'Works as a whitelist: only original downloads from the countries listed below are allowed. Empty list = filter inactive.';
+$lang['Pays autorisés'] = 'Allowed countries';
+$lang['En cas d\'échec de géolocalisation'] = 'On geolocation failure';
+$lang['Autoriser (recommandé)'] = 'Allow (recommended)';
+$lang['Bloquer'] = 'Block';
+$lang['Chaque passage "Autoriser" est journalisé (non bloqué) afin de mesurer sa fréquence réelle — voir la section Aide.'] = 'Every "Allow" pass-through is logged (not blocked) so its real-world frequency can be measured — see the Help section.';
+$lang['Les invités n\'ont pas la permission de télécharger les originaux : filtre sans objet.'] = 'Guests do not have permission to download originals: filter not applicable.';
+$lang['S\'applique uniquement au téléchargement des originaux (et non aux miniatures ou pages), pour les invités ayant la permission de télécharger le HD.'] = 'Applies only to original downloads (not thumbnails or pages), for guests who have permission to download HD.';
+$lang['Fonctionne en liste blanche : seuls les pays listés sont autorisés à télécharger. Une liste vide désactive le filtre, même s\'il est coché comme activé.'] = 'Works as a whitelist: only listed countries are allowed to download. An empty list disables the filter even if it is checked as enabled.';
+$lang['Le blocage se fait très tôt (évènement init), avant que Piwigo n\'enregistre l\'accès dans son historique : un téléchargement bloqué ne laisse donc aucune trace dans l\'historique standard de Piwigo.'] = 'Blocking happens very early (the init event), before Piwigo records the access in its history: a blocked download therefore leaves no trace in Piwigo\'s standard history.';
+$lang['Conçu pour contrer les rafales de proxies résidentiels à usage unique (une IP différente à chaque tentative) : le blocage par IP ou par liste noire de pays serait inefficace dans ce cas, d\'où le choix d\'une liste blanche.'] = 'Designed to counter bursts from single-use residential proxies (a different IP on every attempt): IP blocking or a country blacklist would be ineffective here, hence the whitelist approach.';
+$lang['Une IP présente dans la liste blanche du plugin n\'est jamais bloquée par ce filtre, quel que soit son pays.'] = 'An IP present in the plugin\'s whitelist is never blocked by this filter, regardless of its country.';
+$lang['Si la géolocalisation échoue (providers indisponibles), le mode "Autoriser" (par défaut) laisse passer le téléchargement mais l\'enregistre quand même dans le journal, afin de mesurer la fréquence réelle des échecs. Le mode "Bloquer" refuse par prudence dans ce cas.'] = 'If geolocation fails (providers unavailable), "Allow" mode (default) lets the download through but still logs it, so the real failure frequency can be measured. "Block" mode refuses as a precaution in this case.';
+$lang['Ces tentatives de téléchargement apparaissent dans le journal des accès comme des entrées normales.'] = 'These download attempts appear in the access log as regular entries.';
+$lang['Pistes de repli non implémentées ici, à envisager si les passages "Autoriser" s\'avèrent fréquents : détection de rafale (une même photo demandée par plusieurs IP en quelques secondes), ou retrait de la permission de téléchargement HD au groupe Invités.'] = 'Fallback options not implemented here, worth considering if "Allow" pass-throughs turn out to be frequent: burst detection (the same photo requested by several IPs within seconds), or removing the HD download permission from the Guests group.';
+$lang['Limite connue'] = 'Known limitation';
+$lang['→ le filtre ne couvre pas les téléchargements par format alternatif (paramètre "format" de action.php, nécessite l\'option Piwigo "enable_formats"). Sur cette installation, cette option est désactivée, donc sans impact ; à revoir si elle est activée un jour.'] = '→ the filter does not cover alternate-format downloads (the "format" parameter of action.php, which requires Piwigo\'s "enable_formats" option). On this installation that option is disabled, so there is no impact today; revisit if it is ever enabled.';

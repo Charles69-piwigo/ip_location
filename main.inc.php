@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 2.1a
+Version: 2.2
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,11 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.2 - 27/07/2026
+        ajouté filtre pays (liste blanche) sur les téléchargements d'originaux,
+        appliqué sur l'évènement init pour couvrir action.php
+        ajouté colonne log_type (distingue les tentatives de téléchargement du reste du journal)
+
     version 2.1a - 26/05/2026
         corrigé bug avec la fonction Upload
 
@@ -122,6 +127,9 @@ function ip_location_get_conf()
         'max_records'          => 10000,
         'visitors_enabled'     => '0',
         'visitors_period'      => 'week',
+        'download_filter_enabled'    => '0',
+        'download_allowed_countries' => '',
+        'download_geo_fail_mode'     => 'open',
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -138,6 +146,12 @@ function ip_location_get_conf()
 // Hooks de visite
 add_event_handler('loc_begin_index',   'ip_location_log_visit');
 add_event_handler('loc_begin_picture', 'ip_location_log_visit');
+
+// Filtre pays sur les téléchargements d'originaux — voir §1 du handoff :
+// action.php ne déclenche ni loc_begin_index ni loc_begin_picture, donc on
+// s'accroche à init (déclenché par common.inc.php, avant que action.php
+// n'atteigne son propre pwg_log).
+add_event_handler('init', 'ip_location_download_guard');
 
 // Logger les photos vues via PhotoSwipe (navigation JS sans rechargement)
 add_event_handler('loc_after_page_header', 'ip_location_inject_pswp_logger');
@@ -412,6 +426,258 @@ document.addEventListener('DOMContentLoaded',function(){
 }
 
 /**
+ * Résout la géolocalisation d'une IP : cache (30 jours) sinon providers en
+ * cascade (ip-api.com → freeipapi.com → ipwho.is → geoplugin.net → ipapi.co).
+ * Met à jour le cache en cas de résolution réussie (nettoyage 30 jours + limite 5000).
+ *
+ * @param string $ip           IP déjà échappée pour SQL (pwg_db_real_escape_string).
+ * @param string $prefixeTable
+ * @return array ['country' => ..., 'country_code' => ..., 'city' => ...] ('Unknown' si échec).
+ */
+function ip_location_resolve_geo($ip, $prefixeTable)
+{
+    // Vérification du cache (entrées valides moins de 30 jours)
+    $query = '
+SELECT country, country_code, city
+  FROM ' . $prefixeTable . 'ip_location_cache
+  WHERE ip = \'' . $ip . '\'
+    AND resolved_at >= NOW() - INTERVAL 30 DAY;';
+    $result = pwg_query($query);
+
+    if (pwg_db_num_rows($result) > 0) {
+        return pwg_db_fetch_assoc($result);
+    }
+
+    // Résolution géo avec fallback multi-providers
+    $providers = [
+        [
+            'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city',
+            'country'      => 'country',
+            'country_code' => 'countryCode',
+            'city'         => 'city',
+        ],
+        [
+            'url'          => 'https://free.freeipapi.com/api/json/' . rawurlencode($ip),
+            'country'      => 'countryName',
+            'country_code' => 'countryCode',
+            'city'         => 'cityName',
+        ],
+        [
+            'url'          => 'https://ipwho.is/' . rawurlencode($ip),
+            'country'      => 'country',
+            'country_code' => 'country_code',
+            'city'         => 'city',
+            'success'      => 'success',
+        ],
+        [
+            'url'          => 'https://ssl.geoplugin.net/json.gp?ip=' . rawurlencode($ip),
+            'country'      => 'geoplugin_countryName',
+            'country_code' => 'geoplugin_countryCode',
+            'city'         => 'geoplugin_city',
+        ],
+        [
+            'url'          => 'https://ipapi.co/' . rawurlencode($ip) . '/json/',
+            'country'      => 'country_name',
+            'country_code' => 'country_code',
+            'city'         => 'city',
+        ],
+    ];
+
+    $geo = ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
+
+    foreach ($providers as $provider) {
+        $response = ip_location_http_get($provider['url']);
+        if ($response === false) {
+            continue;
+        }
+
+        $data = json_decode($response, true);
+        if (!is_array($data)) {
+            continue;
+        }
+
+        // Vérification champ 'success' (ipwho.is retourne success=false si IP invalide)
+        if (isset($provider['success']) && empty($data[$provider['success']])) {
+            continue;
+        }
+
+        $country      = !empty($data[$provider['country']])      ? $data[$provider['country']]      : '';
+        $country_code = !empty($data[$provider['country_code']]) ? $data[$provider['country_code']] : '';
+        $city         = !empty($data[$provider['city']])         ? $data[$provider['city']]         : '';
+
+        if (!empty($country) && $country !== 'Unknown') {
+            $geo['country']      = $country;
+            $geo['country_code'] = $country_code;
+            $geo['city']         = !empty($city) ? $city : 'Unknown';
+            break; // Provider OK, on arrête
+        }
+    }
+
+    // Mise en cache (uniquement si résolution réussie)
+    if ($geo['country'] !== 'Unknown') {
+        $query = '
+INSERT INTO ' . $prefixeTable . 'ip_location_cache
+  (ip, country, country_code, city, resolved_at)
+  VALUES (
+    \'' . $ip . '\',
+    \'' . pwg_db_real_escape_string($geo['country']) . '\',
+    \'' . pwg_db_real_escape_string($geo['country_code']) . '\',
+    \'' . pwg_db_real_escape_string($geo['city']) . '\',
+    NOW()
+  )
+  ON DUPLICATE KEY UPDATE
+    country      = VALUES(country),
+    country_code = VALUES(country_code),
+    city         = VALUES(city),
+    resolved_at  = NOW();';
+        pwg_query($query);
+
+        // Nettoyage du cache : supprimer les entrées > 30 jours
+        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
+  WHERE resolved_at < NOW() - INTERVAL 30 DAY');
+
+        // Limite de taille : garder les 5000 entrées les plus récentes
+        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_cache');
+        list($cache_count) = pwg_db_fetch_row($r);
+        if ($cache_count > 5000) {
+            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
+  ORDER BY resolved_at ASC
+  LIMIT ' . ($cache_count - 5000));
+        }
+    }
+
+    return $geo;
+}
+
+/**
+ * IP du client, alignée sur la source utilisée par le cœur Piwigo (pwg_log) :
+ * $_SERVER['REMOTE_ADDR'] brut, sans parsing de X-Forwarded-For.
+ */
+function ip_location_client_ip()
+{
+    return $_SERVER['REMOTE_ADDR'];
+}
+
+/**
+ * Indique si l'utilisateur invité (id 2) a la permission de télécharger les
+ * originaux (enabled_high). Utilisé par admin.php pour l'affichage conditionnel
+ * de la section "Filtre pays sur les téléchargements".
+ */
+function ip_location_guest_enabled_high()
+{
+    $result = pwg_query('SELECT enabled_high FROM ' . USER_INFOS_TABLE . ' WHERE user_id = 2');
+    if ($result && pwg_db_num_rows($result) > 0) {
+        list($val) = pwg_db_fetch_row($result);
+        return $val === 'true';
+    }
+    return false;
+}
+
+/**
+ * Filtre pays (liste blanche) sur les téléchargements d'originaux.
+ * Accroché à init pour couvrir action.php, qui ne déclenche ni
+ * loc_begin_index ni loc_begin_picture. Bloque avant que action.php
+ * n'atteigne son propre pwg_log (donc aucune ligne dans history en cas de blocage).
+ * Mécanisme volontairement indépendant de la blocklist PHP et du .htaccess.
+ */
+function ip_location_download_guard()
+{
+    global $user, $prefixeTable;
+
+    // 1. Contexte download d'original uniquement
+    if (script_basename() !== 'action') {
+        return;
+    }
+    if (!isset($_GET['id']) || !is_numeric($_GET['id']) || !isset($_GET['part']) || $_GET['part'] !== 'e') {
+        return;
+    }
+
+    // 2. Invités uniquement
+    if (!isset($user['id']) || $user['id'] != 2) {
+        return;
+    }
+
+    // 3. Filtre activé + allowlist non vide (sinon : traiter comme filtre inactif)
+    $plugin_conf = ip_location_get_conf();
+    if ($plugin_conf['download_filter_enabled'] !== '1') {
+        return;
+    }
+    $allowed = array_filter(array_map('trim', explode(',', strtoupper($plugin_conf['download_allowed_countries']))));
+    if (empty($allowed)) {
+        return;
+    }
+
+    // 4. Les invités peuvent-ils télécharger le HD ? Sinon rien à protéger (action.php renverra 401 nativement).
+    if (empty($user['enabled_high'])) {
+        return;
+    }
+
+    // 5. IP alignée sur le cœur (REMOTE_ADDR, sans XFF) pour concorder avec history
+    $ip_raw = ip_location_client_ip();
+
+    // 6. Whitelist — toujours autorisée
+    $whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
+    if (in_array($ip_raw, $whitelist)) {
+        return;
+    }
+
+    $ip = pwg_db_real_escape_string($ip_raw);
+
+    // 7. Géo
+    $geo    = ip_location_resolve_geo($ip, $prefixeTable);
+    $geo_ok = ($geo['country'] !== 'Unknown');
+
+    $scheme     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $url        = $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+    $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+    $is_bot     = ip_location_is_bot($user_agent, $url, $ip, $prefixeTable) ? 1 : 0;
+
+    // 8. Décision
+    if ($geo_ok) {
+        if (in_array(strtoupper($geo['country_code']), $allowed)) {
+            return; // Autorisé — on laisse action.php suivre son cours (son propre pwg_log alimente history)
+        }
+        // Pays hors allowlist → blocage
+        ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 1, $prefixeTable);
+        header('HTTP/1.0 403 Forbidden');
+        exit;
+    }
+
+    // Géo indisponible : appliquer download_geo_fail_mode
+    if ($plugin_conf['download_geo_fail_mode'] === 'closed') {
+        ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 1, $prefixeTable);
+        header('HTTP/1.0 403 Forbidden');
+        exit;
+    }
+
+    // fail-open (défaut) : laisser passer, mais journaliser pour mesurer la fréquence réelle
+    ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, 0, $prefixeTable);
+}
+
+/**
+ * Journalise une tentative de téléchargement (log_type='download') dans ip_location_log,
+ * séparément du journal des visites normales.
+ */
+function ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, $is_blocked, $prefixeTable)
+{
+    pwg_query('
+INSERT INTO ' . $prefixeTable . 'ip_location_log
+  (ip, country, country_code, city, url, user_agent, is_bot, is_blocked, log_type, visit_date)
+  VALUES (
+    \'' . $ip . '\',
+    \'' . pwg_db_real_escape_string($geo['country']) . '\',
+    \'' . pwg_db_real_escape_string($geo['country_code']) . '\',
+    \'' . pwg_db_real_escape_string($geo['city']) . '\',
+    \'' . pwg_db_real_escape_string($url) . '\',
+    \'' . pwg_db_real_escape_string($user_agent) . '\',
+    ' . $is_bot . ',
+    ' . $is_blocked . ',
+    \'download\',
+    NOW()
+  );');
+}
+
+/**
  * Enregistre la visite d'un guest avec géolocalisation.
  *
  * @param string|null $override_url  URL à loguer (null = URL de la requête courante).
@@ -455,129 +721,8 @@ function ip_location_log_visit($override_url = null, $do_block = true)
         exit;
     }
 
-    // Vérification du cache (entrées valides moins de 30 jours)
-    $query = '
-SELECT country, country_code, city
-  FROM ' . $prefixeTable . 'ip_location_cache
-  WHERE ip = \'' . $ip . '\'
-    AND resolved_at >= NOW() - INTERVAL 30 DAY;';
-    $result = pwg_query($query);
-
-    if (pwg_db_num_rows($result) > 0) {
-        $geo = pwg_db_fetch_assoc($result);
-    } else {
-        // Résolution géo avec fallback multi-providers
-
-            // DEBUG TEMPORAIRE — à retirer après test
-            //$ip_raw = '82.65.135.221';
-            //$ip = '82.65.135.221';
-
-
-
-        $providers = [
-            [
-                'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city',
-                'country'      => 'country',
-                'country_code' => 'countryCode',
-                'city'         => 'city',
-            ],
-            [
-                'url'          => 'https://free.freeipapi.com/api/json/' . rawurlencode($ip),
-                'country'      => 'countryName',
-                'country_code' => 'countryCode',
-                'city'         => 'cityName',
-            ],
-            [
-                'url'          => 'https://ipwho.is/' . rawurlencode($ip),
-                'country'      => 'country',
-                'country_code' => 'country_code',
-                'city'         => 'city',
-                'success'      => 'success',
-            ],
-            [
-                'url'          => 'https://ssl.geoplugin.net/json.gp?ip=' . rawurlencode($ip),
-                'country'      => 'geoplugin_countryName',
-                'country_code' => 'geoplugin_countryCode',
-                'city'         => 'geoplugin_city',
-            ],
-            [
-                'url'          => 'https://ipapi.co/' . rawurlencode($ip) . '/json/',
-                'country'      => 'country_name',
-                'country_code' => 'country_code',
-                'city'         => 'city',
-            ],
-        ];
-
-        $geo = ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
-
-        foreach ($providers as $provider) {
-            $response = ip_location_http_get($provider['url']);
-            if ($response === false) {
-                //error_log('[ip_location] Provider FAILED: ' . $provider['url']);
-                continue;
-            }
-            //error_log('[ip_location] Provider: ' . $provider['url'] . ' | Response: ' . substr($response, 0, 200));
-
-            $data = json_decode($response, true);
-            if (!is_array($data)) {
-                //error_log('[ip_location] Provider INVALID JSON: ' . $provider['url'] . ' | Body: ' . substr($response, 0, 300));
-                continue;
-            }
-
-            // Vérification champ 'success' (ipwho.is retourne success=false si IP invalide)
-            if (isset($provider['success']) && empty($data[$provider['success']])) {
-                //error_log('[ip_location] Provider REJECTED: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
-                continue;
-            }
-
-            $country      = !empty($data[$provider['country']])      ? $data[$provider['country']]      : '';
-            $country_code = !empty($data[$provider['country_code']]) ? $data[$provider['country_code']] : '';
-            $city         = !empty($data[$provider['city']])         ? $data[$provider['city']]         : '';
-
-            if (!empty($country) && $country !== 'Unknown') {
-                $geo['country']      = $country;
-                $geo['country_code'] = $country_code;
-                $geo['city']         = !empty($city) ? $city : 'Unknown';
-                break; // Provider OK, on arrête
-            }
-            //error_log('[ip_location] Provider NO COUNTRY: ' . $provider['url'] . ' | Data: ' . substr($response, 0, 300));
-        }
-
-        // Mise en cache (uniquement si résolution réussie)
-        if ($geo['country'] === 'Unknown') {
-            //error_log('[ip_location] Cache SKIP (Unknown) for IP: ' . $ip);
-        } else {
-        $query = '
-INSERT INTO ' . $prefixeTable . 'ip_location_cache
-  (ip, country, country_code, city, resolved_at)
-  VALUES (
-    \'' . $ip . '\',
-    \'' . pwg_db_real_escape_string($geo['country']) . '\',
-    \'' . pwg_db_real_escape_string($geo['country_code']) . '\',
-    \'' . pwg_db_real_escape_string($geo['city']) . '\',
-    NOW()
-  )
-  ON DUPLICATE KEY UPDATE
-    country      = VALUES(country),
-    country_code = VALUES(country_code),
-    city         = VALUES(city),
-    resolved_at  = NOW();';
-        pwg_query($query);
-
-        // Nettoyage du cache : supprimer les entrées > 30 jours
-        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
-  WHERE resolved_at < NOW() - INTERVAL 30 DAY');
-
-        // Limite de taille : garder les 5000 entrées les plus récentes
-        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_cache');
-        list($cache_count) = pwg_db_fetch_row($r);
-        if ($cache_count > 5000) {
-            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
-  ORDER BY resolved_at ASC
-  LIMIT ' . ($cache_count - 5000));
-        }
-        } // fin if country !== Unknown
-    }
+    // Résolution géo (cache ou providers en cascade)
+    $geo = ip_location_resolve_geo($ip, $prefixeTable);
 
     // Construction de l'URL visitée
     if ($override_url !== null && is_string($override_url)) {

@@ -42,6 +42,17 @@ if (isset($_POST['action'])) {
             'blocked_url_keywords' => $keywords,
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
+    } elseif ($_POST['action'] === 'save_download_config') {
+        $download_filter_enabled    = isset($_POST['download_filter_enabled']) ? '1' : '0';
+        $download_allowed_countries = strtoupper(trim($_POST['download_allowed_countries'] ?? ''));
+        $download_geo_fail_mode     = ($_POST['download_geo_fail_mode'] ?? '') === 'closed' ? 'closed' : 'open';
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'download_filter_enabled'    => $download_filter_enabled,
+            'download_allowed_countries' => $download_allowed_countries,
+            'download_geo_fail_mode'     => $download_geo_fail_mode,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_config') {
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
@@ -189,6 +200,11 @@ $max_records           = (int)$plugin_conf['max_records'];
 $server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false
                       && stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'apache') === false;
 
+$download_filter_enabled    = $plugin_conf['download_filter_enabled'] === '1';
+$download_allowed_countries = $plugin_conf['download_allowed_countries'] ?? '';
+$download_geo_fail_mode     = $plugin_conf['download_geo_fail_mode'] ?? 'open';
+$guest_enabled_high         = ip_location_guest_enabled_high();
+
 // ── Blocklist ip_location_blocklist ───────────────────────────────────────────
 
 $blocklist = [];
@@ -214,6 +230,10 @@ $template->assign([
     'HTACCESS_ENABLED'   => $htaccess_enabled,
     'SERVER_IS_NGINX'    => $server_is_nginx,
     'MAX_RECORDS'        => $max_records,
+    'DOWNLOAD_FILTER_ENABLED'    => $download_filter_enabled,
+    'DOWNLOAD_ALLOWED_COUNTRIES' => $download_allowed_countries,
+    'DOWNLOAD_GEO_FAIL_MODE'     => $download_geo_fail_mode,
+    'GUEST_ENABLED_HIGH'         => $guest_enabled_high,
     'BLOCKLIST'          => $blocklist,
     'STATS'              => $stats,
     'LOGS'               => $logs,

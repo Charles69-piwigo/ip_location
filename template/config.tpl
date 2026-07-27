@@ -166,3 +166,36 @@
   </p>
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
 </form>
+
+<!-- ── Section 4 : Filtre pays sur les téléchargements ───────────────────── -->
+<h3 style="margin-top:2em;">{'Filtre pays sur les téléchargements'|@translate}</h3>
+
+{if $GUEST_ENABLED_HIGH}
+<form method="post" action="" class="ipl-config">
+  <input type="hidden" name="action" value="save_download_config">
+  <p>
+    <label class="ipl-inline">
+      <input type="checkbox" name="download_filter_enabled" value="1"{if $DOWNLOAD_FILTER_ENABLED} checked{/if}>
+      <strong style="display:inline;">{'Activer le filtre pays sur les téléchargements'|@translate}</strong>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Fonctionne en liste blanche : seuls les téléchargements d\'originaux provenant des pays listés ci-dessous sont autorisés. Liste vide = filtre inactif.'|@translate}</em>
+  </p>
+  <p>
+    <label><strong>{'Pays autorisés'|@translate}</strong> (codes ISO séparés par virgule, ex: FR,BE,CH) :</label><br>
+    <input type="text" name="download_allowed_countries" value="{$DOWNLOAD_ALLOWED_COUNTRIES|escape}"
+           style="width:400px;" placeholder="FR,BE,CH">
+  </p>
+  <p>
+    <label><strong>{'En cas d\'échec de géolocalisation'|@translate}</strong>
+      <select name="download_geo_fail_mode" style="margin-left:10px;">
+        <option value="open"{if $DOWNLOAD_GEO_FAIL_MODE eq 'open'} selected{/if}>{'Autoriser (recommandé)'|@translate}</option>
+        <option value="closed"{if $DOWNLOAD_GEO_FAIL_MODE eq 'closed'} selected{/if}>{'Bloquer'|@translate}</option>
+      </select>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Chaque passage "Autoriser" est journalisé (non bloqué) afin de mesurer sa fréquence réelle — voir la section Aide.'|@translate}</em>
+  </p>
+  <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
+</form>
+{else}
+<p style="margin-left:20px;color:#888;">{'Les invités n\'ont pas la permission de télécharger les originaux : filtre sans objet.'|@translate}</p>
+{/if}
