@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 2.2
+Version: 2.3
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,14 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.3 - 27/07/2026
+        perf : log_visit() allégé sur le chemin chaud (détection bot par user-agent
+        seul, sans scan SQL ; retrait du marquage rétroactif du chemin chaud ;
+        purge échantillonnée 1/50 au lieu d'un COUNT(*) à chaque visite)
+        ajouté ip_location_classify_recent() : classification bot par co-visitation
+        rejouée en lot, déclenchée uniquement à la consultation de l'admin
+        ajouté index idx_url_date et idx_visit_date sur ip_location_log
+
     version 2.2 - 27/07/2026
         ajouté filtre pays (liste blanche) sur les téléchargements d'originaux,
         appliqué sur l'évènement init pour couvrir action.php
@@ -757,8 +765,9 @@ function ip_location_log_visit($override_url = null, $do_block = true)
     }
     $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
 
-    // Détection bot
-    $is_bot = ip_location_is_bot($user_agent, $url, $ip, $prefixeTable) ? 1 : 0;
+    // Détection bot par user-agent uniquement (zéro SQL) — la détection par
+    // co-visitation (scan de la table) est différée à ip_location_classify_recent()
+    $is_bot = ip_location_is_bot_ua($user_agent) ? 1 : 0;
 
     // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer)
     $is_blocked = 0;
@@ -800,24 +809,13 @@ INSERT INTO ' . $prefixeTable . 'ip_location_log
   );';
     pwg_query($query);
 
-    // Marquage rétroactif : si >= 2 IPs distinctes ont visité la même URL dans les 10 dernières
-    // secondes, toutes ces entrées sont des bots — y compris la première qui avait échappé
-    $r = pwg_query('
-SELECT COUNT(DISTINCT ip) FROM ' . $prefixeTable . 'ip_location_log
-  WHERE url = \'' . pwg_db_real_escape_string($url) . '\'
-    AND visit_date >= NOW() - INTERVAL 10 SECOND');
-    list($distinct_ips) = pwg_db_fetch_row($r);
-    if ($distinct_ips >= 2) {
-        pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log
-  SET is_bot = 1
-  WHERE url = \'' . pwg_db_real_escape_string($url) . '\'
-    AND visit_date >= NOW() - INTERVAL 10 SECOND');
-    }
+    // Marquage rétroactif par co-visitation : différé en lot à ip_location_classify_recent()
+    // (appelée depuis admin.php), pour éviter un scan de la table à chaque visite.
 
-    // Vidage automatique : supprimer les plus anciennes entrées si dépassement du seuil
+    // Vidage automatique — échantillonné (1 visite sur 50) : évite un COUNT(*) sur
+    // ~98% des affichages. Le léger dépassement transitoire du seuil est sans conséquence.
     $max_records = (int)$plugin_conf['max_records'];
-    if ($max_records > 0) {
+    if ($max_records > 0 && mt_rand(1, 50) === 1) {
         $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
         list($count) = pwg_db_fetch_row($r);
         if ($count > $max_records) {
@@ -876,6 +874,61 @@ function ip_location_write_htaccess($htaccess_enabled = null)
     return true;
 }
 
+/**
+ * Détection bot par user-agent uniquement — zéro SQL, utilisée sur le chemin
+ * chaud de ip_location_log_visit() (une exécution par affichage de photo).
+ */
+function ip_location_is_bot_ua($user_agent)
+{
+    if (empty($user_agent)) {
+        return true;
+    }
+
+    $keywords = ['bot', 'crawler', 'spider', 'scraper', 'slurp', 'curl', 'wget',
+                 'python', 'go-http', 'java/', 'libwww', 'scrapy', 'zgrab', 'masscan'];
+    $ua_lower = strtolower($user_agent);
+    foreach ($keywords as $kw) {
+        if (strpos($ua_lower, $kw) !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Rejoue en lot, sur les 7 derniers jours, la détection de bots par co-visitation
+ * (>= 2 IP distinctes sur la même URL dans une fenêtre de ~10 s). Approximation par
+ * buckets fixes de 10 s (au lieu d'une fenêtre glissante) — sans impact puisque is_bot
+ * est une info de stats/filtre, ne pilote aucun blocage. Idempotent (WHERE is_bot = 0).
+ * Appelée depuis admin.php uniquement (jamais depuis un chemin public).
+ */
+function ip_location_classify_recent()
+{
+    global $prefixeTable;
+
+    pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_log t
+JOIN (
+    SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
+      FROM ' . $prefixeTable . 'ip_location_log
+     WHERE visit_date >= NOW() - INTERVAL 7 DAY
+     GROUP BY url, bucket
+    HAVING COUNT(DISTINCT ip) >= 2
+) g
+  ON t.url = g.url
+ AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/10) = g.bucket
+SET t.is_bot = 1
+WHERE t.is_bot = 0
+  AND t.visit_date >= NOW() - INTERVAL 7 DAY');
+}
+
+/**
+ * Détection bot par UA + co-visitation (scan SQL). Conservée uniquement pour
+ * ip_location_download_guard() : les tentatives de téléchargement sont bien plus rares
+ * qu'un affichage de photo, donc ce scan n'a pas le même impact perf que dans log_visit()
+ * (qui utilise désormais ip_location_is_bot_ua() sur son chemin chaud, cf. v2.3).
+ */
 function ip_location_is_bot($user_agent, $url, $ip, $prefixeTable)
 {
     // UA vide

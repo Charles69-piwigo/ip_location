@@ -89,6 +89,20 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
         pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
   ADD COLUMN log_type VARCHAR(16) DEFAULT NULL');
     }
+
+    // Migration v2.2 → v2.3 : index pour la passe de classification différée,
+    // le panneau visiteurs et la purge (log_visit ne scanne plus la table à chaud)
+    $idx = [];
+    $r = pwg_query('SHOW INDEX FROM ' . $prefixeTable . 'ip_location_log');
+    while ($row = pwg_db_fetch_assoc($r)) $idx[$row['Key_name']] = true;
+    if (!isset($idx['idx_url_date'])) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
+  ADD INDEX idx_url_date (url(191), visit_date)');
+    }
+    if (!isset($idx['idx_visit_date'])) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
+  ADD INDEX idx_visit_date (visit_date)');
+    }
 }
 
 function plugin_deactivate()

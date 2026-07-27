@@ -97,6 +97,12 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, block
     }
 }
 
+// Classification différée des bots par co-visitation (scan lourd, réservé à cette
+// consultation admin — jamais déclenché depuis un chemin public comme ajax_visitors.php).
+// Placé après les actions POST (qui redirigent) pour ne pas payer ce coût inutilement
+// sur une simple sauvegarde de configuration.
+ip_location_classify_recent();
+
 // ── Compteurs globaux ─────────────────────────────────────────────────────────
 
 $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
