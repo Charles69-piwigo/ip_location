@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 2.5
+Version: 2.3
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,7 +10,7 @@ Has Settings: webmaster
 
 // Versions
 /*
-    version 2.5 - 27/07/2026
+    version 2.3 - 27/07/2026 (ex 2.5)
         fix sécurité : le blocage pays des téléchargements passe fail-closed par
         défaut (download_geo_fail_mode = 'closed') — un échec de géolocalisation
         bloque désormais le téléchargement au lieu de le laisser passer
@@ -20,7 +20,7 @@ Has Settings: webmaster
         un paramètre $use_negative_cache, false pour le guard, true ailleurs)
         aide : mise à jour de la section Filtre pays sur les téléchargements
 
-    version 2.4 - 27/07/2026
+    version 2.2b - 27/07/2026 (ex 2.4)
         fix perf géo : court-circuit immédiat des IP privées/réservées (réseau
         local) dans resolve_geo(), plus jamais envoyées aux providers
         cache géo à double TTL : 30 jours pour une résolution réussie, 2h pour
@@ -28,7 +28,7 @@ Has Settings: webmaster
         réduit CURLOPT_CONNECTTIMEOUT de 5s à 2s (limite le pire cas provider injoignable)
         aide : note sur l'ajout du réseau local à la whitelist
 
-    version 2.3 - 27/07/2026
+    version 2.2a - 27/07/2026 (ex 2.3)
         perf : log_visit() allégé sur le chemin chaud (détection bot par user-agent
         seul, sans scan SQL ; retrait du marquage rétroactif du chemin chaud ;
         purge échantillonnée 1/50 au lieu d'un COUNT(*) à chaque visite)
