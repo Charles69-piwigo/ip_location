@@ -33,6 +33,7 @@
     <li>{'Ces IPs ne seront jamais bloquées par le blocage pays.'|@translate}</li>
     <li>{'Il est également impossible de les ajouter à la blocklist .htaccess : un message d\'erreur s\'affiche si vous tentez de le faire.'|@translate}</li>
     <li>{'Utile pour protéger votre propre IP afin de ne pas vous bloquer accidentellement.'|@translate}</li>
+    <li>{'Si vous naviguez souvent depuis votre réseau local (IP privée du type 192.168.x.x), vous pouvez aussi l\'ajouter ici : la visite sort alors immédiatement (aucune géolocalisation, aucune ligne de journal), ce qui garde les statistiques propres.'|@translate}</li>
   </ul>
 
   <h4>{'Blocage .htaccess (blocklist IP)'|@translate}</h4>

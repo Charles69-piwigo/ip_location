@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 2.3
+Version: 2.4
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
@@ -10,6 +10,14 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.4 - 27/07/2026
+        fix perf géo : court-circuit immédiat des IP privées/réservées (réseau
+        local) dans resolve_geo(), plus jamais envoyées aux providers
+        cache géo à double TTL : 30 jours pour une résolution réussie, 2h pour
+        un échec 'Unknown' (évite de re-solliciter les providers en boucle)
+        réduit CURLOPT_CONNECTTIMEOUT de 5s à 2s (limite le pire cas provider injoignable)
+        aide : note sur l'ajout du réseau local à la whitelist
+
     version 2.3 - 27/07/2026
         perf : log_visit() allégé sur le chemin chaud (détection bot par user-agent
         seul, sans scan SQL ; retrait du marquage rétroactif du chemin chaud ;
@@ -370,7 +378,7 @@ function ip_location_http_get($url)
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 5,
-            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_CONNECTTIMEOUT => 2,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 3,
             CURLOPT_SSL_VERIFYPEER => false,
@@ -434,9 +442,12 @@ document.addEventListener('DOMContentLoaded',function(){
 }
 
 /**
- * Résout la géolocalisation d'une IP : cache (30 jours) sinon providers en
- * cascade (ip-api.com → freeipapi.com → ipwho.is → geoplugin.net → ipapi.co).
- * Met à jour le cache en cas de résolution réussie (nettoyage 30 jours + limite 5000).
+ * Résout la géolocalisation d'une IP : court-circuit immédiat pour une IP privée/réservée
+ * (jamais géolocalisable, jamais mise en cache), sinon cache (30 jours pour un succès,
+ * 2 h pour un 'Unknown') puis providers en cascade (ip-api.com → freeipapi.com →
+ * ipwho.is → geoplugin.net → ipapi.co). Le cache est alimenté dans tous les cas (y
+ * compris les échecs, pour éviter de re-solliciter les providers en boucle) et
+ * nettoyé (30 jours + limite 5000 entrées).
  *
  * @param string $ip           IP déjà échappée pour SQL (pwg_db_real_escape_string).
  * @param string $prefixeTable
@@ -444,12 +455,23 @@ document.addEventListener('DOMContentLoaded',function(){
  */
 function ip_location_resolve_geo($ip, $prefixeTable)
 {
-    // Vérification du cache (entrées valides moins de 30 jours)
+    // IP privée / réservée / loopback (ex: réseau local 192.168.x) — non géolocalisable :
+    // retour immédiat, aucun appel réseau. filter_var tolère une IP déjà échappée
+    // (une IP valide ne contient aucun caractère échappable, donc pas de ré-échappement ici).
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+        return ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
+    }
+
+    // Vérification du cache (30 jours pour une résolution réussie, 2 h pour un échec
+    // 'Unknown' — laisse une chance de re-tenter une IP publique temporairement en échec)
     $query = '
 SELECT country, country_code, city
   FROM ' . $prefixeTable . 'ip_location_cache
   WHERE ip = \'' . $ip . '\'
-    AND resolved_at >= NOW() - INTERVAL 30 DAY;';
+    AND (
+          (country <> \'Unknown\' AND resolved_at >= NOW() - INTERVAL 30 DAY)
+       OR (country =  \'Unknown\' AND resolved_at >= NOW() - INTERVAL 2 HOUR)
+        );';
     $result = pwg_query($query);
 
     if (pwg_db_num_rows($result) > 0) {
@@ -521,9 +543,12 @@ SELECT country, country_code, city
         }
     }
 
-    // Mise en cache (uniquement si résolution réussie)
-    if ($geo['country'] !== 'Unknown') {
-        $query = '
+    // Mise en cache — y compris les échecs 'Unknown' (TTL court de 2 h en lecture, cf. plus
+    // haut), pour éviter de re-tenter les 5 providers à chaque affichage. Cette écriture
+    // n'est atteinte que par des IP publiques (les IP privées sont court-circuitées avant).
+    // ON DUPLICATE KEY UPDATE réhydrate automatiquement une entrée 'Unknown' dès qu'une
+    // résolution réussie survient (l'ancienne valeur est écrasée par la nouvelle).
+    $query = '
 INSERT INTO ' . $prefixeTable . 'ip_location_cache
   (ip, country, country_code, city, resolved_at)
   VALUES (
@@ -538,20 +563,19 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
     country_code = VALUES(country_code),
     city         = VALUES(city),
     resolved_at  = NOW();';
-        pwg_query($query);
+    pwg_query($query);
 
-        // Nettoyage du cache : supprimer les entrées > 30 jours
-        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
+    // Nettoyage du cache : supprimer les entrées > 30 jours
+    pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
   WHERE resolved_at < NOW() - INTERVAL 30 DAY');
 
-        // Limite de taille : garder les 5000 entrées les plus récentes
-        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_cache');
-        list($cache_count) = pwg_db_fetch_row($r);
-        if ($cache_count > 5000) {
-            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
+    // Limite de taille : garder les 5000 entrées les plus récentes
+    $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_cache');
+    list($cache_count) = pwg_db_fetch_row($r);
+    if ($cache_count > 5000) {
+        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
   ORDER BY resolved_at ASC
   LIMIT ' . ($cache_count - 5000));
-        }
     }
 
     return $geo;
