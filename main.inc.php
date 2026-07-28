@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: ip_location
-Version: 2.3
+Version: auto
 Description: Log des visites des guests avec géolocalisation IP + traitement htaccess
 Plugin URI: https://piwigo.org/ext/extension_view.php?eid=1068
 Author: Charles69 
