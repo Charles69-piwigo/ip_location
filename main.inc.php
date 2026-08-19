@@ -10,6 +10,9 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.3a - 19/08/2026
+        fix utilisation d'un hook incorrect
+
     version 2.3 - 27/07/2026 (ex 2.5)
         fix sécurité : le blocage pays des téléchargements passe fail-closed par
         défaut (download_geo_fail_mode = 'closed') — un échec de géolocalisation
@@ -180,7 +183,15 @@ add_event_handler('loc_begin_picture', 'ip_location_log_visit');
 add_event_handler('init', 'ip_location_download_guard');
 
 // Logger les photos vues via PhotoSwipe (navigation JS sans rechargement)
-add_event_handler('loc_after_page_header', 'ip_location_inject_pswp_logger');
+// Hook loc_begin_page_tail (pas loc_after_page_header) : à ce stade,
+// $template->pparse() a déjà flush le header+corps de page vers le
+// navigateur sur tous les points d'entrée publics (index.php, picture.php,
+// comments.php, etc.), donc un echo direct ici arrive bien APRÈS le <html>
+// déjà envoyé. loc_after_page_header se déclenche trop tôt : le header est
+// encore dans le buffer $template->output (pas encore flush), donc un echo
+// direct à ce hook part avant le <html> bufferisé — bug remonté par un
+// utilisateur sur le forum Piwigo (JS injecté avant <html> dans la source).
+add_event_handler('loc_begin_page_tail', 'ip_location_inject_pswp_logger');
 
 // ─── Blockmanager : bouton dans la barre de navigation ────────────────────
 add_event_handler('blockmanager_register_blocks', 'ip_location_register_visitors_block');
@@ -221,7 +232,12 @@ function ip_location_apply_visitors_block($menu_ref_arr)
 }
 
 // ─── Panel flottant + JS (toutes les pages publiques) ─────────────────────
-add_event_handler('loc_after_page_header', 'ip_location_inject_visitors_panel');
+// Hook loc_begin_page_tail plutôt que loc_after_page_header : voir le
+// commentaire sur ip_location_inject_pswp_logger ci-dessus pour l'explication
+// du bug (echo direct avant <html> encore bufferisé). Le panel est en
+// position:fixed, donc sa position dans le DOM (juste avant le footer
+// désormais, au lieu de juste après <body>) n'a aucun impact visuel.
+add_event_handler('loc_begin_page_tail', 'ip_location_inject_visitors_panel');
 
 function ip_location_inject_visitors_panel()
 {
