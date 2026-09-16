@@ -10,6 +10,30 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.4 - 16/09/2026
+        ajouté onglet Statistiques dynamiques : graphique multi-courbes de
+        l'évolution des accès dans le temps, combinable par type/pays/mots-clés
+        bloqués/IP, avec axes gauche/droite indépendants et export CSV/PNG/JSON
+        ajouté préréglages de séries (3 fixes + 4 personnalisables enregistrés
+        en config) et granularité adaptative (jour ≤31j, semaine ≤1an, mois
+        au-delà)
+        ajouté index idx_bot_blocked_date sur ip_location_log
+        vendorisé Chart.js en local (template/js/chart.umd.min.js)
+        ajouté période "Tous les logs" (bornée à la date du log le plus ancien)
+        ajouté mémorisation de la dernière période utilisée (et des dates en
+        cas de période personnalisée)
+        ajouté couleur de fond du graphique personnalisable (sélecteur +
+        raccourcis) et mémorisée, via un plugin Chart.js custom
+        ajouté affichage du nom du préréglage actif sur le graphique
+        fix quadrillage du graphique invisible sur fond coloré (couleur de
+        grille trop proche des fonds clairs)
+        fix case "Filtrer les IP/pays/mots-clés" sans effet visuel (règle CSS
+        [hidden] manquante sur les lignes de la liste)
+        fix nombre d'accès affiché ne tenant pas compte des courbes masquées
+        via la légende
+        fix RangeError "Maximum call stack size exceeded" dans Chart.js
+        (boucle de redimensionnement) : resizeDelay + resize différé
+
     version 2.3a - 19/08/2026
         fix utilisation d'un hook incorrect
 
@@ -113,6 +137,7 @@ if (basename(dirname(__FILE__)) != 'ip_location')
 
 // Plugin constants
 define('IP_LOCATION_PATH', PHPWG_PLUGINS_PATH . 'ip_location/');
+define('IP_LOCATION_STATS_PRESET_SLOTS', 4);
 
 // Debug — décommenter pour activer les logs =============================
 /*
@@ -159,6 +184,11 @@ function ip_location_get_conf()
         'download_filter_enabled'    => '0',
         'download_allowed_countries' => '',
         'download_geo_fail_mode'     => 'closed',
+        'stats_presets'              => array_fill(0, IP_LOCATION_STATS_PRESET_SLOTS, null),
+        'last_stats_period'          => 'month',
+        'last_stats_date_from'       => '',
+        'last_stats_date_to'         => '',
+        'chart_bg_color'             => '#ffffff',
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -636,6 +666,85 @@ function ip_location_guest_enabled_high()
         return $val === 'true';
     }
     return false;
+}
+
+/**
+ * Normalise un tableau de "Mes préréglages" à exactement
+ * IP_LOCATION_STATS_PRESET_SLOTS emplacements (null ou ['name'=>..,'series'=>..]).
+ */
+function ip_location_normalize_stats_presets($presets)
+{
+    if (!is_array($presets)) $presets = [];
+    while (count($presets) < IP_LOCATION_STATS_PRESET_SLOTS) $presets[] = null;
+    return array_slice($presets, 0, IP_LOCATION_STATS_PRESET_SLOTS);
+}
+
+/**
+ * Valide et nettoie un tableau de séries reçu du constructeur de l'onglet
+ * Statistiques dynamiques (JSON décodé côté appelant — admin.php pour
+ * l'enregistrement d'un préréglage, ajax_stats.php pour le calcul du graphique).
+ * Ne fait confiance à aucune valeur reçue : chaque champ est whitelisté.
+ * Retourne un tableau nettoyé (jamais plus de 8 séries, jamais d'entrée invalide).
+ *
+ * @param mixed $raw               Valeur décodée de series_json (doit être un tableau).
+ * @param array $allowed_keywords  Mots-clés actuellement configurés (blocked_url_keywords,
+ *                                 un par ligne) : seule une appartenance stricte à cette
+ *                                 liste est acceptée, ce qui évite de valider du texte libre
+ *                                 avant de construire des clauses LIKE.
+ * @return array
+ */
+function ip_location_validate_stats_series($raw, array $allowed_keywords)
+{
+    if (!is_array($raw)) return [];
+
+    $clean = [];
+    foreach ($raw as $item) {
+        if (count($clean) >= 8) break;
+        if (!is_array($item)) continue;
+
+        $type = in_array($item['type'] ?? '', ['all', 'normal', 'bot', 'blocked'], true) ? $item['type'] : 'all';
+
+        $label = mb_substr(strip_tags(trim((string)($item['label'] ?? ''))), 0, 60);
+
+        $axis = ($item['axis'] ?? '') === 'y1' ? 'y1' : 'y';
+
+        $countries = [];
+        if (!empty($item['countries']) && is_array($item['countries'])) {
+            foreach (array_slice($item['countries'], 0, 50) as $c) {
+                $c = strtoupper(trim((string)$c));
+                if (preg_match('/^[A-Z]{2}$/', $c)) $countries[] = $c;
+            }
+        }
+
+        $keywords = [];
+        if (!empty($item['keywords']) && is_array($item['keywords'])) {
+            foreach (array_slice($item['keywords'], 0, 50) as $k) {
+                if (in_array((string)$k, $allowed_keywords, true)) $keywords[] = (string)$k;
+            }
+        }
+
+        $ips = [];
+        if (!empty($item['ips']) && is_array($item['ips'])) {
+            foreach (array_slice($item['ips'], 0, 50) as $ip) {
+                $ip = preg_replace('/[^0-9a-fA-F.:\/]/', '', trim((string)$ip));
+                if ($ip !== '') $ips[] = $ip;
+            }
+        }
+
+        $color = (!empty($item['color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $item['color'])) ? $item['color'] : '';
+
+        $clean[] = [
+            'label'     => $label,
+            'type'      => $type,
+            'countries' => $countries,
+            'keywords'  => $keywords,
+            'ips'       => $ips,
+            'axis'      => $axis,
+            'color'     => $color,
+        ];
+    }
+
+    return $clean;
 }
 
 /**

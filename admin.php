@@ -94,6 +94,43 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, block
             ip_location_write_htaccess();
             redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_unblocked&ip=' . urlencode($ip));
         }
+    } elseif ($_POST['action'] === 'save_stats_preset') {
+        $slot = (int)($_POST['slot'] ?? -1);
+        $conf_cur = ip_location_get_conf();
+
+        if ($slot < 0 || $slot > IP_LOCATION_STATS_PRESET_SLOTS - 1) {
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&tab=stats&msg=preset_invalid');
+        }
+
+        // Piwigo (common.inc.php) applique addslashes() à tout $_GET/$_POST — stripslashes()
+        // obligatoire avant json_decode(), sinon les guillemets échappés cassent le parsing.
+        $name = mb_substr(strip_tags(trim(stripslashes($_POST['name'] ?? ''))), 0, 60);
+        $allowed_keywords = array_filter(array_map('trim', explode("\n", $conf_cur['blocked_url_keywords'] ?? '')));
+        $raw_series = json_decode(stripslashes($_POST['series_json'] ?? ''), true);
+        $series = ip_location_validate_stats_series($raw_series, $allowed_keywords);
+
+        if ($name === '' || empty($series)) {
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&tab=stats&msg=preset_invalid');
+        }
+
+        $presets = ip_location_normalize_stats_presets($conf_cur['stats_presets'] ?? null);
+        $presets[$slot] = ['name' => $name, 'series' => $series];
+
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'stats_presets' => $presets,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&tab=stats&msg=preset_saved');
+    } elseif ($_POST['action'] === 'delete_stats_preset') {
+        $slot = (int)($_POST['slot'] ?? -1);
+        if ($slot >= 0 && $slot < IP_LOCATION_STATS_PRESET_SLOTS) {
+            $conf_cur = ip_location_get_conf();
+            $presets = ip_location_normalize_stats_presets($conf_cur['stats_presets'] ?? null);
+            $presets[$slot] = null;
+            conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+                'stats_presets' => $presets,
+            ])));
+        }
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&tab=stats&msg=preset_deleted');
     }
 }
 
@@ -181,7 +218,7 @@ while ($row = pwg_db_fetch_assoc($result)) {
 
 // ── Rendu via template Piwigo ─────────────────────────────────────────────────
 
-$tab     = isset($_GET['tab']) && $_GET['tab'] === 'help' ? 'help' : 'config';
+$tab     = in_array($_GET['tab'] ?? '', ['help', 'stats'], true) ? $_GET['tab'] : 'config';
 $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 
 if (isset($_GET['msg'])) {
@@ -192,6 +229,9 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'htaccess_missing') $page['errors'][] = l10n('Fichier .htaccess inexistant : vous devez le créer manuellement à la racine de Piwigo.');
     if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s ajoutée au .htaccess.'), $_GET['ip'] ?? '');
     if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $_GET['ip'] ?? '');
+    if ($_GET['msg'] === 'preset_saved')    $page['infos'][] = l10n('Préréglage enregistré.');
+    if ($_GET['msg'] === 'preset_deleted')  $page['infos'][] = l10n('Préréglage supprimé.');
+    if ($_GET['msg'] === 'preset_invalid')  $page['errors'][] = l10n('Préréglage invalide.');
 }
 
 $plugin_conf           = ip_location_get_conf();
@@ -226,6 +266,103 @@ foreach ($logs as &$log) {
 }
 unset($log);
 
+// ── Onglet Statistiques dynamiques (requêtes/i18n chargées seulement si actif) ─
+
+$known_ips              = [];
+$blocked_keywords_list  = [];
+$stats_presets_json     = '[]';
+$stats_i18n_json        = '{}';
+$chart_js_url           = '';
+$ajax_stats_url         = '';
+$known_ips_json         = '[]';
+$countries_json         = '[]';
+$blocked_keywords_json  = '[]';
+$ajax_stats_url_json    = '""';
+$last_stats_period      = 'month';
+$last_stats_date_from_json = json_encode('');
+$last_stats_date_to_json   = json_encode('');
+$chart_bg_color         = '#ffffff';
+
+if ($tab === 'stats') {
+    $result = pwg_query('
+SELECT ip, COUNT(*) AS hits
+  FROM ' . $prefixeTable . 'ip_location_log
+  GROUP BY ip
+  ORDER BY hits DESC
+  LIMIT 300');
+    while ($row = pwg_db_fetch_assoc($result)) {
+        $known_ips[] = $row;
+    }
+    $known_ips_json = json_encode($known_ips, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+
+    $blocked_keywords_list = array_values(array_filter(array_map('trim', explode("\n", $blocked_url_keywords))));
+    $blocked_keywords_json = json_encode($blocked_keywords_list, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
+
+    $countries_for_js = array_map(function ($c) {
+        return ['code' => $c['country_code'], 'name' => $c['country'], 'hits' => (int)$c['visits']];
+    }, $countries);
+    $countries_json = json_encode($countries_for_js, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
+
+    $stats_presets = ip_location_normalize_stats_presets($plugin_conf['stats_presets'] ?? null);
+    $stats_presets_json = json_encode($stats_presets, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
+
+    $last_stats_period = in_array($plugin_conf['last_stats_period'] ?? '', ['week', 'fortnight', 'month', 'quarter', 'all', 'custom'], true)
+                        ? $plugin_conf['last_stats_period'] : 'month';
+    $last_stats_date_from_json = json_encode($plugin_conf['last_stats_date_from'] ?? '');
+    $last_stats_date_to_json   = json_encode($plugin_conf['last_stats_date_to'] ?? '');
+
+    $chart_bg_color = (!empty($plugin_conf['chart_bg_color']) && ($plugin_conf['chart_bg_color'] === 'transparent' || preg_match('/^#[0-9a-fA-F]{6}$/', $plugin_conf['chart_bg_color'])))
+                    ? $plugin_conf['chart_bg_color'] : '#ffffff';
+
+    $stats_i18n = [
+        'type_all'            => l10n('Tous'),
+        'type_normal'         => l10n('Normal'),
+        'type_bot'            => l10n('Bots'),
+        'type_blocked'        => l10n('Bloqués'),
+        'axis_left'           => l10n('Axe gauche'),
+        'axis_right'          => l10n('Axe droit'),
+        'axis_badge_left'     => l10n('G'),
+        'axis_badge_right'    => l10n('D'),
+        'filter_countries'    => l10n('Filtrer les pays…'),
+        'filter_keywords'     => l10n('Filtrer les mots-clés…'),
+        'filter_ips'          => l10n('Filtrer les IP…'),
+        'label_countries'     => l10n('Pays'),
+        'label_keywords'      => l10n('Mots-clés'),
+        'label_ip'            => l10n('IP'),
+        'series_name_placeholder' => l10n('Nom de la série'),
+        'remove_series'       => l10n('Retirer cette série'),
+        'series_active_one'   => l10n('série active'),
+        'series_active_many'  => l10n('séries actives'),
+        'granularity_day'     => l10n('granularité : jour'),
+        'granularity_week'    => l10n('granularité : semaine'),
+        'granularity_month'   => l10n('granularité : mois'),
+        'slot_empty_name'     => l10n('Emplacement libre'),
+        'slot_empty_meta'     => l10n('cliquer pour créer'),
+        'slot_series_suffix'  => l10n('série(s)'),
+        'slot_prefix'         => l10n('Emplacement'),
+        'slot_new'            => l10n('nouveau préréglage'),
+        'slot_edit'           => l10n('édition'),
+        'save_need_series'    => l10n('Ajoutez au moins une série avant d\'enregistrer ce préréglage.'),
+        'preset_vue_globale'       => l10n('Vue globale'),
+        'preset_bots_vs_humains'   => l10n('Bots vs humains'),
+        'preset_normal_vs_bloques' => l10n('Normal vs bloqués'),
+        'series_tout'         => l10n('Tout'),
+        'series_humains'      => l10n('Humains'),
+        'series_bots'         => l10n('Bots'),
+        'series_normal'       => l10n('Normal'),
+        'series_bloques'      => l10n('Bloqués'),
+        'bg_white'            => l10n('Blanc'),
+        'bg_light_gray'       => l10n('Gris clair'),
+        'bg_light_blue'       => l10n('Bleu très pâle'),
+        'bg_none'             => l10n('Aucune (transparent)'),
+    ];
+    $stats_i18n_json = json_encode($stats_i18n, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
+
+    $chart_js_url        = get_root_url() . 'plugins/ip_location/template/js/chart.umd.min.js';
+    $ajax_stats_url      = get_root_url() . 'plugins/ip_location/ajax_stats.php';
+    $ajax_stats_url_json = json_encode($ajax_stats_url);
+}
+
 $template->assign([
     'VISITORS_ENABLED'      => $visitors_enabled,
     'VISITORS_PERIOD'       => $visitors_period,
@@ -252,6 +389,17 @@ $template->assign([
     'DATE_TO'            => $date_to,
     'IP_FILTER'          => $ip_filter,
     'COUNTRIES'          => $countries,
+    'KNOWN_IPS_JSON'        => $known_ips_json,
+    'COUNTRIES_JSON'        => $countries_json,
+    'BLOCKED_KEYWORDS_JSON' => $blocked_keywords_json,
+    'STATS_PRESETS_JSON'    => $stats_presets_json,
+    'STATS_I18N_JSON'       => $stats_i18n_json,
+    'CHART_JS_URL'          => $chart_js_url,
+    'AJAX_STATS_URL_JSON'   => $ajax_stats_url_json,
+    'LAST_STATS_PERIOD'          => $last_stats_period,
+    'LAST_STATS_DATE_FROM_JSON'  => $last_stats_date_from_json,
+    'LAST_STATS_DATE_TO_JSON'    => $last_stats_date_to_json,
+    'CHART_BG_COLOR'             => $chart_bg_color,
     'TAB'           => $tab,
     'TOTAL_ALL'     => $total_all,
     'TOTAL_BOTS'    => $total_bots,

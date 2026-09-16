@@ -51,6 +51,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 <!-- ── Onglets ────────────────────────────────────────────────────────── -->
 <div class="ipl-tabs">
   <a href="{$BASE_URL|escape}" {if $TAB eq 'config'}class="active"{/if}>{'Configuration'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;tab=stats" {if $TAB eq 'stats'}class="active"{/if}>{'Statistiques'|@translate}</a>
   <a href="{$BASE_URL|escape}&amp;tab=help" {if $TAB eq 'help'}class="active"{/if}>{'Aide'|@translate}</a>
 </div>
 

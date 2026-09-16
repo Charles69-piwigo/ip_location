@@ -103,6 +103,13 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
         pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
   ADD INDEX idx_visit_date (visit_date)');
     }
+
+    // Migration v2.3 → v2.3b : index pour les requêtes par série de l'onglet
+    // Statistiques dynamiques (chaque série filtre systématiquement is_bot/is_blocked)
+    if (!isset($idx['idx_bot_blocked_date'])) {
+        pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
+  ADD INDEX idx_bot_blocked_date (is_bot, is_blocked, visit_date)');
+    }
 }
 
 function plugin_deactivate()

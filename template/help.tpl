@@ -81,6 +81,17 @@ ORDER BY jour DESC;</pre>
     <li>{'La purge manuelle (section Gestion de l\'historique) permet de supprimer les entrées antérieures à une date donnée.'|@translate}</li>
   </ul>
 
+  <h4>{'Statistiques dynamiques'|@translate}</h4>
+  <ul>
+    <li>{'Onglet Statistiques : construisez des courbes combinant type d\'accès, pays, mots-clés bloqués et IP, sur la période de votre choix, y compris « Tous les logs ».'|@translate}</li>
+    <li>{'Granularité automatique : par jour jusqu\'à 31 jours de période, par semaine jusqu\'à 1 an, par mois au-delà (y compris pour une période personnalisée ou « Tous les logs »).'|@translate}</li>
+    <li>{'Chaque série peut être affichée sur l\'axe gauche ou l\'axe droit, pour comparer une courbe de fort volume à une courbe de faible amplitude sans que celle-ci soit écrasée visuellement.'|@translate}</li>
+    <li>{'La dernière période utilisée est mémorisée et proposée par défaut à la prochaine visite de l\'onglet.'|@translate}</li>
+    <li>{'La couleur de fond du graphique se personnalise via un sélecteur de couleur et quelques raccourcis.'|@translate}</li>
+    <li>{'3 préréglages prêts à l\'emploi, plus 4 emplacements personnalisables : sélectionnez un emplacement, construisez vos séries, puis enregistrez.'|@translate}</li>
+    <li>{'Le graphique s\'exporte en CSV, image (PNG) ou données brutes (JSON) via le bouton Exporter.'|@translate}</li>
+  </ul>
+
   <h4>{'Filtres du journal'|@translate}</h4>
   <ul>
     <li><strong>Tous</strong> {'→ toutes les entrées.'|@translate}</li>
