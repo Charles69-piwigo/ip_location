@@ -75,7 +75,8 @@ Has Settings: webmaster
         modifié ip_location_bot_allowlist : tableau PHP au lieu d'une chaîne
         (la chaîne "un par ligne" reste acceptée)
         modifié bloc "Statistiques par pays" repliable, replié par défaut
-        ajouté PARAMETRES.md (liste des $conf surchargeables)
+        ajouté PARAMETRES.md (liste des $conf surchargeables), et sa version
+        anglaise PARAMETERS.md
         fix migrations de base jamais rejouées lors d'une mise à jour depuis
         l'admin Piwigo (PEM ou zip) tant que le plugin restait actif : le cœur
         Piwigo n'appelle alors QUE update(), jamais activate(), et l'ancien
