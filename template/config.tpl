@@ -47,6 +47,7 @@
       <th class="ipl-sortable" data-col="1" style="cursor:pointer;">{'Date'|@translate} <span class="ipl-sort-icon">↕</span></th>
       <th class="ipl-sortable" data-col="2" style="cursor:pointer;">{'Pays'|@translate} <span class="ipl-sort-icon">↕</span></th>
       <th>{'Ville'|@translate}</th>
+      <th>{'Origine'|@translate}</th>
       <th></th>
     </tr>
   </thead>
@@ -57,6 +58,14 @@
       <td>{$bl.blocked_at|escape}</td>
       <td>{$bl.country|escape}</td>
       <td>{$bl.city|escape}</td>
+      <td>
+        {if $bl.origin eq 'auto'}
+          <span style="background:#fff3cd;color:#8a6d1a;border-radius:10px;padding:2px 8px;font-size:0.8em;white-space:nowrap;">{'Auto'|@translate}</span>
+          {if $bl.expires_at}<span style="font-size:0.78em;color:#888;margin-left:6px;white-space:nowrap;">{'expire le'|@translate} {$bl.expires_at|escape}</span>{/if}
+        {else}
+          <span style="background:#e6e6e6;color:#555;border-radius:10px;padding:2px 8px;font-size:0.8em;">{'Manuel'|@translate}</span>
+        {/if}
+      </td>
       <td>
         <form method="post" action="" style="margin:0;">
           <input type="hidden" name="action" value="unblock_ip">
@@ -183,7 +192,7 @@
   <p>
     <label><strong>{'Pays autorisés'|@translate}</strong> (codes ISO séparés par virgule, ex: FR,BE,CH) :</label><br>
     <input type="text" name="download_allowed_countries" value="{$DOWNLOAD_ALLOWED_COUNTRIES|escape}"
-           style="width:400px;" placeholder="FR,BE,CH">
+           style="width:400px;" placeholder="">
   </p>
   <p>
     <label><strong>{'En cas d\'échec de géolocalisation'|@translate}</strong>
@@ -199,3 +208,38 @@
 {else}
 <p style="margin-left:20px;color:#888;">{'Les invités n\'ont pas la permission de télécharger les originaux : filtre sans objet.'|@translate}</p>
 {/if}
+
+<!-- ── Section 5 : Blocage automatique par score de suspicion bot ───────── -->
+<h3 style="margin-top:2em;">{'Blocage automatique par score de suspicion bot'|@translate}{if $SERVER_IS_NGINX} <span style="font-size:0.75em;font-weight:normal;color:#c0392b;">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</h3>
+
+{if !$HTACCESS_ENABLED}
+<p style="margin-left:20px;color:#888;">{'Nécessite d\'abord d\'activer le blocage .htaccess ci-dessus : une IP ajoutée ici ne serait sinon jamais réellement bloquée.'|@translate}</p>
+{/if}
+<form method="post" action="" class="ipl-config">
+  <input type="hidden" name="action" value="save_bot_block_config">
+  <p>
+    <label class="ipl-inline">
+      <input type="checkbox" name="bot_block_enabled" value="1"{if $BOT_BLOCK_ENABLED} checked{/if}{if !$HTACCESS_ENABLED} disabled{/if}>
+      <strong style="display:inline;">{'Activer le blocage automatique'|@translate}</strong>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Ajoute automatiquement au .htaccess les IP détectées comme bots, pour une durée limitée (jamais permanent, jamais de plage — seulement l\'IP exacte).'|@translate}</em>
+  </p>
+  <p style="margin-left:20px;">
+    <label class="ipl-inline">
+      <input type="radio" name="bot_block_mode" value="score"{if $BOT_BLOCK_MODE eq 'score'} checked{/if}>
+      {'Score de suspicion &ge;'|@translate}
+      <input type="range" name="bot_block_score_threshold" min="10" max="90" step="5" value="{$BOT_BLOCK_SCORE_THRESHOLD}"
+             oninput="this.nextElementSibling.textContent=this.value" style="vertical-align:middle;width:160px;">
+      <span>{$BOT_BLOCK_SCORE_THRESHOLD}</span>
+    </label>
+    <em style="display:block;margin-left:24px;font-size:0.85em;color:#666;">{'Le score de chaque accès est visible dans la colonne « Score » du Journal — à consulter avant de fixer ce seuil.'|@translate}</em>
+  </p>
+  <p style="margin-left:20px;">
+    <label class="ipl-inline">
+      <input type="radio" name="bot_block_mode" value="is_bot"{if $BOT_BLOCK_MODE eq 'is_bot'} checked{/if}>
+      {'Détection bot standard (is_bot)'|@translate}
+    </label>
+    <em style="display:block;margin-left:24px;font-size:0.85em;color:#666;">{'Mode simple : bloque dès qu\'un accès est marqué bot dans le Journal, sans passer par le score.'|@translate}</em>
+  </p>
+  <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
+</form>

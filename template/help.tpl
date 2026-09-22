@@ -18,6 +18,12 @@
     <li><strong>{'User-Agent vide'|@translate}</strong> {'→ marqué bot.'|@translate}</li>
     <li><strong>{'Mots-clés dans le User-Agent'|@translate}</strong> {'→ bot, crawler, spider, scraper, curl, wget, python, etc.'|@translate}</li>
     <li><strong>{'Accès synchronisés'|@translate}</strong> {'→ si la même URL est visitée par 2 IPs différentes dans les 10 secondes, les deux entrées sont marquées bots (marquage rétroactif).'|@translate}</li>
+    <li><strong>{'Rafale mono-IP'|@translate}</strong> {'→ si la même IP visite la même URL au moins 3 fois dans les 10 secondes, les entrées sont marquées bots (marquage rétroactif).'|@translate}</li>
+    <li><strong>{'Rafale multi-URL mono-IP'|@translate}</strong> {'→ si la même IP visite au moins 10 URL différentes en moins de 30 secondes, les entrées sont marquées bots (marquage rétroactif) — typique d\'un scraper qui parcourt le catalogue à grande vitesse.'|@translate}</li>
+    <li><strong>{'Navigateur obsolète'|@translate}</strong> {'→ un User-Agent annonçant un Firefox, un Chrome ou un iOS vieux de plusieurs années (ex. Firefox 47, sorti en 2016) est marqué bot : un vrai visiteur n\'a normalement aucune raison de tourner sur un navigateur aussi ancien. Chrome 109, dernière version pour Windows 7/8, est épargné.'|@translate}</li>
+    <li><strong>{'User-Agent annonçant un crawler'|@translate}</strong> {'→ un User-Agent qui contient une URL, une adresse de contact ou un motif « compatible; » (jamais présents dans un vrai navigateur) est marqué bot, même sans le mot « bot ».'|@translate}</li>
+    <li><strong>{'User-Agent figé partagé par de nombreuses IP'|@translate}</strong> {'→ si un même User-Agent est vu au moins 20 fois avec au moins 90% d\'IP distinctes (quasiment jamais deux fois la même IP), les entrées sont marquées bots (marquage rétroactif) : signature typique d\'un pool de proxies résidentiels qui recycle une petite bibliothèque de User-Agents figés.'|@translate}</li>
+    <li><strong>{'Bots d\'IA'|@translate}</strong> {'→ GPTBot, GoogleOther, ClaudeBot… sont comptés comme bots (et peuvent être bloqués automatiquement) : ils ne figurent pas dans la liste des bots légitimes par défaut. Pour en tolérer un, ajoutez-le à ip_location_bot_allowlist ; le robots.txt du site reste le moyen poli de les refuser.'|@translate}</li>
   </ul>
 
   <h4>{'Blocage par pays'|@translate}</h4>
@@ -74,6 +80,20 @@ ORDER BY jour DESC;</pre>
     <li><strong>{'Limite connue'|@translate}</strong> {'→ le filtre ne couvre pas les téléchargements par format alternatif (paramètre "format" de action.php, nécessite l\'option Piwigo "enable_formats"). Sur cette installation, cette option est désactivée, donc sans impact ; à revoir si elle est activée un jour.'|@translate}</li>
   </ul>
 
+  <h4>{'Blocage automatique par score de suspicion bot'|@translate}</h4>
+  <ul>
+    <li>{'Optionnel et désactivé par défaut. Nécessite d\'abord d\'activer le blocage .htaccess : une IP ajoutée par ce mécanisme n\'est réellement bloquée que si le .htaccess est effectivement régénéré.'|@translate}</li>
+    <li>{'Chaque accès reçoit un score (colonne « Score » du journal), calculé à partir de plusieurs signaux : User-Agent vide ou suspect, navigateur manifestement obsolète, User-Agent figé partagé par de nombreuses IP, co-visitation, rafale mono-IP, rafale multi-URL mono-IP, absence de trace du logger JavaScript du diaporama malgré plusieurs accès, et récidive (optionnelle, désactivée par défaut). Un bot connu et légitime (Googlebot, Bingbot, Slackbot…) obtient toujours un score de 0 et n\'est jamais bloqué par ce mécanisme.'|@translate}</li>
+    <li>{'Deux modes de déclenchement au choix : bloquer au-delà d\'un seuil de score (curseur 10-90, à régler en observant la colonne Score du journal), ou bloquer directement sur la détection bot standard (is_bot), sans utiliser le score.'|@translate}</li>
+    <li>{'Contrairement à un blocage manuel, seule l\'IP exacte est ajoutée — jamais une plage /16 — pour limiter les dégâts d\'un éventuel faux positif.'|@translate}</li>
+    <li>{'Le blocage automatique est toujours temporaire (14 jours par défaut) : une IP bloquée par .htaccess devient invisible au système de détection, il est donc impossible de vérifier comportementalement qu\'elle "s\'est calmée" pour la débloquer plus tôt. Un blocage ajouté manuellement, lui, reste permanent.'|@translate}</li>
+    <li>{'Dans le tableau de blocage (Configuration), un badge distingue les entrées « Auto » (avec leur date d\'expiration) des entrées « Manuel ». Cliquer sur "Ajouter IP" pour une IP déjà auto-bloquée la rend permanente.'|@translate}</li>
+    <li>{'Le calcul, le blocage et la purge des entrées expirées se font en différé — pas en temps réel pendant la rafale elle-même — déclenchés soit au chargement de l\'onglet admin, soit au plus une fois toutes les 4 heures via le trafic public (réglable via ip_location_classify_interval_hours dans local/config/config.inc.php), pour que ça fonctionne même sans visite admin régulière.'|@translate}</li>
+    <li>{'Les poids de chaque signal et la liste des bots légitimes exemptés sont réglables via local/config/config.inc.php (éditable depuis le plugin LocalFilesEditor), sans toucher au code.'|@translate}</li>
+    <li>{'Cliquer sur "Retirer du .htaccess" pour une IP auto-bloquée l\'exempte durablement : ses anciennes visites ne compteront plus jamais pour un nouveau blocage automatique, même si son score affiché dans le journal reste au-dessus du seuil courant (badge « Exempté (score) » sur ces lignes, pour ne pas laisser croire à un bug). Seule une nouvelle activité suspecte, postérieure au retrait, peut refaire bloquer l\'IP.'|@translate}</li>
+    <li>{'C\'est aussi ce qui explique qu\'en abaissant le seuil de score, une IP retirée manuellement ne réapparaisse pas dans la liste de blocage alors que d\'autres IP au score comparable y reviennent : contrairement à elles, ses anciennes visites ont été exemptées.'|@translate}</li>
+  </ul>
+
   <h4>{'Vidage automatique'|@translate}</h4>
   <ul>
     <li>{'À chaque accès enregistré, si le nombre d\'entrées dépasse le seuil configuré, les plus anciennes sont supprimées.'|@translate}</li>
@@ -94,10 +114,10 @@ ORDER BY jour DESC;</pre>
 
   <h4>{'Filtres du journal'|@translate}</h4>
   <ul>
-    <li><strong>Tous</strong> {'→ toutes les entrées.'|@translate}</li>
+    <li><strong>Tous</strong> {'→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).'|@translate}</li>
     <li><strong>Normal</strong> {'→ visiteurs humains non bloqués.'|@translate}</li>
-    <li><strong>Bots</strong> {'→ entrées détectées comme bots.'|@translate}</li>
-    <li><strong>Bloqués</strong> {'→ entrées bloquées par le blocage pays.'|@translate}</li>
+    <li><strong>Bots non bloqués</strong> {'→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).'|@translate}</li>
+    <li><strong>Bloqués</strong> {'→ entrées bloquées (pays ou mot-clé), ou dont l\'IP est actuellement dans la blocklist .htaccess (manuelle ou auto), qu\'il s\'agisse d\'un bot ou non.'|@translate}</li>
   </ul>
 
 </div>

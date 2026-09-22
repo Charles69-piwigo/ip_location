@@ -39,6 +39,8 @@ if (strpos($url, $root) !== 0) {
 
 // Loguer la visite sans déclencher le blocage HTTP
 // (le visiteur est déjà sur le site, il sera bloqué au prochain chargement de page)
-ip_location_log_visit($url, false);
+// log_type='js' : preuve qu'un vrai navigateur a exécuté du JavaScript, utilisée
+// par le score de suspicion bot (signal "aucune trace JS" = probablement un script).
+ip_location_log_visit($url, false, 'js');
 
 echo json_encode(['ok' => true]);

@@ -11,6 +11,7 @@
   .ipl-bot-row:hover { background:#ffe0e0 !important; }
   .ipl-bot-badge { color:#c00; font-weight:bold; font-size:0.8em; }
   .ipl-blocked-badge { color:#800; font-weight:bold; font-size:0.8em; background:#fdd; padding:1px 4px; border-radius:3px; }
+  .ipl-exempt-badge { color:#555; font-weight:bold; font-size:0.8em; background:#eee; padding:1px 4px; border-radius:3px; cursor:help; }
   .ipl-btn-block   { font-size:0.8em; padding:2px 7px; background:#c00; color:#fff; border:none; border-radius:3px; cursor:pointer; }
   .ipl-btn-block:hover { background:#900; }
   .ipl-btn-unblock { font-size:0.8em; padding:2px 7px; background:#555; color:#fff; border:none; border-radius:3px; cursor:pointer; }
@@ -36,6 +37,9 @@
   .ipl-config label.ipl-inline { display:inline; }
   .ipl-config strong { display:block; }
   .ipl-config input[type="text"], .ipl-config textarea { display:block; margin:0; }
+  .ipl-country-stats { margin:0 0 1.5em 0; }
+  .ipl-country-stats summary { cursor:pointer; font-size:1.17em; font-weight:bold; padding:10px 0 4px 10px; text-align:left; }
+  .ipl-country-stats .ipl-table { margin-top:0.5em; }
 </style>
 <script>
 if (window.location.search.indexOf('msg=') !== -1) {
@@ -62,36 +66,38 @@ if (window.location.search.indexOf('msg=') !== -1) {
   <span>{'Accès'|@translate} : <strong>{$TOTAL_ALL}</strong></span>
   <span style="color:#c00;">{'Bots détectés'|@translate} : <strong>{$TOTAL_BOTS}</strong></span>
   <span style="color:#800;">{'IPs bloquées'|@translate} : <strong>{$TOTAL_BLOCKED}</strong></span>
-  <span>{'Humains'|@translate} : <strong>{math equation="a - b" a=$TOTAL_ALL b=$TOTAL_BOTS}</strong></span>
+  <span>{'Humains'|@translate} : <strong>{$TOTAL_NORMAL}</strong></span>
 </div>
 
 <!-- ── Statistiques par pays ─────────────────────────────────────────────── -->
-<h3>{'Statistiques par pays'|@translate}</h3>
+<details class="ipl-country-stats">
+  <summary>{'Statistiques par pays'|@translate}</summary>
 
-<table class="ipl-table">
-  <thead>
-    <tr>
-      <th>{'Pays'|@translate}</th>
-      <th>{'Code'|@translate}</th>
-      <th>{'Accès'|@translate}</th>
-      <th>{'Bots'|@translate}</th>
-    </tr>
-  </thead>
-  <tbody>
-  {if $STATS|@count == 0}
-    <tr><td colspan="4">{'Aucune donnée.'|@translate}</td></tr>
-  {else}
-    {foreach from=$STATS item=s}
-    <tr>
-      <td>{$s.country|escape}</td>
-      <td>{$s.country_code|escape}</td>
-      <td>{$s.visits}</td>
-      <td>{if $s.bots > 0}<span class="ipl-bot-badge">{$s.bots}</span>{else}0{/if}</td>
-    </tr>
-    {/foreach}
-  {/if}
-  </tbody>
-</table>
+  <table class="ipl-table">
+    <thead>
+      <tr>
+        <th>{'Pays'|@translate}</th>
+        <th>{'Code'|@translate}</th>
+        <th>{'Accès'|@translate}</th>
+        <th>{'Bots'|@translate}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {if $STATS|@count == 0}
+      <tr><td colspan="4">{'Aucune donnée.'|@translate}</td></tr>
+    {else}
+      {foreach from=$STATS item=s}
+      <tr>
+        <td>{$s.country|escape}</td>
+        <td>{$s.country_code|escape}</td>
+        <td>{$s.visits}</td>
+        <td>{if $s.bots > 0}<span class="ipl-bot-badge">{$s.bots}</span>{else}0{/if}</td>
+      </tr>
+      {/foreach}
+    {/if}
+    </tbody>
+  </table>
+</details>
 
 <!-- ── Journal des visites ──────────────────────────────────────────────── -->
 <h3 id="ipl-journal">{'Journal des accès'|@translate}</h3>
@@ -112,7 +118,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
   {/if}
   <a href="{$BASE_URL|escape}{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"                          {if $FILTER eq 'all'}     class="active"{/if}>{'Tous'|@translate}</a>
   <a href="{$BASE_URL|escape}&amp;filter=normal{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"        {if $FILTER eq 'normal'}  class="active"{/if}>{'Normal'|@translate}</a>
-  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots'|@translate}</a>
+  <a href="{$BASE_URL|escape}&amp;filter=bot{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"           {if $FILTER eq 'bot'}     class="active"{/if}>{'Bots non bloqués'|@translate}</a>
   <a href="{$BASE_URL|escape}&amp;filter=blocked{$country_qs}{$date_qs}{$ip_qs}#ipl-journal"       {if $FILTER eq 'blocked'} class="active"{/if}>{'Bloqués'|@translate}</a>
   &nbsp;|&nbsp;
   <form method="get" action="admin.php" style="display:inline;margin:0;">
@@ -166,13 +172,14 @@ if (window.location.search.indexOf('msg=') !== -1) {
       <th>{'IP'|@translate}</th>
       <th>{'Pays'|@translate}</th>
       <th>{'Ville'|@translate}</th>
+      <th>{'Score'|@translate}</th>
       <th>{'URL'|@translate}</th>
       <th>{'User-Agent'|@translate}</th>
     </tr>
   </thead>
   <tbody>
   {if $LOGS|@count == 0}
-    <tr><td colspan="7">{'Aucun accès enregistré.'|@translate}</td></tr>
+    <tr><td colspan="8">{'Aucun accès enregistré.'|@translate}</td></tr>
   {else}
     {foreach from=$LOGS item=log}
     <tr{if $log.is_bot} class="ipl-bot-row"{/if}>
@@ -197,10 +204,11 @@ if (window.location.search.indexOf('msg=') !== -1) {
           </form>
         {/if}
       </td>
-      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
+      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked || $log.in_blocklist} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
       <td>{$log.ip|escape}</td>
       <td>{$log.country|escape}</td>
       <td>{$log.city|escape}</td>
+      <td>{if $log.is_exempt && ($log.is_bot || $log.bot_score > 0)}<span class="ipl-exempt-badge" title="{'Retirée manuellement du blocage : le score affiché peut rester au-dessus du seuil sans que l\'IP soit rebloquée, tant qu\'aucune nouvelle activité suspecte n\'apparaît après le retrait.'|@translate}">{'Exempté'|@translate}</span> {/if}{$log.bot_score}</td>
       <td class="ipl-url">
         <a href="{$log.url|escape}" target="_blank" title="{$log.url|escape}">{$log.url|escape}</a>
       </td>

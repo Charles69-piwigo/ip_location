@@ -53,6 +53,24 @@ if (isset($_POST['action'])) {
             'download_geo_fail_mode'     => $download_geo_fail_mode,
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
+    } elseif ($_POST['action'] === 'save_bot_block_config') {
+        $conf_cur = ip_location_get_conf();
+        $bot_block_mode = ($_POST['bot_block_mode'] ?? '') === 'is_bot' ? 'is_bot' : 'score';
+        $bot_block_score_threshold = max(10, min(90, (int)($_POST['bot_block_score_threshold'] ?? 70)));
+        // L'interrupteur ne peut être activé que si le blocage .htaccess global l'est déjà —
+        // sinon une ligne ajoutée au blocklist ne bloquerait jamais rien réellement
+        // (cf. ip_location_auto_block_bots()).
+        $bot_block_enabled = (isset($_POST['bot_block_enabled']) && $conf_cur['htaccess_enabled'] === '1') ? '1' : '0';
+        $new_conf = array_merge($conf_cur, [
+            'bot_block_enabled'         => $bot_block_enabled,
+            'bot_block_mode'            => $bot_block_mode,
+            'bot_block_score_threshold' => $bot_block_score_threshold,
+        ]);
+        conf_update_param('ip_location', serialize($new_conf));
+        // Libère aussitôt les IP auto-bloquées qui ne correspondent plus au nouveau
+        // mode/seuil, sans attendre leur expiration TTL (cf. ip_location_reconcile_auto_blocks()).
+        ip_location_reconcile_auto_blocks($new_conf);
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_config') {
         $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
@@ -74,15 +92,18 @@ if (isset($_POST['action'])) {
             if (in_array($ip, $whitelist)) {
                 $page['errors'][] = sprintf(l10n('IP %s est dans la liste blanche.'), $ip);
             } else {
+                // ON DUPLICATE KEY : promeut aussi une éventuelle entrée auto existante en
+                // blocage manuel permanent (origin='manuel', expires_at=NULL) — un clic
+                // explicite de l'admin doit toujours l'emporter sur une expiration auto.
                 pwg_query('
-INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, blocked_at)
+INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, blocked_at, origin, expires_at)
   VALUES (
     \'' . pwg_db_real_escape_string($ip) . '\',
     \'' . pwg_db_real_escape_string($country) . '\',
     \'' . pwg_db_real_escape_string($city) . '\',
-    NOW()
+    NOW(), \'manuel\', NULL
   )
-  ON DUPLICATE KEY UPDATE blocked_at = NOW()');
+  ON DUPLICATE KEY UPDATE blocked_at = NOW(), origin = \'manuel\', expires_at = NULL');
                 ip_location_write_htaccess();
                 redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_blocked&ip=' . urlencode($ip));
             }
@@ -90,7 +111,18 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, block
     } elseif ($_POST['action'] === 'unblock_ip') {
         $ip = trim($_POST['ip'] ?? '');
         if ($ip) {
-            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
+            // Marque l'IP 'exempt' plutôt que de simplement supprimer la ligne : bot_score/
+            // is_bot sont recalculés depuis zéro à chaque passage de
+            // ip_location_classify_recent() (déclenché par ce rechargement de page même),
+            // donc un simple retrait serait aussitôt annulé par les mêmes vieilles preuves
+            // toujours dans la fenêtre de 7 jours. ip_location_get_bot_candidates() ignore
+            // les visites antérieures à cette date pour cette IP ; seule une NOUVELLE
+            // visite suspecte peut la refaire qualifier (et promouvoir cette ligne en
+            // 'auto', cf. ip_location_auto_block_bots()).
+            pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_blocklist
+   SET origin = \'exempt\', blocked_at = NOW(), expires_at = NULL
+ WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
             ip_location_write_htaccess();
             redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_unblocked&ip=' . urlencode($ip));
         }
@@ -151,6 +183,9 @@ list($total_bots) = pwg_db_fetch_row($r);
 $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_blocked = 1');
 list($total_blocked) = pwg_db_fetch_row($r);
 
+$r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_bot = 0 AND is_blocked = 0');
+list($total_normal) = pwg_db_fetch_row($r);
+
 // ── Statistiques par pays ─────────────────────────────────────────────────────
 
 $stats = [];
@@ -191,10 +226,16 @@ $date_from = isset($_GET['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_
 $date_to   = isset($_GET['date_to'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'])   ? $_GET['date_to']   : '';
 $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', trim($_GET['ip_filter'])) : '';
 
+// "Bloqués" doit aussi couvrir les IP actuellement dans la blocklist .htaccess
+// (manuelle ou auto) — pas seulement is_blocked=1, qui ne reflète que le blocage
+// pays/mot-clé décidé au moment de la visite. Sans ça, une IP bloquée après coup
+// (ex. ajoutée manuellement) continue d'apparaître comme "Normal"/"Bots non bloqués"
+// sur ses lignes déjà journalisées.
+$in_blocklist_sql = 'ip IN (SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin != \'exempt\')';
 $where_parts = [];
-if ($filter === 'normal')  $where_parts[] = 'is_bot = 0 AND is_blocked = 0';
-if ($filter === 'bot')     $where_parts[] = 'is_bot = 1';
-if ($filter === 'blocked') $where_parts[] = 'is_blocked = 1';
+if ($filter === 'normal')  $where_parts[] = "is_bot = 0 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
+if ($filter === 'bot')     $where_parts[] = "is_bot = 1 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
+if ($filter === 'blocked') $where_parts[] = "(is_blocked = 1 OR $in_blocklist_sql)";
 if ($country_filter !== '') $where_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
 if ($date_from !== '') $where_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
 if ($date_to   !== '') $where_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
@@ -207,7 +248,7 @@ $total_pages = max(1, ceil($total_visits / $per_page));
 
 $logs = [];
 $result = pwg_query('
-SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked
+SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked, bot_score
   FROM ' . $prefixeTable . 'ip_location_log
   ' . $filter_where . '
   ORDER BY visit_date DESC
@@ -251,18 +292,32 @@ $download_allowed_countries = $plugin_conf['download_allowed_countries'] ?? '';
 $download_geo_fail_mode     = $plugin_conf['download_geo_fail_mode'] ?? 'open';
 $guest_enabled_high         = ip_location_guest_enabled_high();
 
+$bot_block_enabled         = $plugin_conf['bot_block_enabled'] === '1';
+$bot_block_mode            = $plugin_conf['bot_block_mode'] ?? 'score';
+$bot_block_score_threshold = (int)($plugin_conf['bot_block_score_threshold'] ?? 70);
+
 // ── Blocklist ip_location_blocklist ───────────────────────────────────────────
 
 $blocklist = [];
-$result = pwg_query('SELECT ip, country, city, blocked_at FROM ' . $prefixeTable . 'ip_location_blocklist ORDER BY blocked_at DESC');
+$result = pwg_query('SELECT ip, country, city, blocked_at, origin, DATE(expires_at) AS expires_at FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin != \'exempt\' ORDER BY blocked_at DESC');
 while ($row = pwg_db_fetch_assoc($result)) {
     $blocklist[] = $row;
 }
 $blocklist_ips = array_column($blocklist, 'ip');
 
+// IP retirées manuellement du .htaccess (origin='exempt') : leur bot_score peut rester
+// affiché au-dessus du seuil courant sans qu'elles soient bloquées — badge dédié dans le
+// journal pour que ça ne ressemble pas à un bug (cf. ip_location_get_bot_candidates()).
+$result = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin = \'exempt\'');
+$exempt_ips = [];
+while ($row = pwg_db_fetch_row($result)) {
+    $exempt_ips[] = $row[0];
+}
+
 // Marquer les entrées du log dont l'IP est en blocklist
 foreach ($logs as &$log) {
     $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
+    $log['is_exempt']    = in_array($log['ip'], $exempt_ips);
 }
 unset($log);
 
@@ -317,7 +372,7 @@ SELECT ip, COUNT(*) AS hits
     $stats_i18n = [
         'type_all'            => l10n('Tous'),
         'type_normal'         => l10n('Normal'),
-        'type_bot'            => l10n('Bots'),
+        'type_bot'            => l10n('Bots non bloqués'),
         'type_blocked'        => l10n('Bloqués'),
         'axis_left'           => l10n('Axe gauche'),
         'axis_right'          => l10n('Axe droit'),
@@ -344,11 +399,11 @@ SELECT ip, COUNT(*) AS hits
         'slot_edit'           => l10n('édition'),
         'save_need_series'    => l10n('Ajoutez au moins une série avant d\'enregistrer ce préréglage.'),
         'preset_vue_globale'       => l10n('Vue globale'),
-        'preset_bots_vs_humains'   => l10n('Bots vs humains'),
+        'preset_bots_vs_humains'   => l10n('Bots non bloqués vs humains'),
         'preset_normal_vs_bloques' => l10n('Normal vs bloqués'),
         'series_tout'         => l10n('Tout'),
         'series_humains'      => l10n('Humains'),
-        'series_bots'         => l10n('Bots'),
+        'series_bots'         => l10n('Bots non bloqués'),
         'series_normal'       => l10n('Normal'),
         'series_bloques'      => l10n('Bloqués'),
         'bg_white'            => l10n('Blanc'),
@@ -377,6 +432,9 @@ $template->assign([
     'DOWNLOAD_ALLOWED_COUNTRIES' => $download_allowed_countries,
     'DOWNLOAD_GEO_FAIL_MODE'     => $download_geo_fail_mode,
     'GUEST_ENABLED_HIGH'         => $guest_enabled_high,
+    'BOT_BLOCK_ENABLED'          => $bot_block_enabled,
+    'BOT_BLOCK_MODE'             => $bot_block_mode,
+    'BOT_BLOCK_SCORE_THRESHOLD'  => $bot_block_score_threshold,
     'BLOCKLIST'          => $blocklist,
     'STATS'              => $stats,
     'LOGS'               => $logs,
@@ -404,6 +462,7 @@ $template->assign([
     'TOTAL_ALL'     => $total_all,
     'TOTAL_BOTS'    => $total_bots,
     'TOTAL_BLOCKED' => $total_blocked,
+    'TOTAL_NORMAL'  => $total_normal,
 ]);
 
 $template->set_filename('ip_location_tab', $tab_tpl);
