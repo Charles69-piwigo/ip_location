@@ -421,3 +421,4 @@ $lang['IP %s bloquée.'] = 'IP %s bloquée.';
 $lang['IP %s débloquée.'] = 'IP %s débloquée.';
 $lang['modifications non enregistrées'] = 'modifications non enregistrées';
 $lang['Actif, aucun robot bloqué : ne refuse rien, protège les robots autorisés'] = 'Actif, aucun robot bloqué : ne refuse rien, protège les robots autorisés';
+$lang['Refus journalisés sur 7 jours — un refus répété de la même IP n\'est journalisé qu\'une fois toutes les 10 minutes'] = 'Refus journalisés sur 7 jours — un refus répété de la même IP n\'est journalisé qu\'une fois toutes les 10 minutes';

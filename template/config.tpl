@@ -358,7 +358,7 @@
           <button type="submit" class="iplc-btn ghost sm">{'Bloquer'|@translate}</button>
         </form>
         <div class="iplc-list"><div class="iplc-scroll">
-          <table class="iplc-t"><thead><tr><th>{'IP / plage'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th>{'Depuis le'|@translate}</th><th class="num">{'Refus 7 j'|@translate}</th><th></th></tr></thead><tbody>
+          <table class="iplc-t"><thead><tr><th>{'IP / plage'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th>{'Depuis le'|@translate}</th><th class="num" title="{'Refus journalisés sur 7 jours — un refus répété de la même IP n\'est journalisé qu\'une fois toutes les 10 minutes'|@translate}">{'Refus 7 j'|@translate}</th><th></th></tr></thead><tbody>
           {foreach from=$MANUAL_ROWS item=bl}
             <tr>
               <td><span class="ip">{$bl.ip|escape}</span>{if $bl.is_range}<span class="iplc-tag">{'plage'|@translate}</span>{/if}</td>

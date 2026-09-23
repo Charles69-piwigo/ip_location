@@ -10,6 +10,17 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.5 - 23/09/2026
+        robots d'IA (GPTBot, ClaudeBot, CCBot, Bytespider, PerplexityBot, Amazonbot)
+        bloqués par défaut — GPTBot observé à ~50 requêtes/minute pendant des heures sur
+        un site réel. S'applique aux sites dont la liste n'a jamais été enregistrée ; un
+        site qui avait personnalisé l'ancienne liste blanche garde ses robots autorisés,
+        complétés des robots d'IA bloqués
+        refus répétés (même IP, même motif : robot bloqué, liste d'IP, blocage auto)
+        journalisés au plus une fois toutes les ip_location_refusal_log_minutes (10)
+        minutes : la requête reste refusée à chaque fois, mais un robot qui insiste ne
+        remplit plus le journal jusqu'à évincer tout le reste via max_records
+
     version 2.6.4 - 23/09/2026
         onglet Configuration : l'étiquette d'état de chaque bloc (Actif / Inactif,
         Affiché / Masqué) suit l'interrupteur en direct, sans attendre l'enregistrement ;
@@ -364,6 +375,7 @@ $ip_location_score_defaults = [
     'ip_location_auto_block_recent_hours' => 24, // seules les IP actives depuis N h sont auto-bloquées
     'ip_location_score_bot_spoof'     => 50, // UA d'un moteur connu depuis une IP qui ne lui appartient pas (v2.6.2)
     'ip_location_robot_check_days'    => 30, // durée de validité d'une vérification DNS de robot
+    'ip_location_refusal_log_minutes' => 10, // un refus répété (même IP, même motif) n'est journalisé qu'une fois par période ; 0 = tous
     'ip_location_classify_interval_hours' => 4,
     'ip_location_classify_window_days' => 7,
 ];
@@ -1026,13 +1038,15 @@ function ip_location_is_prefetch_request()
  * Liste par défaut du bloc "Robots d'indexation" (v2.6.2). Chaque robot : nom, motif
  * cherché dans le User-Agent (insensible à la casse), famille (search / social / ai),
  * domaines de vérification DNS (vide = le robot ne publie pas de méthode : confiance au
- * User-Agent) et statut (allow / block). Tous autorisés par défaut : le plugin ne bloque
- * rien qu'on ne lui ait demandé.
+ * User-Agent) et statut (allow / block). Moteurs de recherche et aperçus de partage
+ * autorisés ; robots d'IA bloqués par défaut (décision v2.6.5 : GPTBot observé à ~50
+ * requêtes/minute pendant des heures sur un site réel, sans bénéfice pour le site).
  */
 function ip_location_default_robots()
 {
     $r = function ($name, $ua, $fam, $verify = '') {
-        return ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => $verify, 'status' => 'allow'];
+        return ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => $verify,
+                'status' => $fam === 'ai' ? 'block' : 'allow'];
     };
     return [
         $r('Googlebot',    'Googlebot',           'search', 'googlebot.com google.com'),
@@ -1061,9 +1075,10 @@ function ip_location_default_robots()
 /**
  * Liste courante des robots : celle enregistrée dans l'admin, sinon — tant qu'elle n'a
  * jamais été enregistrée — la liste par défaut, ou la reprise de l'ancienne liste
- * blanche $conf['ip_location_bot_allowlist'] si le site l'avait personnalisée : seuls
- * ses robots sont alors listés (autorisés), les autres restant traités par le score comme
- * avant la mise à jour.
+ * blanche $conf['ip_location_bot_allowlist'] si le site l'avait personnalisée : ses
+ * robots sont alors listés et autorisés (même un robot d'IA : l'administrateur l'avait
+ * explicitement toléré), complétés des robots d'IA par défaut, bloqués ; les autres
+ * restent traités par le score comme avant la mise à jour.
  */
 function ip_location_get_robots()
 {
@@ -1090,7 +1105,17 @@ function ip_location_get_robots()
                 break;
             }
         }
+        if ($known) {
+            $known['status'] = 'allow';
+        }
         $list[] = $known ?: ['name' => $pattern, 'ua' => $pattern, 'fam' => 'search', 'verify' => '', 'status' => 'allow'];
+    }
+    // Robots d'IA par défaut (bloqués) absents de l'ancienne liste
+    $listed = array_map('strtolower', array_column($list, 'ua'));
+    foreach ($defaults as $d) {
+        if ($d['fam'] === 'ai' && !in_array(strtolower($d['ua']), $listed, true)) {
+            $list[] = $d;
+        }
     }
     return $cache = $list;
 }
@@ -1252,6 +1277,29 @@ function ip_location_geo_from_cache($ip_raw, $fallback_country, $fallback_city)
 }
 
 /**
+ * Vrai si un refus de même motif a déjà été journalisé pour cette IP depuis moins de
+ * $conf['ip_location_refusal_log_minutes'] minutes (défaut 10). Un robot bloqué qui
+ * insiste (GPTBot observé à ~50 requêtes/minute pendant des heures) remplirait sinon le
+ * journal jusqu'à évincer tout le reste via max_records. La requête reste refusée à
+ * chaque fois ; seule sa journalisation est espacée. Requête limitée aux dernières
+ * minutes (index idx_visit_date).
+ */
+function ip_location_refusal_recently_logged($ip_raw, $reason)
+{
+    global $prefixeTable, $conf;
+    $minutes = (int)$conf['ip_location_refusal_log_minutes'];
+    if ($minutes <= 0) {
+        return false;
+    }
+    $r = pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_log
+  WHERE visit_date >= NOW() - INTERVAL ' . $minutes . ' MINUTE
+    AND ip = \'' . pwg_db_real_escape_string($ip_raw) . '\'
+    AND block_reason = \'' . pwg_db_real_escape_string($reason) . '\'
+  LIMIT 1');
+    return pwg_db_num_rows($r) > 0;
+}
+
+/**
  * Vidage automatique au-delà de max_records — échantillonné (1 appel sur 50) pour éviter
  * un COUNT(*) à chaque accès. Le léger dépassement transitoire est sans conséquence.
  */
@@ -1316,17 +1364,19 @@ function ip_location_blocklist_guard()
     $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
     $robot_state = ip_location_request_robot_state($ip_raw, $user_agent);
     if ($robot_state['state'] === 'blocked') {
-        ip_location_insert_log([
-            'ip'           => $ip_raw,
-            'geo'          => ip_location_geo_from_cache($ip_raw, null, null),
-            'url'          => ip_location_current_url(),
-            'user_agent'   => $user_agent,
-            'is_bot'       => 1,
-            'is_blocked'   => 1,
-            'log_type'     => ip_location_is_prefetch_request() ? 'prefetch' : null,
-            'block_reason' => 'robot',
-        ]);
-        ip_location_enforce_max_records($plugin_conf);
+        if (!ip_location_refusal_recently_logged($ip_raw, 'robot')) {
+            ip_location_insert_log([
+                'ip'           => $ip_raw,
+                'geo'          => ip_location_geo_from_cache($ip_raw, null, null),
+                'url'          => ip_location_current_url(),
+                'user_agent'   => $user_agent,
+                'is_bot'       => 1,
+                'is_blocked'   => 1,
+                'log_type'     => ip_location_is_prefetch_request() ? 'prefetch' : null,
+                'block_reason' => 'robot',
+            ]);
+            ip_location_enforce_max_records($plugin_conf);
+        }
         header('HTTP/1.0 403 Forbidden');
         exit;
     }
@@ -1352,17 +1402,20 @@ function ip_location_blocklist_guard()
         return;
     }
 
-    ip_location_insert_log([
-        'ip'           => $ip_raw,
-        'geo'          => ip_location_geo_from_cache($ip_raw, $hit['country'], $hit['city']),
-        'url'          => ip_location_current_url(),
-        'user_agent'   => $user_agent,
-        'is_bot'       => ip_location_is_bot_ua($user_agent) ? 1 : 0,
-        'is_blocked'   => 1,
-        'log_type'     => ip_location_is_prefetch_request() ? 'prefetch' : null,
-        'block_reason' => $hit['origin'] === 'auto' ? 'auto' : 'ip',
-    ]);
-    ip_location_enforce_max_records($plugin_conf);
+    $reason = $hit['origin'] === 'auto' ? 'auto' : 'ip';
+    if (!ip_location_refusal_recently_logged($ip_raw, $reason)) {
+        ip_location_insert_log([
+            'ip'           => $ip_raw,
+            'geo'          => ip_location_geo_from_cache($ip_raw, $hit['country'], $hit['city']),
+            'url'          => ip_location_current_url(),
+            'user_agent'   => $user_agent,
+            'is_bot'       => ip_location_is_bot_ua($user_agent) ? 1 : 0,
+            'is_blocked'   => 1,
+            'log_type'     => ip_location_is_prefetch_request() ? 'prefetch' : null,
+            'block_reason' => $reason,
+        ]);
+        ip_location_enforce_max_records($plugin_conf);
+    }
 
     header('HTTP/1.0 403 Forbidden');
     exit;
