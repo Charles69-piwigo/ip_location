@@ -288,8 +288,21 @@ if (window.location.search.indexOf('msg=') !== -1) {
         <label class="field">{'Du'|@translate}<input type="date" name="date_from" value="{$DATE_FROM|escape}"></label>
         <label class="field">{'Au'|@translate}<input type="date" name="date_to" value="{$DATE_TO|escape}"></label>
         <label class="field">{'IP commençant par'|@translate}<input type="text" name="ip_filter" value="{$IP_FILTER|escape}" placeholder="ex. 34.17." style="width:150px;"></label>
+        <label class="field">{'Motif de blocage'|@translate}
+          <select name="reason" onchange="this.form.submit()">
+            <option value="">{'Tous les motifs'|@translate}</option>
+            <option value="country"{if $REASON_FILTER eq 'country'} selected{/if}>{'Refusé · pays'|@translate} ({$REASON_COUNTS.country})</option>
+            <option value="keyword"{if $REASON_FILTER eq 'keyword'} selected{/if}>{'Refusé · mot-clé'|@translate} ({$REASON_COUNTS.keyword})</option>
+            <option value="ip"{if $REASON_FILTER eq 'ip'} selected{/if}>{'Refusé · liste IP'|@translate} ({$REASON_COUNTS.ip})</option>
+            <option value="auto"{if $REASON_FILTER eq 'auto'} selected{/if}>{'Refusé · blocage auto'|@translate} ({$REASON_COUNTS.auto})</option>
+            <option value="robot"{if $REASON_FILTER eq 'robot'} selected{/if}>{'Refusé · robot'|@translate} ({$REASON_COUNTS.robot})</option>
+            <option value="download"{if $REASON_FILTER eq 'download'} selected{/if}>{'Refusé · téléchargement'|@translate} ({$REASON_COUNTS.download})</option>
+            <option value="listed"{if $REASON_FILTER eq 'listed'} selected{/if}>{'Bloquée depuis (servi avant le blocage)'|@translate} ({$REASON_COUNTS.listed})</option>
+            <option value="unknown"{if $REASON_FILTER eq 'unknown'} selected{/if}>{'Motif inconnu (avant la 2.6.1)'|@translate} ({$REASON_COUNTS.unknown})</option>
+          </select>
+        </label>
         <button type="submit" class="iplc-btn ghost sm">{'Filtrer'|@translate}</button>
-        {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq ''}
+        {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq ''}
           <a class="iplj-reset" href="{$BASE_URL|escape}&amp;sub=journal{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}">{'Réinitialiser'|@translate}</a>
         {/if}
       </form>

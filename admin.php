@@ -10,7 +10,7 @@ function ip_location_admin_return_qs()
 {
     parse_str(stripslashes($_POST['return_qs'] ?? ''), $in);
     $out = '';
-    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'pnum'] as $k) {
+    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'reason', 'pnum'] as $k) {
         if (isset($in[$k]) && is_string($in[$k]) && preg_match('/^[A-Za-z0-9.:\/-]{1,45}$/', $in[$k])) {
             $out .= '&' . $k . '=' . urlencode($in[$k]);
         }
@@ -388,6 +388,11 @@ if (!preg_match('/^[A-Z]{0,2}$/', $country_filter)) $country_filter = '';
 $date_from = isset($_GET['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_from']) ? $_GET['date_from'] : '';
 $date_to   = isset($_GET['date_to'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'])   ? $_GET['date_to']   : '';
 $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', trim($_GET['ip_filter'])) : '';
+// Motif de blocage (v2.6.10) : un motif de refus (block_reason), "listed" (servi avant le
+// blocage de son IP / robot, classé Bloqués par l'état actuel) ou "unknown" (refus
+// antérieur à la 2.6.1, sans motif enregistré).
+$reason_keys   = ['country', 'keyword', 'ip', 'auto', 'robot', 'download', 'listed', 'unknown'];
+$reason_filter = isset($_GET['reason']) && in_array($_GET['reason'], $reason_keys, true) ? $_GET['reason'] : '';
 
 // Le Journal reflète l'état actuel (v2.6.8, après un essai "historique figé" en v2.6.1) :
 // une ligne servie avant le blocage de son IP / robot passe dans "Bloqués" (badge "Bloquée
@@ -404,6 +409,31 @@ if ($ip_filter !== '')  $base_parts[] = "ip LIKE '" . pwg_db_real_escape_string(
 // "Bloqués" = refus réels OU IP/robot actuellement bloqué (le Journal reflète l'état
 // actuel depuis v2.6.8 ; seuls les leviers allumés comptent, cf. ip_location_currently_blocked_sql()).
 $currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable);
+
+// Filtre "Motif" : conditions par motif, et effectif de chacun (mêmes filtres pays /
+// dates / IP) pour l'afficher dans la liste déroulante.
+$reason_sql = [
+    'listed'  => 'is_blocked = 0 AND ' . $currently_blocked_sql,
+    'unknown' => 'is_blocked = 1 AND block_reason IS NULL',
+];
+foreach (['country', 'keyword', 'ip', 'auto', 'robot', 'download'] as $rk) {
+    $reason_sql[$rk] = "is_blocked = 1 AND block_reason = '" . $rk . "'";
+}
+$reason_cols = [];
+foreach ($reason_sql as $rk => $sql) {
+    $reason_cols[] = 'SUM(' . $sql . ') AS r_' . $rk;
+}
+$r = pwg_query('SELECT ' . implode(', ', $reason_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
+    . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
+$reason_counts = [];
+$row = pwg_db_fetch_assoc($r) ?: [];
+foreach ($reason_keys as $rk) {
+    $reason_counts[$rk] = (int)($row['r_' . $rk] ?? 0);
+}
+if ($reason_filter !== '') {
+    $base_parts[] = '(' . $reason_sql[$reason_filter] . ')';
+}
+
 $category_sql = [
     'all'     => '1',
     'normal'  => 'is_bot = 0 AND is_blocked = 0 AND NOT ' . $currently_blocked_sql,
@@ -451,7 +481,7 @@ $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 $sub = 'settings';
 if ($tab === 'config' && (($_GET['sub'] ?? '') === 'journal'
     || isset($_GET['filter']) || isset($_GET['country']) || isset($_GET['date_from'])
-    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['pnum']))) {
+    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['reason']) || isset($_GET['pnum']))) {
     $sub = 'journal';
 }
 
@@ -463,6 +493,7 @@ if ($country_filter !== '') $journal_qs .= '&country=' . urlencode($country_filt
 if ($date_from !== '')      $journal_qs .= '&date_from=' . urlencode($date_from);
 if ($date_to !== '')        $journal_qs .= '&date_to=' . urlencode($date_to);
 if ($ip_filter !== '')      $journal_qs .= '&ip_filter=' . urlencode($ip_filter);
+if ($reason_filter !== '')  $journal_qs .= '&reason=' . urlencode($reason_filter);
 $return_qs = ltrim($journal_qs, '&') . ($filter !== 'all' ? '&filter=' . $filter : '') . '&pnum=' . $current_page;
 $pager = [];
 if ($total_pages > 1) {
@@ -924,6 +955,8 @@ $template->assign([
     'TAB'           => $tab,
     'SUB'           => $sub,
     'JOURNAL_COUNTS'=> $journal_counts,
+    'REASON_FILTER' => $reason_filter,
+    'REASON_COUNTS' => $reason_counts,
     'JOURNAL_QS'    => $journal_qs,
     'RETURN_QS'     => $return_qs,
     'PAGER'         => $pager,

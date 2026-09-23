@@ -512,3 +512,15 @@ $lang['Statistiques dynamiques'] = 'Statistiques dynamiques';
 $lang['Courbes combinant type d\'accès, pays, mots-clés bloqués et IP, sur la période de votre choix, y compris « Tous les logs ». Granularité automatique : jour jusqu\'à 31 jours, semaine jusqu\'à 1 an, mois au-delà.'] = 'Courbes combinant type d\'accès, pays, mots-clés bloqués et IP, sur la période de votre choix, y compris « Tous les logs ». Granularité automatique : jour jusqu\'à 31 jours, semaine jusqu\'à 1 an, mois au-delà.';
 $lang['Chaque série peut aller sur l\'axe gauche ou droit, pour comparer une courbe de fort volume à une courbe de faible amplitude.'] = 'Chaque série peut aller sur l\'axe gauche ou droit, pour comparer une courbe de fort volume à une courbe de faible amplitude.';
 $lang['3 préréglages prêts à l\'emploi et 4 emplacements personnels ; export en CSV, PNG ou JSON.'] = '3 préréglages prêts à l\'emploi et 4 emplacements personnels ; export en CSV, PNG ou JSON.';
+
+// v2.6.10 — filtre Motif du Journal
+$lang['Motif de blocage'] = 'Motif de blocage';
+$lang['Tous les motifs'] = 'Tous les motifs';
+$lang['Refusé · pays'] = 'Refusé · pays';
+$lang['Refusé · mot-clé'] = 'Refusé · mot-clé';
+$lang['Refusé · liste IP'] = 'Refusé · liste IP';
+$lang['Refusé · blocage auto'] = 'Refusé · blocage auto';
+$lang['Refusé · robot'] = 'Refusé · robot';
+$lang['Refusé · téléchargement'] = 'Refusé · téléchargement';
+$lang['Bloquée depuis (servi avant le blocage)'] = 'Bloquée depuis (servi avant le blocage)';
+$lang['Motif inconnu (avant la 2.6.1)'] = 'Motif inconnu (avant la 2.6.1)';

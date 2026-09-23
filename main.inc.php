@@ -10,6 +10,13 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.10 - 23/09/2026
+        Journal : filtre "Motif de blocage" (pays, mot-clé, liste IP, blocage auto, robot,
+        téléchargement, "Bloquée depuis" = servi avant le blocage de son IP / robot,
+        "Motif inconnu" = refus antérieurs à la 2.6.1), avec l'effectif de chaque motif ;
+        combinable avec les autres filtres, pris en compte par les compteurs, conservé par
+        la pagination et le retour après Bloquer / Débloquer
+
     version 2.6.9 - 23/09/2026
         Aide réécrite en suivant l'interface : présentation (observateur + leviers,
         sous-onglets), ce qui est enregistré (refus espacés, pré-lectures), Observation
