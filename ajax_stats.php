@@ -136,7 +136,8 @@ foreach ($series_in as $s) {
     // Cohérent avec le Journal des accès (admin.php) : "Bloqués" couvre aussi les IP
     // actuellement dans la blocklist .htaccess, pas seulement is_blocked=1. origin='exempt'
     // exclu : une IP retirée manuellement n'est plus bloquée (cf. admin.php:unblock_ip).
-    $in_blocklist_sql = 'ip IN (SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin != \'exempt\')';
+    // Plages /16 manuelles comprises (cf. ip_location_in_blocklist_sql()).
+    $in_blocklist_sql = ip_location_in_blocklist_sql($prefixeTable);
     if ($s['type'] === 'normal')  $where[] = "is_bot = 0 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
     if ($s['type'] === 'bot')     $where[] = "is_bot = 1 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
     if ($s['type'] === 'blocked') $where[] = "(is_blocked = 1 OR $in_blocklist_sql)";

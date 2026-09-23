@@ -276,36 +276,25 @@
 {/if}
 
 <!-- ── Section 5 : Blocage automatique par score de suspicion bot ───────── -->
-<h3 style="margin-top:2em;">{'Blocage automatique par score de suspicion bot'|@translate}{if $SERVER_IS_NGINX} <span style="font-size:0.75em;font-weight:normal;color:#c0392b;">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</h3>
+<h3 style="margin-top:2em;">{'Blocage automatique par score de suspicion bot'|@translate}</h3>
 
-{if !$HTACCESS_ENABLED}
-<p style="margin-left:20px;color:#888;">{'Nécessite d\'abord d\'activer le blocage .htaccess ci-dessus : une IP ajoutée ici ne serait sinon jamais réellement bloquée.'|@translate}</p>
-{/if}
 <form method="post" action="" class="ipl-config">
   <input type="hidden" name="action" value="save_bot_block_config">
   <p>
     <label class="ipl-inline">
-      <input type="checkbox" name="bot_block_enabled" value="1"{if $BOT_BLOCK_ENABLED} checked{/if}{if !$HTACCESS_ENABLED} disabled{/if}>
+      <input type="checkbox" name="bot_block_enabled" value="1"{if $BOT_BLOCK_ENABLED} checked{/if}>
       <strong style="display:inline;">{'Activer le blocage automatique'|@translate}</strong>
     </label>
-    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Ajoute automatiquement au .htaccess les IP détectées comme bots, pour une durée limitée (jamais permanent, jamais de plage — seulement l\'IP exacte).'|@translate}</em>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Bloque automatiquement (par le plugin, sans passer par le .htaccess) les IP récemment détectées comme bots, pour une durée limitée (jamais permanent, jamais de plage — seulement l\'IP exacte).'|@translate}</em>
   </p>
   <p style="margin-left:20px;">
     <label class="ipl-inline">
-      <input type="radio" name="bot_block_mode" value="score"{if $BOT_BLOCK_MODE eq 'score'} checked{/if}>
       {'Score de suspicion &ge;'|@translate}
       <input type="range" name="bot_block_score_threshold" min="10" max="90" step="5" value="{$BOT_BLOCK_SCORE_THRESHOLD}"
              oninput="this.nextElementSibling.textContent=this.value" style="vertical-align:middle;width:160px;">
       <span>{$BOT_BLOCK_SCORE_THRESHOLD}</span>
     </label>
-    <em style="display:block;margin-left:24px;font-size:0.85em;color:#666;">{'Le score de chaque accès est visible dans la colonne « Score » du Journal — à consulter avant de fixer ce seuil.'|@translate}</em>
-  </p>
-  <p style="margin-left:20px;">
-    <label class="ipl-inline">
-      <input type="radio" name="bot_block_mode" value="is_bot"{if $BOT_BLOCK_MODE eq 'is_bot'} checked{/if}>
-      {'Détection bot standard (is_bot)'|@translate}
-    </label>
-    <em style="display:block;margin-left:24px;font-size:0.85em;color:#666;">{'Mode simple : bloque dès qu\'un accès est marqué bot dans le Journal, sans passer par le score.'|@translate}</em>
+    <em style="display:block;margin-left:0;font-size:0.85em;color:#666;">{'Le score de chaque accès est visible dans la colonne « Score » du Journal — à consulter avant de fixer ce seuil.'|@translate}</em>
   </p>
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
 </form>

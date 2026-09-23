@@ -10,6 +10,43 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.5.5 - 23/09/2026
+        suite à l'analyse du journal et de la blocklist d'un site testeur (10 000 accès,
+        10 475 IP auto-bloquées) :
+        fix faux positif "rafale multi-URL" sur une navigation humaine rapide (11 photos
+        en 27 s en cliquant "suivant") : seuil relevé de 10 à 20 URL distinctes en ~30 s,
+        désormais réglable (ip_location_multi_url_threshold) ; les scrapers visés en v2.5
+        en faisaient 47 à 88
+        requêtes de pré-lecture du navigateur (<link rel="prefetch"> de la photo suivante
+        dans le thème, en-têtes Sec-Purpose/Purpose/X-Moz) journalisées avec
+        log_type='prefetch' et ignorées par toutes les règles comportementales et par
+        les visites qualifiées du widget (une photo pré-chargée mais jamais vue comptait
+        comme une page vue)
+        règle "UA figé partagé" : ne pose plus is_bot et poids 50 -> 30 — l'UA recyclé
+        par le botnet était celui de Chrome 151/Windows, donc tout vrai visiteur avec
+        ce navigateur était marqué bot (et auto-bloquable)
+        blocage auto appliqué en PHP seulement, jamais écrit dans le .htaccess
+        (réservé aux blocages manuels) : nouveau garde ip_location_blocklist_guard()
+        sur init, qui couvre tous les scripts PHP (pas seulement index/picture) et
+        les plages /16 manuelles — celles-ci n'étaient appliquées que par le
+        .htaccess, inopérant sur le site testeur. Le blocage auto ne dépend plus de
+        htaccess_enabled (fonctionne aussi sous nginx). .htaccess réécrit une fois
+        au 1er chargement de l'admin pour en retirer les anciennes entrées auto
+        blocage auto limité aux IP suspectes récemment (ip_location_auto_block_recent_hours,
+        défaut 24) : la 1ère activation posait d'un coup toute la fenêtre de 7 jours
+        jamais de blocage auto d'une IP privée/réservée (poste du réseau local) : une fois
+        bloquée, elle ne pouvait même plus afficher la page de connexion depuis le LAN
+        fix "Bloqués" (Journal, Statistiques, widget Visiteurs) : les lignes d'une IP
+        couverte par une plage /16 manuelle apparaissaient en "Bots non bloqués"/"Normal"
+        (test sur l'IP exacte seulement) — ip_location_in_blocklist_sql() commun, et
+        mention "Plage /16 bloquée" dans le Journal à la place des boutons
+        supprimé le mode de blocage auto "Détection bot standard (is_bot)" : il revenait
+        à un seuil de score ~10, bloquait sur un signal isolé peu fiable (co-visitation)
+        et is_bot n'est jamais remis à 0 après correction d'une règle. Blocage auto
+        toujours sur le score ; migration au 1er chargement de l'admin : les sites en
+        mode is_bot passent au score avec le seuil déjà enregistré, et les entrées auto
+        qui ne l'atteignent pas sont libérées aussitôt
+
     version 2.5.4 - 23/09/2026
         fix "Détail des visites comptabilisées" (Configuration) toujours calculé sur la
         période par défaut (semaine) au lieu de la période réellement enregistrée :
@@ -260,11 +297,13 @@ $ip_location_score_defaults = [
     'ip_location_score_covisit'       => 40,
     'ip_location_score_burst'         => 50,
     'ip_location_score_multi_url_burst' => 50,
-    'ip_location_score_shared_ua'     => 50,
+    'ip_location_multi_url_threshold' => 20, // URL distinctes par IP en ~30 s (10 avant v2.5.5)
+    'ip_location_score_shared_ua'     => 30,  // < seuils usuels : doit être confirmé par un 2e signal
     'ip_location_score_outdated_browser' => 20,
     'ip_location_score_no_js'         => 20,
     'ip_location_recurrence'          => 0,  // 0 = désactivé (même convention que max_records)
     'ip_location_auto_block_ttl_days' => 14,
+    'ip_location_auto_block_recent_hours' => 24, // seules les IP actives depuis N h sont auto-bloquées
     'ip_location_bot_allowlist'       => ['Googlebot', 'Bingbot', 'Slackbot', 'Twitterbot', 'facebookexternalhit', 'DuckDuckBot', 'WhatsApp', 'Applebot', 'LinkedInBot', 'TelegramBot'],
     'ip_location_classify_interval_hours' => 4,
     'ip_location_classify_window_days' => 7,
@@ -327,7 +366,6 @@ function ip_location_get_conf()
         'last_stats_date_to'         => '',
         'chart_bg_color'             => '#ffffff',
         'bot_block_enabled'          => '0',
-        'bot_block_mode'             => 'score',
         'bot_block_score_threshold'  => 70,
         'last_classify_at'           => '',
     ];
@@ -359,6 +397,23 @@ function ip_location_visitors_periods()
 }
 
 /**
+ * Fragment SQL (parenthésé) vrai si l'IP de la colonne donnée est actuellement dans la
+ * blocklist : IP exacte (manuelle ou auto, hors 'exempt') OU couverte par une plage
+ * manuelle "A.B.0.0/16" (seul format de plage généré par le plugin). Source unique pour
+ * la catégorie "Bloqués" du Journal, les séries des Statistiques et les visites
+ * qualifiées du widget — auparavant chacun testait l'IP exacte seulement, si bien que
+ * les lignes d'une plage bloquée apparaissaient en "Bots non bloqués"/"Normal".
+ * IPv6 : SUBSTRING_INDEX ne trouve pas de '.', la clé construite ne correspond jamais
+ * à une plage — seule la correspondance exacte s'applique (pas de plage IPv6).
+ */
+function ip_location_in_blocklist_sql($prefixeTable, $col = 'ip')
+{
+    return "({$col} IN (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin != 'exempt')"
+        . " OR CONCAT(SUBSTRING_INDEX({$col}, '.', 2), '.0.0/16') IN"
+        . " (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin = 'manuel'))";
+}
+
+/**
  * Fragment SQL définissant une "visite qualifiée" du widget public Visiteurs : accès
  * présumé humain (non-bot, non-bloqué, IP absente de la blocklist .htaccess) à une page
  * photo ou une section d'album (hors accueil), précédé ou suivi d'une autre URL de la
@@ -372,11 +427,12 @@ function ip_location_visitors_periods()
  */
 function ip_location_qualifying_visit_where($prefixeTable, $alias = 'l1')
 {
-    $in_blocklist_sql = "{$alias}.ip IN (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin != 'exempt')";
+    $in_blocklist_sql = ip_location_in_blocklist_sql($prefixeTable, "{$alias}.ip");
 
     return "
    {$alias}.is_bot        = 0
    AND {$alias}.is_blocked    = 0
+   AND ({$alias}.log_type IS NULL OR {$alias}.log_type != 'prefetch')
    AND NOT ({$in_blocklist_sql})
    AND {$alias}.country_code != ''
    AND (
@@ -388,6 +444,7 @@ function ip_location_qualifying_visit_where($prefixeTable, $alias = 'l1')
            FROM {$prefixeTable}ip_location_log l2
           WHERE l2.ip  = {$alias}.ip
             AND l2.url != {$alias}.url
+            AND (l2.log_type IS NULL OR l2.log_type != 'prefetch')
             AND l2.visit_date BETWEEN
                 DATE_SUB({$alias}.visit_date, INTERVAL 30 MINUTE)
                 AND DATE_ADD({$alias}.visit_date, INTERVAL 30 MINUTE)
@@ -403,6 +460,11 @@ add_event_handler('loc_begin_picture', 'ip_location_log_visit');
 // s'accroche à init (déclenché par common.inc.php, avant que action.php
 // n'atteigne son propre pwg_log).
 add_event_handler('init', 'ip_location_download_guard');
+
+// Blocklist (manuelle + auto) appliquée en PHP dès init : couvre tous les scripts PHP
+// (pages, action.php, ws.php...), pas seulement index/picture, et fonctionne même si le
+// .htaccess est inopérant (nginx, AllowOverride désactivé...).
+add_event_handler('init', 'ip_location_blocklist_guard');
 
 // Logger les photos vues via PhotoSwipe (navigation JS sans rechargement)
 // Hook loc_begin_page_tail (pas loc_after_page_header) : à ce stade,
@@ -690,6 +752,16 @@ document.addEventListener('DOMContentLoaded',function(){
 }
 
 /**
+ * IP publique valide (ni privée comme 192.168.x / 10.x / 172.16-31.x, ni réservée comme
+ * 127.x, ni chaîne invalide — ex. un X-Forwarded-For fantaisiste). Seules ces IP sont
+ * géolocalisées et peuvent être bloquées automatiquement.
+ */
+function ip_location_is_public_ip($ip)
+{
+    return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+}
+
+/**
  * Résout la géolocalisation d'une IP : court-circuit immédiat pour une IP privée/réservée
  * (jamais géolocalisable, jamais mise en cache), sinon cache (30 jours pour un succès,
  * 2 h pour un 'Unknown' — voir $use_negative_cache) puis providers en cascade
@@ -711,7 +783,7 @@ function ip_location_resolve_geo($ip, $prefixeTable, $use_negative_cache = true)
     // IP privée / réservée / loopback (ex: réseau local 192.168.x) — non géolocalisable :
     // retour immédiat, aucun appel réseau. filter_var tolère une IP déjà échappée
     // (une IP valide ne contient aucun caractère échappable, donc pas de ré-échappement ici).
-    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+    if (!ip_location_is_public_ip($ip)) {
         return ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
     }
 
@@ -843,6 +915,81 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
 function ip_location_client_ip()
 {
     return $_SERVER['REMOTE_ADDR'];
+}
+
+/**
+ * IP du visiteur telle que journalisée par ip_location_log_visit() (1ère entrée de
+ * X-Forwarded-For si présente, sinon REMOTE_ADDR) — donc celle qui figure dans la
+ * blocklist. Source unique pour log_visit() et ip_location_blocklist_guard(), afin que
+ * le contrôle de blocage compare bien la même IP que celle enregistrée.
+ */
+function ip_location_visitor_ip()
+{
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        return trim($parts[0]);
+    }
+    return $_SERVER['REMOTE_ADDR'];
+}
+
+/**
+ * Requête de pré-lecture émise par le navigateur (ex. <link rel="prefetch"> de la photo
+ * suivante dans le thème par défaut, header.tpl) et non par une action du visiteur :
+ * chaque photo vue génère une 2e requête, qui ne doit compter ni dans les règles de
+ * rafale ni comme page vue (la dernière photo pré-chargée n'est souvent jamais vue).
+ */
+function ip_location_is_prefetch_request()
+{
+    foreach (['HTTP_SEC_PURPOSE', 'HTTP_PURPOSE', 'HTTP_X_MOZ'] as $header) {
+        if (isset($_SERVER[$header]) && stripos($_SERVER[$header], 'prefetch') !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Blocklist (entrées manuelles et auto) appliquée en PHP, accrochée à init : 403 immédiat
+ * pour un invité dont l'IP exacte, ou la plage /16 manuelle qui la couvre, est bloquée.
+ * Seul mécanisme appliquant les entrées 'auto' (jamais écrites dans le .htaccess, cf.
+ * ip_location_write_htaccess()) ; filet de sécurité pour les entrées manuelles si le
+ * .htaccess est inopérant. Requête sur la clé primaire (2 valeurs au plus).
+ */
+function ip_location_blocklist_guard()
+{
+    global $user, $prefixeTable;
+
+    // Invités uniquement (même règle que ip_location_log_visit())
+    if (!isset($user['id']) || $user['id'] != 2) {
+        return;
+    }
+
+    $ip_raw = ip_location_visitor_ip();
+
+    // Liste blanche d'IPs — toujours autorisées
+    $plugin_conf = ip_location_get_conf();
+    $whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
+    if (in_array($ip_raw, $whitelist)) {
+        return;
+    }
+
+    $keys = ['\'' . pwg_db_real_escape_string($ip_raw) . '\''];
+    if (preg_match('/^(\d+\.\d+)\.\d+\.\d+$/', $ip_raw, $m)) {
+        // Plage /16 au format écrit par le blocage manuel ("A.B.0.0/16")
+        $keys[] = '\'' . $m[1] . '.0.0/16\'';
+    }
+
+    // origin='exempt' exclu : retrait manuel qui ne doit plus bloquer, cf.
+    // ip_location_get_bot_candidates(). Les entrées auto expirées ne bloquent plus rien.
+    $r = pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_blocklist
+  WHERE ip IN (' . implode(',', $keys) . ')
+    AND origin != \'exempt\'
+    AND (expires_at IS NULL OR expires_at > NOW())
+  LIMIT 1');
+    if (pwg_db_num_rows($r) > 0) {
+        header('HTTP/1.0 403 Forbidden');
+        exit;
+    }
 }
 
 /**
@@ -1090,14 +1237,16 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     }
 
     // Récupération de l'IP
-    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-        $ip = trim($parts[0]);
-    } else {
-        $ip = $_SERVER['REMOTE_ADDR'];
-    }
+    $ip = ip_location_visitor_ip();
 
     $ip_raw = $ip; // IP non échappée pour les comparaisons
+
+    // Pré-lecture du navigateur (photo suivante) : journalisée mais marquée, pour être
+    // exclue des règles de rafale et des visites qualifiées. Les contrôles de blocage
+    // ci-dessous s'appliquent normalement.
+    if ($log_type === null && ip_location_is_prefetch_request()) {
+        $log_type = 'prefetch';
+    }
 
     // Liste blanche d'IPs — toujours autorisées
     $plugin_conf  = ip_location_get_conf();
@@ -1109,17 +1258,8 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
 
     $ip = pwg_db_real_escape_string($ip);
 
-    // Blocklist manuelle/auto — blocage immédiat par IP individuelle (les entrées
-    // auto expirées, expires_at dépassé, ne bloquent plus rien). origin='exempt' exclu :
-    // c'est un retrait manuel qui ne doit plus bloquer, cf. ip_location_get_bot_candidates().
-    $r = pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_blocklist
-  WHERE ip = \'' . $ip . '\'
-    AND origin != \'exempt\'
-    AND (expires_at IS NULL OR expires_at > NOW())');
-    if (pwg_db_num_rows($r) > 0) {
-        header('HTTP/1.0 403 Forbidden');
-        exit;
-    }
+    // Blocklist manuelle/auto : déjà appliquée plus tôt par ip_location_blocklist_guard()
+    // (hook init), qui couvre aussi les plages /16 — une IP bloquée n'arrive jamais ici.
 
     // Résolution géo (cache ou providers en cascade)
     $geo = ip_location_resolve_geo($ip, $prefixeTable);
@@ -1239,9 +1379,12 @@ function ip_location_write_htaccess($htaccess_enabled = null)
         $htaccess_enabled = ip_location_get_conf()['htaccess_enabled'];
     }
     if ($htaccess_enabled === '1') {
+        // Blocages manuels uniquement : les entrées 'auto' (nombreuses, temporaires, IP
+        // souvent à usage unique) sont appliquées en PHP par ip_location_blocklist_guard()
+        // — les écrire ici gonflait le .htaccess (10 000+ lignes relues par Apache à
+        // chaque requête, constaté en v2.5.4) sans bénéfice réel.
         $result = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist
-  WHERE origin != \'exempt\'
-    AND (expires_at IS NULL OR expires_at > NOW())
+  WHERE origin = \'manuel\'
   ORDER BY blocked_at ASC');
         $ips = [];
         while ($row = pwg_db_fetch_row($result)) {
@@ -1377,12 +1520,20 @@ function ip_location_classify_recent()
     // score (surchargeable via $conf['ip_location_classify_window_days'], défaut 7).
     $window_days = max(1, (int)$conf['ip_location_classify_window_days']);
 
+    // Seuil de la rafale multi-URL (URL distinctes par IP en ~30 s), cf. plus bas.
+    $multi_url_threshold = max(2, (int)$conf['ip_location_multi_url_threshold']);
+
+    // Toutes les règles comportementales ci-dessous ignorent les requêtes de pré-lecture
+    // (log_type='prefetch', cf. ip_location_is_prefetch_request()) : elles doublent le
+    // nombre d'URL d'une navigation humaine et ne traduisent aucune action du visiteur.
+
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log t
 JOIN (
     SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY url, bucket
     HAVING COUNT(DISTINCT ip) >= 2
 ) g
@@ -1401,6 +1552,7 @@ JOIN (
     SELECT ip, url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY ip, url, bucket
     HAVING COUNT(*) >= 3
 ) g
@@ -1411,48 +1563,25 @@ SET t.is_bot = 1
 WHERE t.is_bot = 0
   AND t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
 
-    // Rafale multi-URL mono-IP : >= 10 URL distinctes par la même IP en ~30 s (ex. un
-    // scraper qui parcourt le catalogue à grande vitesse), contrairement à la rafale
-    // mono-IP ci-dessus qui vise la répétition d'une même URL. Ajouté suite à une
-    // analyse du journal réel (v2.5) : plusieurs IP faisaient 47 à 88 accès à des URL
-    // toutes différentes en moins de 25 s, invisibles aux règles précédentes.
+    // Rafale multi-URL mono-IP : >= $multi_url_threshold URL distinctes (défaut 20) par la
+    // même IP en ~30 s (ex. un scraper qui parcourt le catalogue à grande vitesse),
+    // contrairement à la rafale mono-IP ci-dessus qui vise la répétition d'une même URL.
+    // Ajouté suite à une analyse du journal réel (v2.5) : plusieurs IP faisaient 47 à 88
+    // accès à des URL toutes différentes en moins de 25 s, invisibles aux règles
+    // précédentes. Seuil initial de 10 relevé à 20 en v2.5.5 : un humain qui clique
+    // "suivant" dans un album atteint facilement 11-12 photos en 30 s (faux positif réel).
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log t
 JOIN (
     SELECT ip, FLOOR(UNIX_TIMESTAMP(visit_date)/30) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY ip, bucket
-    HAVING COUNT(DISTINCT url) >= 10
+    HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
 ) g
   ON t.ip = g.ip
  AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/30) = g.bucket
-SET t.is_bot = 1
-WHERE t.is_bot = 0
-  AND t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-
-    // User-Agent "figé" partagé par un nombre anormalement élevé d'IP distinctes : un vrai
-    // navigateur populaire est réutilisé par de nombreux visiteurs différents, mais avec
-    // un fort taux de retours (mêmes IP qui reviennent) ; un UA vu >= 20 fois sur la
-    // fenêtre avec >= 90% d'IP distinctes (quasiment jamais deux fois la même IP) trahit
-    // une petite bibliothèque d'UA figés recyclée par un pool de proxies résidentiels —
-    // chaque IP ne servant qu'une poignée de requêtes avant d'être changée. Ajouté suite
-    // à une analyse du journal réel (v2.5) : 13 UA de ce type, 7000+ accès, 6400+ IP
-    // distinctes étalées sur 2 jours, invisibles à toutes les règles précédentes
-    // (aucune IP ni URL ne se répète assez pour déclencher rafale/co-visitation/multi-URL).
-    // Calcul batch uniquement (GROUP BY sur plusieurs lignes) : contrairement aux mots-clés
-    // ou à "navigateur obsolète", ce signal est impossible à évaluer sur une seule requête,
-    // donc absent du chemin chaud de ip_location_log_visit().
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT user_agent
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND user_agent IS NOT NULL AND user_agent != \'\'
-     GROUP BY user_agent
-    HAVING COUNT(*) >= 20 AND COUNT(DISTINCT ip) / COUNT(*) >= 0.9
-) g ON t.user_agent = g.user_agent
 SET t.is_bot = 1
 WHERE t.is_bot = 0
   AND t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
@@ -1521,6 +1650,7 @@ JOIN (
     SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY url, bucket
     HAVING COUNT(DISTINCT ip) >= 2
 ) g
@@ -1536,6 +1666,7 @@ JOIN (
     SELECT ip, url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY ip, url, bucket
     HAVING COUNT(*) >= 3
 ) g
@@ -1552,22 +1683,33 @@ JOIN (
     SELECT ip, FLOOR(UNIX_TIMESTAMP(visit_date)/30) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY ip, bucket
-    HAVING COUNT(DISTINCT url) >= 10
+    HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
 ) g
   ON t.ip = g.ip
  AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/30) = g.bucket
 SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_multi_url_burst'] . '
 WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
 
-    // UA "figé" partagé par un nombre anormalement élevé d'IP distinctes (même détection
-    // que la mise à jour is_bot ci-dessus)
+    // User-Agent "figé" partagé par un nombre anormalement élevé d'IP distinctes : un vrai
+    // navigateur populaire est réutilisé par de nombreux visiteurs différents, mais avec
+    // un fort taux de retours (mêmes IP qui reviennent) ; un UA vu >= 20 fois sur la
+    // fenêtre avec >= 90% d'IP distinctes (quasiment jamais deux fois la même IP) trahit
+    // une petite bibliothèque d'UA figés recyclée par un pool de proxies résidentiels.
+    // Calcul batch uniquement (GROUP BY sur plusieurs lignes), donc absent du chemin chaud
+    // de ip_location_log_visit().
+    // Contribue au score SEULEMENT (plus de mise à jour is_bot depuis v2.5.5) et avec un
+    // poids inférieur aux seuils usuels : l'UA figé du pool peut être celui du navigateur
+    // le plus répandu du moment (ex. Chrome 151/Windows), donc ce signal seul marquait —
+    // et pouvait auto-bloquer — tous les vrais visiteurs utilisant ce navigateur.
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log t
 JOIN (
     SELECT user_agent
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
        AND user_agent IS NOT NULL AND user_agent != \'\'
      GROUP BY user_agent
     HAVING COUNT(*) >= 20 AND COUNT(DISTINCT ip) / COUNT(*) >= 0.9
@@ -1587,6 +1729,7 @@ JOIN (
     SELECT ip
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')
      GROUP BY ip
     HAVING COUNT(*) >= 2 AND SUM(log_type = \'js\') = 0
 ) g ON t.ip = g.ip
@@ -1645,8 +1788,8 @@ function ip_location_manual_range_prefix($ip)
 }
 
 /**
- * IP actuellement éligibles au blocage automatique selon le mode/seuil courants
- * (score ou is_bot) d'une config donnée, en excluant la liste blanche de bots
+ * IP actuellement éligibles au blocage automatique selon le seuil de score courant
+ * d'une config donnée, en excluant la liste blanche de bots
  * légitimes et la whitelist IP du plugin. Fenêtre glissante de 7 jours, comme le
  * reste de la classification. Retourne un tableau de ['ip', 'country', 'city'].
  *
@@ -1659,26 +1802,34 @@ function ip_location_manual_range_prefix($ip)
  * restent dans la fenêtre de 7 jours. Seule une NOUVELLE visite suspecte, postérieure
  * au retrait, peut refaire qualifier l'IP.
  */
-function ip_location_get_bot_candidates($plugin_conf)
+function ip_location_get_bot_candidates($plugin_conf, $recent_only = false)
 {
     global $prefixeTable, $conf;
-
-    $mode = $plugin_conf['bot_block_mode'] === 'is_bot' ? 'is_bot' : 'score';
 
     // Même fenêtre glissante que ip_location_classify_recent() (surchargeable via
     // $conf['ip_location_classify_window_days'], défaut 7).
     $window_days = max(1, (int)$conf['ip_location_classify_window_days']);
 
     $where = ['t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY'];
-    if ($mode === 'score') {
-        $where[] = 't.bot_score >= ' . (int)$plugin_conf['bot_block_score_threshold'];
-    } else {
-        $where[] = 't.is_bot = 1';
-    }
 
-    // Liste blanche de bots légitimes : jamais éligible, quel que soit le mode
-    // (en mode score déjà exclu via bot_score=0, revérifié ici par sécurité — le
-    // mode is_bot n'a lui aucune notion d'allowlist en amont).
+    // $recent_only (ajout de nouvelles entrées) : seules les IP ayant une ligne suspecte
+    // récente ($conf['ip_location_auto_block_recent_hours'], défaut 24) — bloquer une IP
+    // vue une seule fois il y a plusieurs jours ne sert à rien (proxies résidentiels à
+    // usage unique) ; sans ce filtre, la 1ère activation posait d'un coup toute la
+    // fenêtre de 7 j (8 853 IP constatées en v2.5.4). Pas appliqué par la réconciliation
+    // (ip_location_reconcile_auto_blocks()), qui ne doit pas libérer une entrée juste
+    // parce que son IP n'est plus revenue.
+    if ($recent_only) {
+        $recent_hours = max(1, (int)$conf['ip_location_auto_block_recent_hours']);
+        $where[] = 't.visit_date >= NOW() - INTERVAL ' . $recent_hours . ' HOUR';
+    }
+    // Toujours sur le score (le mode "is_bot direct" a été supprimé en v2.5.5 : il
+    // revenait à un seuil de ~10, bloquait sur un signal isolé peu fiable comme la
+    // co-visitation, et is_bot n'est jamais remis à 0 après correction d'une règle).
+    $where[] = 't.bot_score >= ' . (int)$plugin_conf['bot_block_score_threshold'];
+
+    // Liste blanche de bots légitimes : jamais éligible (déjà exclue via bot_score=0,
+    // revérifié ici par sécurité).
     $allowlist = ip_location_get_bot_allowlist();
     foreach ($allowlist as $pattern) {
         $where[] = "t.user_agent NOT LIKE '%" . pwg_db_real_escape_string($pattern) . "%'";
@@ -1718,6 +1869,15 @@ SELECT t.ip, MAX(t.country) AS country, MAX(t.city) AS city
 
     $candidates = [];
     while ($row = pwg_db_fetch_assoc($result)) {
+        // Jamais d'IP privée/réservée (poste du réseau local, cf. ip_location_is_public_ip()) :
+        // ce n'est pas un bot venu d'Internet, et une fois bloquée elle ne pourrait même plus
+        // afficher la page de connexion depuis le réseau local (garde init sur tous les
+        // scripts). Incident réel en v2.5.5 : des tests curl depuis le poste de dev l'ont
+        // fait auto-bloquer. Exclues aussi de la réconciliation, qui libère donc une telle
+        // entrée déjà posée dès le prochain enregistrement du formulaire.
+        if (!ip_location_is_public_ip($row['ip'])) {
+            continue;
+        }
         $candidates[] = $row;
     }
     return $candidates;
@@ -1725,9 +1885,11 @@ SELECT t.ip, MAX(t.country) AS country, MAX(t.city) AS city
 
 /**
  * Blocage automatique par score (4ème levier, optionnel) : ajoute au blocklist les IP
- * qui franchissent le seuil configuré (mode "score") ou simplement is_bot=1 (mode
- * "is_bot"), avec une expiration — jamais permanent, jamais de plage /16, seulement
- * l'IP exacte. Purge aussi les entrées auto expirées et régénère le .htaccess.
+ * qui franchissent le seuil de score configuré, avec une expiration — jamais
+ * permanent, jamais de plage /16, seulement
+ * l'IP exacte, et seulement si elle s'est montrée suspecte récemment. Purge aussi les
+ * entrées auto expirées. Blocage appliqué en PHP (ip_location_blocklist_guard()), pas
+ * via le .htaccess.
  * Appelée uniquement depuis ip_location_classify_recent() — via admin.php (à chaque
  * chargement) ou via ip_location_log_visit() (trafic public, au plus 1x/jour).
  */
@@ -1739,20 +1901,14 @@ function ip_location_auto_block_bots()
 
     // Purge des entrées auto expirées, indépendamment de l'état de l'interrupteur
     // (une entrée déjà posée doit expirer même si la fonctionnalité a été désactivée depuis)
-    $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_blocklist
+    pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist
   WHERE origin = \'auto\' AND expires_at IS NOT NULL AND expires_at <= NOW()');
-    list($expired_count) = pwg_db_fetch_row($r);
-    if ($expired_count > 0) {
-        pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist
-  WHERE origin = \'auto\' AND expires_at IS NOT NULL AND expires_at <= NOW()');
-    }
 
-    $added = 0;
-
-    // Prérequis : l'interrupteur ET le blocage .htaccess global doivent être actifs —
-    // sinon une ligne ajoutée au blocklist ne bloquerait jamais rien réellement.
-    if ($plugin_conf['bot_block_enabled'] === '1' && $plugin_conf['htaccess_enabled'] === '1') {
-        $candidates = ip_location_get_bot_candidates($plugin_conf);
+    // Plus de prérequis .htaccess depuis v2.5.5 : les entrées 'auto' sont appliquées en
+    // PHP par ip_location_blocklist_guard() et ne sont jamais écrites dans le .htaccess
+    // (donc pas de réécriture du .htaccess ici, ni à l'ajout ni à la purge).
+    if ($plugin_conf['bot_block_enabled'] === '1') {
+        $candidates = ip_location_get_bot_candidates($plugin_conf, true);
 
         if (!empty($candidates)) {
             $ttl_days = (int)$conf['ip_location_auto_block_ttl_days'];
@@ -1778,20 +1934,16 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist
     city       = IF(origin = \'exempt\', VALUES(city), city),
     expires_at = IF(origin = \'exempt\', VALUES(expires_at), expires_at),
     origin     = IF(origin = \'exempt\', VALUES(origin), origin)');
-            $added = pwg_db_changes();
         }
-    }
-
-    if ($expired_count > 0 || $added > 0) {
-        ip_location_write_htaccess();
     }
 }
 
 /**
  * Retire de la blocklist les entrées 'auto' qui ne correspondent plus aux réglages
- * donnés (mode/seuil de score, allowlist bots, whitelist IP) — appelée uniquement
- * lors de l'enregistrement explicite du formulaire de blocage bot (admin.php), pour
- * que relever le seuil (ou changer de mode) libère aussitôt les IP qui n'y satisfont
+ * donnés (seuil de score, allowlist bots, whitelist IP) — appelée lors de
+ * l'enregistrement explicite du formulaire de blocage bot (admin.php) et une fois par
+ * la migration v2.5.5 (suppression du mode is_bot), pour que relever le seuil libère
+ * aussitôt les IP qui n'y satisfont
  * plus, sans attendre leur expiration TTL. Les blocages 'manuel' ne sont jamais
  * concernés. La purge périodique via ip_location_auto_block_bots() continue elle de
  * ne dépendre que du TTL (y compris si la fonctionnalité est désactivée entre-temps),
@@ -1804,7 +1956,7 @@ function ip_location_reconcile_auto_blocks($plugin_conf)
 {
     global $prefixeTable;
 
-    if ($plugin_conf['bot_block_enabled'] !== '1' || $plugin_conf['htaccess_enabled'] !== '1') {
+    if ($plugin_conf['bot_block_enabled'] !== '1') {
         return false;
     }
 
@@ -1822,7 +1974,6 @@ function ip_location_reconcile_auto_blocks($plugin_conf)
     list($count) = pwg_db_fetch_row($r);
     if ($count > 0) {
         pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_blocklist WHERE ' . $where);
-        ip_location_write_htaccess();
         return true;
     }
     return false;

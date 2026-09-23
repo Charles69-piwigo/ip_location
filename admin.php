@@ -55,20 +55,17 @@ if (isset($_POST['action'])) {
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_bot_block_config') {
         $conf_cur = ip_location_get_conf();
-        $bot_block_mode = ($_POST['bot_block_mode'] ?? '') === 'is_bot' ? 'is_bot' : 'score';
         $bot_block_score_threshold = max(10, min(90, (int)($_POST['bot_block_score_threshold'] ?? 70)));
-        // L'interrupteur ne peut être activé que si le blocage .htaccess global l'est déjà —
-        // sinon une ligne ajoutée au blocklist ne bloquerait jamais rien réellement
-        // (cf. ip_location_auto_block_bots()).
-        $bot_block_enabled = (isset($_POST['bot_block_enabled']) && $conf_cur['htaccess_enabled'] === '1') ? '1' : '0';
+        // Indépendant du blocage .htaccess depuis v2.5.5 : les entrées auto sont appliquées
+        // en PHP (cf. ip_location_blocklist_guard()).
+        $bot_block_enabled = isset($_POST['bot_block_enabled']) ? '1' : '0';
         $new_conf = array_merge($conf_cur, [
             'bot_block_enabled'         => $bot_block_enabled,
-            'bot_block_mode'            => $bot_block_mode,
             'bot_block_score_threshold' => $bot_block_score_threshold,
         ]);
         conf_update_param('ip_location', serialize($new_conf));
         // Libère aussitôt les IP auto-bloquées qui ne correspondent plus au nouveau
-        // mode/seuil, sans attendre leur expiration TTL (cf. ip_location_reconcile_auto_blocks()).
+        // seuil, sans attendre leur expiration TTL (cf. ip_location_reconcile_auto_blocks()).
         ip_location_reconcile_auto_blocks($new_conf);
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_config') {
@@ -183,6 +180,40 @@ UPDATE ' . $prefixeTable . 'ip_location_blocklist
 // sur une simple sauvegarde de configuration.
 ip_location_classify_recent();
 
+// Migrations v2.5.5, une seule fois chacune. Faites ici et non dans
+// maintain.class.php::update() : pendant update(), c'est encore l'ancien main.inc.php qui
+// est chargé en mémoire (anciennes versions de ip_location_write_htaccess() et
+// ip_location_get_bot_candidates()).
+$ipl_conf_migr = ip_location_get_conf();
+$ipl_conf_changed = false;
+
+// 1. Réécrit le .htaccess pour en retirer les entrées 'auto' qu'y écrivaient les
+//    versions précédentes (désormais appliquées en PHP, cf. ip_location_write_htaccess()).
+if (empty($ipl_conf_migr['htaccess_manual_only'])) {
+    if (ip_location_write_htaccess() !== false) {
+        $ipl_conf_migr['htaccess_manual_only'] = '1';
+        $ipl_conf_changed = true;
+    }
+}
+
+// 2. Suppression du mode de blocage auto "is_bot direct" : le blocage auto se fait
+//    toujours sur le score, avec le seuil déjà enregistré (le curseur était enregistré
+//    même en mode is_bot). Les entrées auto posées par l'ancien mode qui n'atteignent
+//    pas ce seuil sont libérées tout de suite, sans attendre leur expiration.
+if (array_key_exists('bot_block_mode', $ipl_conf_migr)) {
+    $ipl_was_is_bot = $ipl_conf_migr['bot_block_mode'] === 'is_bot';
+    unset($ipl_conf_migr['bot_block_mode']);
+    $ipl_conf_changed = true;
+    if ($ipl_was_is_bot) {
+        ip_location_reconcile_auto_blocks($ipl_conf_migr);
+    }
+}
+
+if ($ipl_conf_changed) {
+    conf_update_param('ip_location', serialize($ipl_conf_migr));
+}
+unset($ipl_conf_migr, $ipl_conf_changed, $ipl_was_is_bot);
+
 // ── Compteurs globaux ─────────────────────────────────────────────────────────
 
 $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
@@ -267,7 +298,8 @@ $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', 
 // pays/mot-clé décidé au moment de la visite. Sans ça, une IP bloquée après coup
 // (ex. ajoutée manuellement) continue d'apparaître comme "Normal"/"Bots non bloqués"
 // sur ses lignes déjà journalisées.
-$in_blocklist_sql = 'ip IN (SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin != \'exempt\')';
+// Couvre aussi les plages /16 manuelles (cf. ip_location_in_blocklist_sql()).
+$in_blocklist_sql = ip_location_in_blocklist_sql($prefixeTable);
 $where_parts = [];
 if ($filter === 'normal')  $where_parts[] = "is_bot = 0 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
 if ($filter === 'bot')     $where_parts[] = "is_bot = 1 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
@@ -329,7 +361,6 @@ $download_geo_fail_mode     = $plugin_conf['download_geo_fail_mode'] ?? 'open';
 $guest_enabled_high         = ip_location_guest_enabled_high();
 
 $bot_block_enabled         = $plugin_conf['bot_block_enabled'] === '1';
-$bot_block_mode            = $plugin_conf['bot_block_mode'] ?? 'score';
 $bot_block_score_threshold = (int)($plugin_conf['bot_block_score_threshold'] ?? 70);
 
 // ── Blocklist ip_location_blocklist ───────────────────────────────────────────
@@ -354,10 +385,31 @@ while ($row = pwg_db_fetch_row($result)) {
     $exempt_ips[] = $row[0];
 }
 
-// Marquer les entrées du log dont l'IP est en blocklist
+// Préfixes "A.B." des plages /16 manuelles, pour reconnaître les lignes qu'elles couvrent
+// (même règle que ip_location_in_blocklist_sql()).
+$blocked_range_prefixes = [];
+foreach ($blocklist_manual as $b) {
+    $prefix = ip_location_manual_range_prefix($b['ip']);
+    if ($prefix !== null) {
+        $blocked_range_prefixes[] = $prefix;
+    }
+}
+
+// Marquer les entrées du log dont l'IP est en blocklist (exacte) ou couverte par une
+// plage /16 manuelle — pour une ligne couverte par une plage, pas de bouton "Retirer" :
+// retirer l'IP isolée ne retirerait pas la plage (retrait depuis la Configuration).
 foreach ($logs as &$log) {
     $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
     $log['is_exempt']    = in_array($log['ip'], $exempt_ips);
+    $log['in_range']     = false;
+    if (!$log['in_blocklist']) {
+        foreach ($blocked_range_prefixes as $prefix) {
+            if (strpos($log['ip'], $prefix) === 0) {
+                $log['in_range'] = true;
+                break;
+            }
+        }
+    }
 }
 unset($log);
 
@@ -474,7 +526,6 @@ $template->assign([
     'DOWNLOAD_GEO_FAIL_MODE'     => $download_geo_fail_mode,
     'GUEST_ENABLED_HIGH'         => $guest_enabled_high,
     'BOT_BLOCK_ENABLED'          => $bot_block_enabled,
-    'BOT_BLOCK_MODE'             => $bot_block_mode,
     'BOT_BLOCK_SCORE_THRESHOLD'  => $bot_block_score_threshold,
     'BLOCKLIST_MANUAL'   => $blocklist_manual,
     'BLOCKLIST_AUTO'     => $blocklist_auto,

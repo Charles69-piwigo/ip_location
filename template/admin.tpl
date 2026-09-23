@@ -196,6 +196,8 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <input type="hidden" name="ip" value="{$log.ip|escape}">
             <button type="submit" class="ipl-btn-unblock">{'Retirer du .htaccess'|@translate}</button>
           </form>
+        {elseif $log.in_range}
+          <span style="font-size:0.85em;color:#888;" title="{'Plage /16 bloquée manuellement : à retirer depuis la liste des IP.'|@translate}">{'Plage /16 bloquée'|@translate}</span>
         {else}
           <form method="post" action="" style="margin:0;" id="blk_{$log.id}">
             <input type="hidden" name="action" value="block_ip">
@@ -210,7 +212,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
           </form>
         {/if}
       </td>
-      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked || $log.in_blocklist} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
+      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked || $log.in_blocklist || $log.in_range} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
       <td>{$log.ip|escape}</td>
       <td>{$log.country|escape}</td>
       <td>{$log.city|escape}</td>
