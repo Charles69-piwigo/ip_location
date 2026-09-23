@@ -10,6 +10,16 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.9 - 23/09/2026
+        Aide réécrite en suivant l'interface : présentation (observateur + leviers,
+        sous-onglets), ce qui est enregistré (refus espacés, pré-lectures), Observation
+        (widget, conservation, liste blanche), détection et score (seuil multi-URL à 20,
+        UA partagé en score seul, faux robots), leviers de blocage un par un (robots, IP,
+        pays, mot-clé, automatique, téléchargements), Journal à l'état actuel, statistiques.
+        Retrait des passages périmés ("Retirer du .htaccess", seuil 10, "décocher pour
+        observer sans bloquer", ip_location_bot_allowlist, "Gestion de l'historique") et
+        des notes de développement. Traductions EN correspondantes
+
     version 2.6.8 - 23/09/2026
         le Journal reflète l'état actuel (revient sur le choix "historique figé" de la
         2.6.1) : "Bloqués" = refus réels + tous les accès des IP et robots actuellement
