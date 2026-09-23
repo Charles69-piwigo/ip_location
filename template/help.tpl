@@ -122,7 +122,7 @@ ORDER BY jour DESC;</pre>
     <li><strong>Tous</strong> {'→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).'|@translate}</li>
     <li><strong>Normal</strong> {'→ visiteurs humains non bloqués.'|@translate}</li>
     <li><strong>Bots non bloqués</strong> {'→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).'|@translate}</li>
-    <li><strong>Bloqués</strong> {'→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « EN LISTE ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.'|@translate}</li>
+    <li><strong>Bloqués</strong> {'→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « Bloquée depuis le … ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.'|@translate}</li>
   </ul>
 
 </div>

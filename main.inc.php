@@ -10,6 +10,12 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.7 - 23/09/2026
+        Journal : le badge "EN LISTE" devient "Bloquée depuis le jj/mm/aaaa" (date de
+        l'entrée de blocage, ou de la plage /16 qui couvre l'IP), infobulle "Accès servi
+        normalement : il date d'avant le blocage de cette IP" — la chronologie se lit
+        directement. Texte de l'Aide sur la catégorie Bloqués mis à jour
+
     version 2.6.6 - 23/09/2026
         onglet Configuration en deux sous-onglets, Réglages (blocs) et Journal des accès
         (paramètre sub=journal ; tout filtre du Journal ouvre directement ce sous-onglet).

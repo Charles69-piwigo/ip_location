@@ -333,7 +333,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
               {elseif $log.is_bot}<span class="iplj-badge bot">BOT</span>{/if}
               {if $log.is_spoof}<span class="iplj-badge refused" title="{'User-Agent d\'un moteur connu, mais l\'IP ne lui appartient pas (vérification DNS)'|@translate}">{'faux robot'|@translate}</span>{/if}
               {if $log.is_blocked}<span class="iplj-badge refused">{'Refusé'|@translate}{if $log.block_reason_label} · {$log.block_reason_label|escape}{/if}</span>
-              {elseif $log.in_blocklist || $log.in_range}<span class="iplj-badge listed" title="{'Accès servi avant la mise en liste de cette IP'|@translate}">{'EN LISTE'|@translate}</span>{/if}
+              {elseif $log.in_blocklist || $log.in_range}<span class="iplj-badge listed" title="{'Accès servi normalement : il date d\'avant le blocage de cette IP'|@translate}">{'Bloquée depuis le'|@translate} {$log.listed_since|escape}</span>{/if}
               {if $log.is_exempt && ($log.is_bot || $log.bot_score > 0)}<span class="iplj-badge exempt" title="{'Retirée manuellement du blocage : le score affiché peut rester au-dessus du seuil sans que l\'IP soit rebloquée, tant qu\'aucune nouvelle activité suspecte n\'apparaît après le retrait.'|@translate}">{'Exempté'|@translate}</span>{/if}
             </td>
             <td class="ip">{$log.ip|escape}</td>

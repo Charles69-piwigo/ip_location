@@ -159,7 +159,7 @@ $lang['→ entrées bloquées par le blocage pays.'] = '→ entries blocked by c
 $lang['→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).'] = '→ all entries (= Normal + Unblocked bots + Blocked).';
 $lang['→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).'] = '→ entries detected as bots, not blocked (a blocked bot counts under "Blocked" instead).';
 $lang['→ entrées bloquées (pays ou mot-clé), qu\'il s\'agisse d\'un bot ou non.'] = '→ blocked entries (by country or keyword), whether a bot or not.';
-$lang['→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « EN LISTE ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.'] = '→ accesses actually refused, with their reason (country, keyword, IP list, auto-block, download). A visit served before its IP was listed keeps its original category and only carries the "LISTED" badge. Each lever only blocks when enabled: with all of them disabled, the plugin only observes.';
+$lang['→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « Bloquée depuis le … ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.'] = '→ accesses actually refused, with their reason (country, keyword, IP list, auto-block, download). A visit served before its IP was listed keeps its original category and only carries the "Blocked since …" badge. Each lever only blocks when enabled: with all of them disabled, the plugin only observes.';
 
 // Country filter on downloads
 $lang['Filtre pays sur les téléchargements'] = 'Country filter on downloads';
@@ -446,3 +446,5 @@ $lang['Filtrer sur cette IP'] = 'Filter on this IP';
 $lang['Bloquer l\'IP'] = 'Block IP';
 $lang['Bloquer la plage'] = 'Block range';
 $lang['Aucun accès ne correspond à ces filtres.'] = 'No access matches these filters.';
+$lang['Bloquée depuis le'] = 'Blocked since';
+$lang['Accès servi normalement : il date d\'avant le blocage de cette IP'] = 'Access served normally: it predates this IP\'s blocking';

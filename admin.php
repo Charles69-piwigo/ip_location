@@ -535,13 +535,18 @@ while ($row = pwg_db_fetch_row($result)) {
 
 // Préfixes "A.B." des plages /16 manuelles, pour reconnaître les lignes qu'elles couvrent
 // (même règle que ip_location_in_blocklist_sql()).
-$blocked_range_prefixes = [];
+$blocked_range_prefixes = [];   // préfixe "A.B." => date de blocage de la plage
 foreach ($blocklist_manual as $b) {
     $prefix = ip_location_manual_range_prefix($b['ip']);
     if ($prefix !== null) {
-        $blocked_range_prefixes[] = $prefix;
+        $blocked_range_prefixes[$prefix] = $b['blocked_at'];
     }
 }
+// Date de blocage par IP exacte (badge "Bloquée depuis le …" du Journal)
+$blocked_since = array_column($blocklist, 'blocked_at', 'ip');
+$fmt_since = function ($datetime) {
+    return $datetime ? date('d/m/Y', strtotime($datetime)) : '';
+};
 
 // Marquer les entrées du log dont l'IP est en blocklist (exacte) ou couverte par une
 // plage /16 manuelle — pour une ligne couverte par une plage, pas de bouton "Retirer" :
@@ -581,10 +586,12 @@ foreach ($logs as &$log) {
     $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
     $log['is_exempt']    = in_array($log['ip'], $exempt_ips);
     $log['in_range']     = false;
+    $log['listed_since'] = $log['in_blocklist'] ? $fmt_since($blocked_since[$log['ip']] ?? '') : '';
     if (!$log['in_blocklist']) {
-        foreach ($blocked_range_prefixes as $prefix) {
+        foreach ($blocked_range_prefixes as $prefix => $since) {
             if (strpos($log['ip'], $prefix) === 0) {
                 $log['in_range'] = true;
+                $log['listed_since'] = $fmt_since($since);
                 break;
             }
         }
