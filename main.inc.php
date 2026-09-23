@@ -10,6 +10,21 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.2 - 23/09/2026
+        robots d'indexation (moteur ; l'écran d'édition arrive avec la refonte de l'onglet
+        Configuration) : liste par défaut de 20 robots (moteurs de recherche, aperçus de
+        partage, robots d'IA), tous autorisés, stockée dans conf['ip_location']['robots'],
+        interrupteur robots_enabled.
+        - autorisé et authentique : passe tous les leviers (blocklist, pays, mot-clé,
+          score forcé à 0, jamais auto-bloqué) ; bloqué : refusé dès l'init, journalisé
+          avec le motif "robot"
+        - vérification DNS inverse + directe pour Google, Bing, Apple, Yandex, Baidu,
+          résultat gardé ip_location_robot_check_days (30) jours dans la nouvelle table
+          ip_location_robot_check ; faux robot = visiteur ordinaire + is_bot + score
+          ip_location_score_bot_spoof (50)
+        - remplace l'ancienne liste blanche $conf['ip_location_bot_allowlist'] ; si un
+          site l'avait personnalisée, elle sert de point de départ à la nouvelle liste
+
     version 2.6.1 - 23/09/2026
         principe "observateur" : chaque levier ne bloque — et n'alimente "Bloqués" — que
         s'il est activé ; tous coupés, le plugin ne fait qu'observer :
@@ -324,10 +339,16 @@ $ip_location_score_defaults = [
     'ip_location_recurrence'          => 0,  // 0 = désactivé (même convention que max_records)
     'ip_location_auto_block_ttl_days' => 14,
     'ip_location_auto_block_recent_hours' => 24, // seules les IP actives depuis N h sont auto-bloquées
-    'ip_location_bot_allowlist'       => ['Googlebot', 'Bingbot', 'Slackbot', 'Twitterbot', 'facebookexternalhit', 'DuckDuckBot', 'WhatsApp', 'Applebot', 'LinkedInBot', 'TelegramBot'],
+    'ip_location_score_bot_spoof'     => 50, // UA d'un moteur connu depuis une IP qui ne lui appartient pas (v2.6.2)
+    'ip_location_robot_check_days'    => 30, // durée de validité d'une vérification DNS de robot
     'ip_location_classify_interval_hours' => 4,
     'ip_location_classify_window_days' => 7,
 ];
+// Ancienne liste blanche de robots (réglage fin jusqu'en v2.6.1) : remplacée par le bloc
+// "Robots d'indexation" (conf['ip_location']['robots']). Si un site l'avait personnalisée
+// dans local/config/config.inc.php, elle sert une seule fois de point de départ à la
+// nouvelle liste (cf. ip_location_get_robots()).
+$GLOBALS['ip_location_legacy_bot_allowlist'] = isset($conf['ip_location_bot_allowlist']) ? $conf['ip_location_bot_allowlist'] : null;
 foreach ($ip_location_score_defaults as $ip_location_score_key => $ip_location_score_default) {
     if (!isset($conf[$ip_location_score_key])) {
         $conf[$ip_location_score_key] = $ip_location_score_default;
@@ -389,6 +410,8 @@ function ip_location_get_conf()
         'bot_block_enabled_at'       => '',  // activation du blocage auto (v2.6.1), cf. ip_location_get_bot_candidates()
         'bot_block_score_threshold'  => 70,
         'keyword_block_enabled'      => '0',
+        'robots_enabled'             => '1',   // bloc "Robots d'indexation" (v2.6.2)
+        'robots'                     => null,  // null = liste par défaut, cf. ip_location_get_robots()
         'last_classify_at'           => '',
     ];
 
@@ -977,6 +1000,204 @@ function ip_location_is_prefetch_request()
 }
 
 /**
+ * Liste par défaut du bloc "Robots d'indexation" (v2.6.2). Chaque robot : nom, motif
+ * cherché dans le User-Agent (insensible à la casse), famille (search / social / ai),
+ * domaines de vérification DNS (vide = le robot ne publie pas de méthode : confiance au
+ * User-Agent) et statut (allow / block). Tous autorisés par défaut : le plugin ne bloque
+ * rien qu'on ne lui ait demandé.
+ */
+function ip_location_default_robots()
+{
+    $r = function ($name, $ua, $fam, $verify = '') {
+        return ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => $verify, 'status' => 'allow'];
+    };
+    return [
+        $r('Googlebot',    'Googlebot',           'search', 'googlebot.com google.com'),
+        $r('Bingbot',      'bingbot',             'search', 'search.msn.com'),
+        $r('Applebot',     'Applebot',            'search', 'applebot.apple.com'),
+        $r('DuckDuckBot',  'DuckDuckBot',         'search'),
+        $r('Qwant',        'Qwantbot',            'search'),
+        $r('Yandex',       'YandexBot',           'search', 'yandex.ru yandex.net yandex.com'),
+        $r('Baidu',        'Baiduspider',         'search', 'baidu.com baidu.jp'),
+        $r('Facebook',     'facebookexternalhit', 'social'),
+        $r('X / Twitter',  'Twitterbot',          'social'),
+        $r('Slack',        'Slackbot',            'social'),
+        $r('WhatsApp',     'WhatsApp',            'social'),
+        $r('LinkedIn',     'LinkedInBot',         'social'),
+        $r('Telegram',     'TelegramBot',         'social'),
+        $r('Discord',      'Discordbot',          'social'),
+        $r('OpenAI',       'GPTBot',              'ai'),
+        $r('Anthropic',    'ClaudeBot',           'ai'),
+        $r('Common Crawl', 'CCBot',               'ai'),
+        $r('ByteDance',    'Bytespider',          'ai'),
+        $r('Perplexity',   'PerplexityBot',       'ai'),
+        $r('Amazon',       'Amazonbot',           'ai'),
+    ];
+}
+
+/**
+ * Liste courante des robots : celle enregistrée dans l'admin, sinon — tant qu'elle n'a
+ * jamais été enregistrée — la liste par défaut, ou la reprise de l'ancienne liste
+ * blanche $conf['ip_location_bot_allowlist'] si le site l'avait personnalisée : seuls
+ * ses robots sont alors listés (autorisés), les autres restant traités par le score comme
+ * avant la mise à jour.
+ */
+function ip_location_get_robots()
+{
+    static $cache = null;
+    if ($cache !== null) return $cache;
+
+    $plugin_conf = ip_location_get_conf();
+    if (is_array($plugin_conf['robots'])) {
+        return $cache = $plugin_conf['robots'];
+    }
+
+    $defaults = ip_location_default_robots();
+    $legacy = $GLOBALS['ip_location_legacy_bot_allowlist'] ?? null;
+    if ($legacy === null) {
+        return $cache = $defaults;
+    }
+    $patterns = array_filter(array_map('trim', is_array($legacy) ? $legacy : explode("\n", (string)$legacy)));
+    $list = [];
+    foreach ($patterns as $pattern) {
+        $known = null;
+        foreach ($defaults as $d) {
+            if (strcasecmp($d['ua'], $pattern) === 0 || strcasecmp($d['name'], $pattern) === 0) {
+                $known = $d;
+                break;
+            }
+        }
+        $list[] = $known ?: ['name' => $pattern, 'ua' => $pattern, 'fam' => 'search', 'verify' => '', 'status' => 'allow'];
+    }
+    return $cache = $list;
+}
+
+/**
+ * Robot de la liste dont le motif apparaît dans ce User-Agent (premier trouvé), ou null.
+ */
+function ip_location_match_robot($user_agent)
+{
+    if ($user_agent === '') return null;
+    foreach (ip_location_get_robots() as $robot) {
+        if ($robot['ua'] !== '' && stripos($user_agent, $robot['ua']) !== false) {
+            return $robot;
+        }
+    }
+    return null;
+}
+
+/**
+ * Vérifie qu'une IP appartient bien au robot annoncé : DNS inverse (le nom doit finir par
+ * l'un des domaines du robot) puis DNS direct (ce nom doit redonner la même IP) — méthode
+ * publiée par Google, Bing, Apple, Yandex, Baidu. Résultat gardé en cache
+ * (ip_location_robot_check, ip_location_robot_check_days jours) : une seule résolution
+ * par IP. Un robot sans domaine de vérification est cru sur parole (true).
+ */
+function ip_location_robot_verified($ip_raw, $robot)
+{
+    global $prefixeTable, $conf;
+
+    $domains = array_filter(preg_split('/\s+/', trim($robot['verify'] ?? '')));
+    if (empty($domains)) {
+        return true;
+    }
+    if (!filter_var($ip_raw, FILTER_VALIDATE_IP)) {
+        return false;
+    }
+    $ip_sql = pwg_db_real_escape_string($ip_raw);
+    $days = max(1, (int)$conf['ip_location_robot_check_days']);
+
+    $r = pwg_query('SELECT verified FROM ' . $prefixeTable . 'ip_location_robot_check
+  WHERE ip = \'' . $ip_sql . '\' AND checked_at >= NOW() - INTERVAL ' . $days . ' DAY LIMIT 1');
+    if ($row = pwg_db_fetch_row($r)) {
+        return $row[0] === '1' || $row[0] === 1;
+    }
+
+    $verified = false;
+    $host = @gethostbyaddr($ip_raw);
+    if ($host && $host !== $ip_raw) {
+        $host_l = strtolower(rtrim($host, '.'));
+        foreach ($domains as $dom) {
+            $dom = strtolower($dom);
+            if ($host_l === $dom || substr($host_l, -strlen($dom) - 1) === '.' . $dom) {
+                // DNS direct : le nom doit pointer vers la même IP (sinon DNS inverse falsifié)
+                if (filter_var($ip_raw, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $ips = @gethostbynamel($host_l) ?: [];
+                } else {
+                    $ips = array_column(@dns_get_record($host_l, DNS_AAAA) ?: [], 'ipv6');
+                    $ips = array_map(function ($a) { return inet_ntop(inet_pton($a)); }, $ips);
+                    $ip_raw = inet_ntop(inet_pton($ip_raw));
+                }
+                $verified = in_array($ip_raw, $ips, true);
+                break;
+            }
+        }
+    }
+
+    pwg_query('
+REPLACE INTO ' . $prefixeTable . 'ip_location_robot_check (ip, robot, verified, checked_at)
+  VALUES (\'' . $ip_sql . '\', \'' . pwg_db_real_escape_string($robot['name']) . '\', ' . ($verified ? 1 : 0) . ', NOW())');
+    return $verified;
+}
+
+/**
+ * Statut "robot" de la requête en cours (calculé une fois par requête) :
+ *   null      — bloc Robots coupé, invité inconnu, ou robot hors liste (→ score) ;
+ *   'allowed' — robot autorisé et authentique : passe tous les leviers ;
+ *   'blocked' — robot marqué "Bloqué" : refusé (sans vérification : un faux GPTBot reste
+ *               un robot dont on ne veut pas) ;
+ *   'spoof'   — UA d'un robot autorisé vérifiable, mais IP qui ne lui appartient pas :
+ *               traité comme un visiteur ordinaire (et signal de score, cf. classify).
+ * Retourne ['state' => …, 'robot' => array|null].
+ */
+function ip_location_request_robot_state($ip_raw, $user_agent)
+{
+    static $memo = [];
+    $key = $ip_raw . '|' . $user_agent;
+    if (isset($memo[$key])) return $memo[$key];
+
+    $state = ['state' => null, 'robot' => null];
+    $plugin_conf = ip_location_get_conf();
+    if ($plugin_conf['robots_enabled'] === '1') {
+        $robot = ip_location_match_robot($user_agent);
+        if ($robot) {
+            $state['robot'] = $robot;
+            if (($robot['status'] ?? 'allow') === 'block') {
+                $state['state'] = 'blocked';
+            } else {
+                $state['state'] = ip_location_robot_verified($ip_raw, $robot) ? 'allowed' : 'spoof';
+            }
+        }
+    }
+    return $memo[$key] = $state;
+}
+
+/**
+ * Fragment SQL (parenthésé) vrai pour une ligne de journal émise par un robot autorisé
+ * authentique : UA correspondant à un robot "autorisé" de la liste, et IP non démasquée
+ * comme usurpatrice (ip_location_robot_check.verified = 0). '0' si le bloc Robots est
+ * coupé ou sans robot autorisé. Remplace l'ancienne liste blanche UA (jusqu'en v2.6.1).
+ */
+function ip_location_allowed_robot_sql($prefixeTable, $ua_col = 'user_agent', $ip_col = 'ip')
+{
+    $plugin_conf = ip_location_get_conf();
+    if ($plugin_conf['robots_enabled'] !== '1') {
+        return '0';
+    }
+    $likes = [];
+    foreach (ip_location_get_robots() as $robot) {
+        if (($robot['status'] ?? 'allow') === 'allow' && $robot['ua'] !== '') {
+            $likes[] = $ua_col . " LIKE '%" . pwg_db_real_escape_string($robot['ua']) . "%'";
+        }
+    }
+    if (empty($likes)) {
+        return '0';
+    }
+    return '((' . implode(' OR ', $likes) . ') AND ' . $ip_col . ' NOT IN (SELECT ip FROM '
+        . $prefixeTable . 'ip_location_robot_check WHERE verified = 0))';
+}
+
+/**
  * URL complète de la requête en cours, telle que journalisée.
  */
 function ip_location_current_url()
@@ -1055,7 +1276,7 @@ function ip_location_blocklist_guard()
     if ($plugin_conf['bot_block_enabled'] === '1') {
         $origins[] = '\'auto\'';
     }
-    if (empty($origins)) {
+    if (empty($origins) && $plugin_conf['robots_enabled'] !== '1') {
         return;
     }
 
@@ -1064,6 +1285,29 @@ function ip_location_blocklist_guard()
     // Liste blanche d'IPs — toujours autorisées
     $whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
     if (in_array($ip_raw, $whitelist)) {
+        return;
+    }
+
+    // Robots d'indexation (v2.6.2) : un robot "Bloqué" est refusé ici quel que soit son
+    // IP ; un robot autorisé et authentique passe la blocklist (comme tous les leviers).
+    $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+    $robot_state = ip_location_request_robot_state($ip_raw, $user_agent);
+    if ($robot_state['state'] === 'blocked') {
+        ip_location_insert_log([
+            'ip'           => $ip_raw,
+            'geo'          => ip_location_geo_from_cache($ip_raw, null, null),
+            'url'          => ip_location_current_url(),
+            'user_agent'   => $user_agent,
+            'is_bot'       => 1,
+            'is_blocked'   => 1,
+            'log_type'     => ip_location_is_prefetch_request() ? 'prefetch' : null,
+            'block_reason' => 'robot',
+        ]);
+        ip_location_enforce_max_records($plugin_conf);
+        header('HTTP/1.0 403 Forbidden');
+        exit;
+    }
+    if ($robot_state['state'] === 'allowed' || empty($origins)) {
         return;
     }
 
@@ -1085,7 +1329,6 @@ function ip_location_blocklist_guard()
         return;
     }
 
-    $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
     ip_location_insert_log([
         'ip'           => $ip_raw,
         'geo'          => ip_location_geo_from_cache($ip_raw, $hit['country'], $hit['city']),
@@ -1411,12 +1654,21 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     // co-visitation (scan de la table) est différée à ip_location_classify_recent()
     $is_bot = ip_location_is_bot_ua($user_agent) ? 1 : 0;
 
+    // Robot de la liste (v2.6.2) : toujours "bot" ; s'il est autorisé et authentique, il
+    // passe le blocage par pays et par mot-clé (le garde init lui a déjà épargné la
+    // blocklist). Un robot "Bloqué" n'arrive jamais ici (refusé par le garde init).
+    $robot_state = ip_location_request_robot_state($ip_raw, $user_agent);
+    if ($robot_state['robot']) {
+        $is_bot = 1;
+    }
+    $robot_allowed = $robot_state['state'] === 'allowed';
+
     // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer), et pourquoi
     $is_blocked   = 0;
     $block_reason = null;
 
     // Blocage par pays
-    if ($plugin_conf['blocking_enabled'] === '1') {
+    if (!$robot_allowed && $plugin_conf['blocking_enabled'] === '1') {
         $blocked = array_filter(array_map('trim', explode(',', strtoupper($plugin_conf['blocked_countries']))));
         if (!empty($blocked) && in_array(strtoupper($geo['country_code']), $blocked)) {
             $is_blocked   = 1;
@@ -1425,7 +1677,7 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     }
 
     // Blocage par mot-clé dans l'URL — seulement si son interrupteur est allumé (v2.6.1)
-    if (!$is_blocked && $plugin_conf['keyword_block_enabled'] === '1' && !empty($plugin_conf['blocked_url_keywords'])) {
+    if (!$is_blocked && !$robot_allowed && $plugin_conf['keyword_block_enabled'] === '1' && !empty($plugin_conf['blocked_url_keywords'])) {
         $url_keywords = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
         $url_lower = strtolower($url);
         foreach ($url_keywords as $kw) {
@@ -1519,21 +1771,6 @@ function ip_location_write_htaccess($htaccess_enabled = null)
 
     file_put_contents($htaccess_path, $content);
     return true;
-}
-
-/**
- * Normalise $conf['ip_location_bot_allowlist'] (tableau PHP, format attendu depuis la
- * v2.5) en tableau de motifs non vides. Accepte aussi une chaîne "un par ligne" par
- * compatibilité avec une éventuelle ancienne surcharge dans local/config/config.inc.php.
- */
-function ip_location_get_bot_allowlist()
-{
-    global $conf;
-
-    $raw = $conf['ip_location_bot_allowlist'];
-    $items = is_array($raw) ? $raw : explode("\n", (string)$raw);
-
-    return array_filter(array_map('trim', $items));
 }
 
 /**
@@ -1873,19 +2110,24 @@ WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
   AND t.bot_score > 0');
     }
 
-    // Liste blanche de bots légitimes connus (Googlebot, Slackbot...) : score forcé à 0,
-    // jamais éligible au blocage automatique par ce mécanisme.
-    $allowlist = ip_location_get_bot_allowlist();
-    if (!empty($allowlist)) {
-        $allow_where = [];
-        foreach ($allowlist as $pattern) {
-            $allow_where[] = "user_agent LIKE '%" . pwg_db_real_escape_string($pattern) . "%'";
-        }
+    // Faux robots (v2.6.2) : UA d'un moteur vérifiable, mais IP démasquée par la
+    // vérification DNS (ip_location_robot_check.verified = 0) — usurpation délibérée,
+    // signal fort : is_bot + ip_location_score_bot_spoof.
+    pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_log
+   SET is_bot = 1, bot_score = bot_score + ' . (int)$conf['ip_location_score_bot_spoof'] . '
+ WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+   AND ip IN (SELECT ip FROM ' . $prefixeTable . 'ip_location_robot_check WHERE verified = 0)');
+
+    // Robots autorisés et authentiques (bloc "Robots d'indexation") : score forcé à 0,
+    // jamais éligibles au blocage automatique.
+    $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
+    if ($allowed_robot_sql !== '0') {
         pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log
    SET bot_score = 0
  WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-   AND (' . implode(' OR ', $allow_where) . ')');
+   AND ' . $allowed_robot_sql);
     }
 
     ip_location_auto_block_bots();
@@ -1950,11 +2192,11 @@ function ip_location_get_bot_candidates($plugin_conf, $recent_only = false)
     // co-visitation, et is_bot n'est jamais remis à 0 après correction d'une règle).
     $where[] = 't.bot_score >= ' . (int)$plugin_conf['bot_block_score_threshold'];
 
-    // Liste blanche de bots légitimes : jamais éligible (déjà exclue via bot_score=0,
+    // Robots autorisés et authentiques : jamais éligibles (déjà exclus via bot_score=0,
     // revérifié ici par sécurité).
-    $allowlist = ip_location_get_bot_allowlist();
-    foreach ($allowlist as $pattern) {
-        $where[] = "t.user_agent NOT LIKE '%" . pwg_db_real_escape_string($pattern) . "%'";
+    $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable, 't.user_agent', 't.ip');
+    if ($allowed_robot_sql !== '0') {
+        $where[] = 'NOT ' . $allowed_robot_sql;
     }
 
     // Liste blanche d'IPs du plugin : revérifiée ici (pas seulement au moment du

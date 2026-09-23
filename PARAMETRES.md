@@ -13,7 +13,7 @@ l'exécution des plugins — donc prioritaire sur les défauts codés en dur) :
 
 ```php
 $conf['ip_location_score_burst'] = 30;
-$conf['ip_location_bot_allowlist'] = ['Googlebot', 'Bingbot', 'MonBot'];
+$conf['ip_location_score_bot_spoof'] = 80;
 ```
 
 Ce fichier peut être édité depuis l'admin Piwigo via le plugin
@@ -37,7 +37,9 @@ si la clé n'existe pas déjà dans `$conf` (`if (!isset($conf[$key]))`).
 | `ip_location_recurrence` | `0` | Poids de **récidive** : ajoute `poids × (nb d'autres lignes déjà suspectes de la même IP − 1)` au score de chaque ligne suspecte. `0` = désactivé (même convention que `max_records`). |
 | `ip_location_auto_block_ttl_days` | `14` | Durée en jours avant expiration d'un blocage **automatique** ajouté à la blocklist (toujours temporaire, jamais permanent, IP exacte uniquement — jamais de plage /16). |
 | `ip_location_auto_block_recent_hours` | `24` | (v2.5.5) Seules les IP ayant au moins un accès suspect dans les N dernières heures deviennent candidates au blocage automatique — évite de bloquer d'un coup toute la fenêtre de 7 jours (IP souvent à usage unique, déjà parties). N'affecte pas la libération des entrées existantes lors de l'enregistrement du formulaire. |
-| `ip_location_bot_allowlist` | `['Googlebot', 'Bingbot', 'Slackbot', 'Twitterbot', 'facebookexternalhit', 'DuckDuckBot', 'WhatsApp', 'Applebot', 'LinkedInBot', 'TelegramBot']` | Liste blanche de bots légitimes (tableau PHP) : toute visite dont le User-Agent contient une de ces sous-chaînes voit son `bot_score` forcé à 0 et n'est jamais éligible au blocage automatique. Pour désactiver l'allowlist (bloquer aussi ces bots), surcharger avec `array()`. Les bots d'IA (`GPTBot`, `GoogleOther`, `ClaudeBot`, `CCBot`…) n'y figurent volontairement pas : ils sont comptés comme bots et peuvent être bloqués ; pour en tolérer un, ajoutez son nom ici (le `robots.txt` du site reste le moyen poli de les refuser). |
+| `ip_location_bot_allowlist` | *(obsolète depuis v2.6.2)* | Ancienne liste blanche de robots. Remplacée par le bloc **Robots d'indexation** de l'onglet Configuration (liste éditable, statut Autorisé / Bloqué, vérification DNS). Si ce réglage existe dans `local/config/config.inc.php`, il sert **une seule fois** de point de départ à la nouvelle liste (ses robots y deviennent « Autorisé »), puis n'est plus lu dès que la liste est enregistrée depuis l'admin. |
+| `ip_location_score_bot_spoof` | `50` | (v2.6.2) Points ajoutés — et marquage bot — quand une IP se présente avec le User-Agent d'un moteur vérifiable (Googlebot, Bingbot, Applebot, Yandex, Baidu) alors que la vérification DNS montre qu'elle ne lui appartient pas : usurpation délibérée. |
+| `ip_location_robot_check_days` | `30` | (v2.6.2) Durée de validité, en jours, du résultat de la vérification DNS d'une IP de robot (table `ip_location_robot_check`) : une seule résolution DNS par IP sur cette durée. |
 | `ip_location_classify_interval_hours` | `4` | Intervalle minimal (en heures) entre deux déclenchements de la classification/blocage auto via le **trafic public** (`ip_location_log_visit()`), pour que le mécanisme fonctionne même sans visite admin régulière. Sans effet sur le déclenchement depuis l'onglet admin, qui a lieu à chaque chargement. |
 | `ip_location_classify_window_days` | `7` | Fenêtre glissante (en jours) sur laquelle portent toute la classification bot (`ip_location_classify_recent()`) et la sélection des IP candidates au blocage (`ip_location_get_bot_candidates()`) : au-delà, une visite n'est plus reconsidérée pour le score, `is_bot` ou l'éligibilité au blocage auto. L'élargir permet de détecter des scrapers "lents" étalés sur plusieurs jours, au prix de requêtes SQL plus lourdes (plus de lignes scannées à chaque passage). |
 

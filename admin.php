@@ -229,6 +229,16 @@ if (!in_array('block_reason', $ipl_cols)) {
     pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
 }
 unset($ipl_cols, $ipl_r, $ipl_row);
+
+// 4. Table de vérification DNS des robots (v2.6.2) — même filet de sécurité ; même
+//    définition que maintain.class.php::robot_check_table_sql() (non chargée ici).
+pwg_query('
+CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
+  ip          VARCHAR(45) PRIMARY KEY,
+  robot       VARCHAR(64) NOT NULL,
+  verified    TINYINT(1)  NOT NULL DEFAULT 0,
+  checked_at  DATETIME    NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 unset($ipl_conf_migr, $ipl_conf_changed, $ipl_was_is_bot);
 
 // ── Compteurs globaux ─────────────────────────────────────────────────────────

@@ -129,6 +129,24 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
         }
 
+        // Migration v2.6.1 → v2.6.2 : cache de vérification DNS des robots d'indexation
+        pwg_query(ip_location_maintain::robot_check_table_sql($prefixeTable));
+    }
+
+    /**
+     * CREATE TABLE du cache de vérification des robots (partagé avec le filet de sécurité
+     * d'admin.php, pour une copie de fichiers sans passer par la mise à jour Piwigo).
+     */
+    static function robot_check_table_sql($prefixeTable)
+    {
+        return '
+CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
+  ip          VARCHAR(45) PRIMARY KEY,
+  robot       VARCHAR(64) NOT NULL,
+  verified    TINYINT(1)  NOT NULL DEFAULT 0,
+  checked_at  DATETIME    NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;';
+
         $cols = [];
         $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
         while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];
@@ -154,6 +172,7 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_log');
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_cache');
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_blocklist');
+        pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_robot_check');
         pwg_query("DELETE FROM " . CONFIG_TABLE . " WHERE param = 'ip_location'");
     }
 
