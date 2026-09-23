@@ -10,6 +10,10 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6 - 23/09/2026
+        intégration des versions 2.5.1 à 2.5.5
+        pour diffusion PEM
+
     version 2.5.5 - 23/09/2026
         suite à l'analyse du journal et de la blocklist d'un site testeur (10 000 accès,
         10 475 IP auto-bloquées) :

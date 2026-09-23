@@ -22,3 +22,6 @@ CLAUDE.md
 
 # Script de génération des ZIP de release
 generate-release-zip.ps1
+
+# Session navigateur
+.playwright-mcp
