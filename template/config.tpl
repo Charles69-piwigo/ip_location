@@ -26,6 +26,37 @@
   <button type="submit" class="buttonLike">{'Enregistrer la configuration'|@translate}</button>
 </form>
 
+<!-- Détail des visites comptabilisées par le widget ci-dessus (audit) -->
+<details class="ipl-visitor-detail" style="margin:0 0 1.5em 0;">
+  <summary>{'Détail des visites comptabilisées'|@translate} ({$VISITOR_DETAIL_ROWS|@count})</summary>
+  {if $VISITOR_DETAIL_ROWS|@count == 0}
+  <p style="color:#666;">{'Aucune visite comptabilisée sur la période configurée.'|@translate}</p>
+  {else}
+  <div style="max-height:400px;overflow-y:auto;margin-top:0.5em;">
+    <table class="ipl-table">
+      <thead>
+        <tr>
+          <th>{'Date'|@translate}</th>
+          <th>{'IP'|@translate}</th>
+          <th>{'Pays'|@translate}</th>
+          <th>{'URL'|@translate}</th>
+        </tr>
+      </thead>
+      <tbody>
+      {foreach from=$VISITOR_DETAIL_ROWS item=v}
+        <tr>
+          <td class="ipl-date">{$v.visit_date|escape}</td>
+          <td>{$v.ip|escape}</td>
+          <td>{$v.country|escape}</td>
+          <td style="word-break:break-all;">{$v.url|escape}</td>
+        </tr>
+      {/foreach}
+      </tbody>
+    </table>
+  </div>
+  {/if}
+</details>
+
 <!-- ── Section 1 : Blocage .htaccess ─────────────────────────────────────── -->
 <h3>{'Blocage .htaccess'|@translate}{if $SERVER_IS_NGINX} <span style="font-size:0.75em;font-weight:normal;color:#c0392b;">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</h3>
 <div style="margin:0 0 1em 20px;text-align:left;">
@@ -36,36 +67,27 @@
   <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'|@translate}</em>
 </div>
 
-<!-- Tableau des IPs bloquées -->
-{if $BLOCKLIST|@count == 0}
-<p style="margin-left:20px;color:#666;">{'Aucune IP dans le .htaccess.'|@translate}</p>
+<!-- Tableau des IPs bloquées manuellement (toujours affiché) -->
+{if $BLOCKLIST_MANUAL|@count == 0}
+<p style="margin-left:20px;color:#666;">{'Aucune IP bloquée manuellement.'|@translate}</p>
 {else}
-<table class="ipl-table" id="ipl-blocklist">
+<table class="ipl-table" id="ipl-blocklist-manual">
   <thead>
     <tr>
       <th class="ipl-sortable" data-col="0" style="cursor:pointer;">{'IP'|@translate} <span class="ipl-sort-icon">↕</span></th>
       <th class="ipl-sortable" data-col="1" style="cursor:pointer;">{'Date'|@translate} <span class="ipl-sort-icon">↕</span></th>
       <th class="ipl-sortable" data-col="2" style="cursor:pointer;">{'Pays'|@translate} <span class="ipl-sort-icon">↕</span></th>
       <th>{'Ville'|@translate}</th>
-      <th>{'Origine'|@translate}</th>
       <th></th>
     </tr>
   </thead>
   <tbody>
-  {foreach from=$BLOCKLIST item=bl}
+  {foreach from=$BLOCKLIST_MANUAL item=bl}
     <tr>
       <td><strong>{$bl.ip|escape}</strong></td>
       <td>{$bl.blocked_at|escape}</td>
       <td>{$bl.country|escape}</td>
       <td>{$bl.city|escape}</td>
-      <td>
-        {if $bl.origin eq 'auto'}
-          <span style="background:#fff3cd;color:#8a6d1a;border-radius:10px;padding:2px 8px;font-size:0.8em;white-space:nowrap;">{'Auto'|@translate}</span>
-          {if $bl.expires_at}<span style="font-size:0.78em;color:#888;margin-left:6px;white-space:nowrap;">{'expire le'|@translate} {$bl.expires_at|escape}</span>{/if}
-        {else}
-          <span style="background:#e6e6e6;color:#555;border-radius:10px;padding:2px 8px;font-size:0.8em;">{'Manuel'|@translate}</span>
-        {/if}
-      </td>
       <td>
         <form method="post" action="" style="margin:0;">
           <input type="hidden" name="action" value="unblock_ip">
@@ -78,6 +100,46 @@
   </tbody>
 </table>
 {/if}
+
+<!-- Tableau des IPs bloquées automatiquement (score bot) — dépliable/repliable, pour ne pas
+     noyer la liste manuelle sur les sites très ciblés où l'auto-blocage produit beaucoup d'entrées -->
+<details class="ipl-blocklist-auto-details" style="margin:0.8em 0 0 20px;">
+  <summary>{'IP bloquées automatiquement'|@translate} ({$BLOCKLIST_AUTO|@count})</summary>
+  {if $BLOCKLIST_AUTO|@count == 0}
+  <p style="color:#666;">{'Aucune IP bloquée automatiquement.'|@translate}</p>
+  {else}
+  <table class="ipl-table" id="ipl-blocklist-auto" style="margin-top:0.5em;">
+    <thead>
+      <tr>
+        <th class="ipl-sortable" data-col="0" style="cursor:pointer;">{'IP'|@translate} <span class="ipl-sort-icon">↕</span></th>
+        <th class="ipl-sortable" data-col="1" style="cursor:pointer;">{'Date'|@translate} <span class="ipl-sort-icon">↕</span></th>
+        <th class="ipl-sortable" data-col="2" style="cursor:pointer;">{'Pays'|@translate} <span class="ipl-sort-icon">↕</span></th>
+        <th>{'Ville'|@translate}</th>
+        <th>{'Expiration'|@translate}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {foreach from=$BLOCKLIST_AUTO item=bl}
+      <tr>
+        <td><strong>{$bl.ip|escape}</strong></td>
+        <td>{$bl.blocked_at|escape}</td>
+        <td>{$bl.country|escape}</td>
+        <td>{$bl.city|escape}</td>
+        <td>{if $bl.expires_at}{'expire le'|@translate} {$bl.expires_at|escape}{/if}</td>
+        <td>
+          <form method="post" action="" style="margin:0;">
+            <input type="hidden" name="action" value="unblock_ip">
+            <input type="hidden" name="ip" value="{$bl.ip|escape}">
+            <button type="submit" class="ipl-btn-unblock">{'Retirer du .htaccess'|@translate}</button>
+          </form>
+        </td>
+      </tr>
+    {/foreach}
+    </tbody>
+  </table>
+  {/if}
+</details>
 
 <!-- Ajout manuel -->
 <form method="post" action="" style="margin:0.8em 0 1.5em 20px;"
@@ -103,37 +165,41 @@
 
 <script>
 (function() {
-  var table = document.getElementById('ipl-blocklist');
-  if (!table) return;
-  var sortCol = -1, sortAsc = true;
+  function attachSort(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var sortCol = -1, sortAsc = true;
 
-  table.querySelectorAll('th.ipl-sortable').forEach(function(th) {
-    th.addEventListener('click', function() {
-      var col = parseInt(th.dataset.col);
-      sortAsc = (sortCol === col) ? !sortAsc : true;
-      sortCol = col;
+    table.querySelectorAll('th.ipl-sortable').forEach(function(th) {
+      th.addEventListener('click', function() {
+        var col = parseInt(th.dataset.col);
+        sortAsc = (sortCol === col) ? !sortAsc : true;
+        sortCol = col;
 
-      table.querySelectorAll('th.ipl-sortable .ipl-sort-icon').forEach(function(ic) { ic.textContent = '↕'; });
-      th.querySelector('.ipl-sort-icon').textContent = sortAsc ? '↑' : '↓';
+        table.querySelectorAll('th.ipl-sortable .ipl-sort-icon').forEach(function(ic) { ic.textContent = '↕'; });
+        th.querySelector('.ipl-sort-icon').textContent = sortAsc ? '↑' : '↓';
 
-      var tbody = table.querySelector('tbody');
-      var rows = Array.from(tbody.querySelectorAll('tr'));
-      rows.sort(function(a, b) {
-        var av = (a.cells[col] ? a.cells[col].textContent.trim() : '');
-        var bv = (b.cells[col] ? b.cells[col].textContent.trim() : '');
-        /* tri numérique pour les IPs (compare octet par octet) */
-        if (col === 0) {
-          var ap = av.split('.').map(Number), bp = bv.split('.').map(Number);
-          for (var i = 0; i < 4; i++) {
-            if ((ap[i]||0) !== (bp[i]||0)) return sortAsc ? (ap[i]||0) - (bp[i]||0) : (bp[i]||0) - (ap[i]||0);
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort(function(a, b) {
+          var av = (a.cells[col] ? a.cells[col].textContent.trim() : '');
+          var bv = (b.cells[col] ? b.cells[col].textContent.trim() : '');
+          /* tri numérique pour les IPs (compare octet par octet) */
+          if (col === 0) {
+            var ap = av.split('.').map(Number), bp = bv.split('.').map(Number);
+            for (var i = 0; i < 4; i++) {
+              if ((ap[i]||0) !== (bp[i]||0)) return sortAsc ? (ap[i]||0) - (bp[i]||0) : (bp[i]||0) - (ap[i]||0);
+            }
+            return 0;
           }
-          return 0;
-        }
-        return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+          return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
       });
-      rows.forEach(function(r) { tbody.appendChild(r); });
     });
-  });
+  }
+  attachSort('ipl-blocklist-manual');
+  attachSort('ipl-blocklist-auto');
 })();
 </script>
 

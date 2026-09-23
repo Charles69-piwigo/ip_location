@@ -12,12 +12,11 @@ if (empty($plugin_conf['visitors_enabled'])) {
     exit;
 }
 
-$period_map      = array('week' => '7 DAY', 'fortnight' => '15 DAY', 'month' => '30 DAY', 'quarter' => '90 DAY');
-$period_days_map = array('week' => 7,       'fortnight' => 15,        'month' => 30,        'quarter' => 90);
+$periods    = ip_location_visitors_periods();
 $period_key = isset($plugin_conf['visitors_period']) ? $plugin_conf['visitors_period'] : 'week';
-if (!array_key_exists($period_key, $period_map)) $period_key = 'week';
-$interval    = $period_map[$period_key];
-$period_days = $period_days_map[$period_key];
+if (!array_key_exists($period_key, $periods)) $period_key = 'week';
+$interval    = $periods[$period_key]['interval'];
+$period_days = $periods[$period_key]['days'];
 
 // Couverture réelle du log (la plus ancienne entrée peut être plus récente que le début de la période)
 $r_oldest   = pwg_query("SELECT MIN(visit_date) AS oldest FROM {$prefixeTable}ip_location_log");
@@ -33,28 +32,14 @@ if (!empty($oldest_row['oldest'])) {
 
 // Visites humaines : toute page photo (picture.php) ou page index avec section (?/...)
 // précédée ou suivie d'une page d'entrée (accueil sans ?/, ou entrée directe ?/section)
-// dans les 30 min avant ou après.
-// Sections couvertes : category, list, recent_pics, most_visited, best_rated, tag, search, favorites, etc.
+// dans les 30 min avant ou après. Critères exacts dans ip_location_qualifying_visit_where()
+// (main.inc.php), partagée avec la section d'audit "Détail des visites comptabilisées"
+// de l'admin (admin.php) pour que les deux calculs ne divergent jamais.
 $result = pwg_query("
 SELECT l1.country_code, MIN(l1.country) AS country, COUNT(*) AS visit_count
   FROM {$prefixeTable}ip_location_log l1
  WHERE l1.visit_date >= NOW() - INTERVAL {$interval}
-   AND l1.is_bot        = 0
-   AND l1.is_blocked    = 0
-   AND l1.country_code != ''
-   AND (
-         l1.url LIKE '%/picture.php%'
-      OR l1.url REGEXP '/category/[0-9]+|/list/[0-9]|/recent_pics|/most_visited|/best_rated|/tag/[0-9]|/search/[0-9]|/favorites'
-   )
-   AND EXISTS (
-         SELECT 1
-           FROM {$prefixeTable}ip_location_log l2
-          WHERE l2.ip  = l1.ip
-            AND l2.url != l1.url
-            AND l2.visit_date BETWEEN
-                DATE_SUB(l1.visit_date, INTERVAL 30 MINUTE)
-                AND DATE_ADD(l1.visit_date, INTERVAL 30 MINUTE)
-       )
+   AND " . ip_location_qualifying_visit_where($prefixeTable, 'l1') . "
  GROUP BY l1.country_code
  ORDER BY visit_count DESC
 ");

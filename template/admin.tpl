@@ -37,9 +37,15 @@
   .ipl-config label.ipl-inline { display:inline; }
   .ipl-config strong { display:block; }
   .ipl-config input[type="text"], .ipl-config textarea { display:block; margin:0; }
-  .ipl-country-stats { margin:0 0 1.5em 0; }
-  .ipl-country-stats summary { cursor:pointer; font-size:1.17em; font-weight:bold; padding:10px 0 4px 10px; text-align:left; }
-  .ipl-country-stats .ipl-table { margin-top:0.5em; }
+  .ipl-country-stats,
+  .ipl-visitor-detail,
+  .ipl-blocklist-auto-details { margin:0 0 1.5em 0; text-align:left; }
+  .ipl-country-stats summary,
+  .ipl-visitor-detail summary,
+  .ipl-blocklist-auto-details summary { cursor:pointer; font-size:1.17em; font-weight:bold; padding:10px 0 4px 10px; text-align:left; }
+  .ipl-country-stats .ipl-table,
+  .ipl-visitor-detail .ipl-table,
+  .ipl-blocklist-auto-details .ipl-table { margin-top:0.5em; }
 </style>
 <script>
 if (window.location.search.indexOf('msg=') !== -1) {

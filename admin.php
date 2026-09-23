@@ -104,6 +104,17 @@ INSERT INTO ' . $prefixeTable . 'ip_location_blocklist (ip, country, city, block
     NOW(), \'manuel\', NULL
   )
   ON DUPLICATE KEY UPDATE blocked_at = NOW(), origin = \'manuel\', expires_at = NULL');
+                // Si l'IP ajoutée est une plage /16, les entrées 'auto' déjà couvertes
+                // par cette plage sont désormais redondantes (la plage manuelle les
+                // bloque déjà) : on les retire pour qu'elles cessent d'apparaître dans
+                // la liste "IP bloquées automatiquement". ip_location_get_bot_candidates()
+                // les exclura aussi durablement tant que la plage reste active.
+                $range_prefix = ip_location_manual_range_prefix($ip);
+                if ($range_prefix !== null) {
+                    pwg_query('
+DELETE FROM ' . $prefixeTable . 'ip_location_blocklist
+ WHERE origin = \'auto\' AND ip LIKE \'' . pwg_db_real_escape_string($range_prefix) . '%\'');
+                }
                 ip_location_write_htaccess();
                 redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_blocked&ip=' . urlencode($ip));
             }
@@ -185,6 +196,31 @@ list($total_blocked) = pwg_db_fetch_row($r);
 
 $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_bot = 0 AND is_blocked = 0');
 list($total_normal) = pwg_db_fetch_row($r);
+
+// ── Détail des visites comptabilisées (audit du widget public "Visiteurs") ────
+// Rejoue exactement la requête d'agrégat de ajax_visitors.php (même helper partagé,
+// même période configurée) mais renvoie le détail ligne par ligne, pour pouvoir
+// vérifier concrètement ce qui compose le chiffre affiché par le widget.
+
+// $plugin_conf n'est assigné que plus loin dans ce fichier (config Blocklist/bot) :
+// on relit ici via ip_location_get_conf() directement (cache statique, coût nul) pour
+// ne pas dépendre de l'ordre des blocs et refléter la période réellement enregistrée.
+$visitor_conf        = ip_location_get_conf();
+$visitor_periods     = ip_location_visitors_periods();
+$visitor_period_key  = isset($visitor_conf['visitors_period']) && array_key_exists($visitor_conf['visitors_period'], $visitor_periods)
+    ? $visitor_conf['visitors_period'] : 'week';
+$visitor_interval    = $visitor_periods[$visitor_period_key]['interval'];
+
+$visitor_detail_rows = [];
+$result = pwg_query('
+SELECT l1.visit_date, l1.ip, l1.country, l1.country_code, l1.url
+  FROM ' . $prefixeTable . 'ip_location_log l1
+ WHERE l1.visit_date >= NOW() - INTERVAL ' . $visitor_interval . '
+   AND ' . ip_location_qualifying_visit_where($prefixeTable, 'l1') . '
+ ORDER BY l1.country ASC, l1.visit_date DESC');
+while ($row = pwg_db_fetch_assoc($result)) {
+    $visitor_detail_rows[] = $row;
+}
 
 // ── Statistiques par pays ─────────────────────────────────────────────────────
 
@@ -303,6 +339,10 @@ $result = pwg_query('SELECT ip, country, city, blocked_at, origin, DATE(expires_
 while ($row = pwg_db_fetch_assoc($result)) {
     $blocklist[] = $row;
 }
+// Liste longue sur les sites très ciblés (auto-blocage) : séparée en deux pour la lisibilité
+// — manuelles toujours affichées, auto dépliables/repliables (template/config.tpl).
+$blocklist_manual = array_values(array_filter($blocklist, function ($b) { return $b['origin'] !== 'auto'; }));
+$blocklist_auto    = array_values(array_filter($blocklist, function ($b) { return $b['origin'] === 'auto'; }));
 $blocklist_ips = array_column($blocklist, 'ip');
 
 // IP retirées manuellement du .htaccess (origin='exempt') : leur bot_score peut rester
@@ -421,6 +461,7 @@ SELECT ip, COUNT(*) AS hits
 $template->assign([
     'VISITORS_ENABLED'      => $visitors_enabled,
     'VISITORS_PERIOD'       => $visitors_period,
+    'VISITOR_DETAIL_ROWS'   => $visitor_detail_rows,
     'BLOCKED_COUNTRIES'     => $blocked_countries,
     'BLOCKED_URL_KEYWORDS'  => $blocked_url_keywords,
     'WHITELIST_IPS'         => $whitelist_ips,
@@ -435,7 +476,8 @@ $template->assign([
     'BOT_BLOCK_ENABLED'          => $bot_block_enabled,
     'BOT_BLOCK_MODE'             => $bot_block_mode,
     'BOT_BLOCK_SCORE_THRESHOLD'  => $bot_block_score_threshold,
-    'BLOCKLIST'          => $blocklist,
+    'BLOCKLIST_MANUAL'   => $blocklist_manual,
+    'BLOCKLIST_AUTO'     => $blocklist_auto,
     'STATS'              => $stats,
     'LOGS'               => $logs,
     'TOTAL_PAGES'        => $total_pages,

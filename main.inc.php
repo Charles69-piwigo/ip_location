@@ -10,6 +10,41 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.5.4 - 23/09/2026
+        fix "Détail des visites comptabilisées" (Configuration) toujours calculé sur la
+        période par défaut (semaine) au lieu de la période réellement enregistrée :
+        admin.php lisait $plugin_conf['visitors_period'] avant que $plugin_conf ne soit
+        assigné plus loin dans le fichier (variable non définie à cet endroit). Lit
+        désormais la config via ip_location_get_conf() directement à l'endroit voulu
+
+    version 2.5.3 - 23/09/2026
+        fix blocage manuel d'une plage /16 sans effet sur les IP déjà auto-bloquées du
+        même sous-réseau : elles restaient affichées séparément dans "IP bloquées
+        automatiquement" et pouvaient même être réinsérées par le passage de
+        classification suivant. Ajouter une plage manuelle retire désormais aussitôt
+        les entrées 'auto' qu'elle couvre et les exclut durablement du blocage
+        automatique tant que la plage reste active (ip_location_manual_range_prefix(),
+        ip_location_get_bot_candidates())
+
+    version 2.5.2 - 23/09/2026
+        ajouté section repliable "Détail des visites comptabilisées" à la fin du
+        bloc Statistiques visiteurs (Configuration) : liste ligne par ligne
+        (date/IP/pays/URL) des accès qui composent le chiffre du widget public
+        "Visiteurs" sur la période configurée, pour pouvoir l'auditer ; critères
+        de qualification extraits dans ip_location_qualifying_visit_where()
+        (main.inc.php), partagée avec ajax_visitors.php pour ne jamais diverger
+        scindé le tableau de blocage .htaccess (Configuration) en deux : IP
+        bloquées manuellement toujours affichées, IP auto-bloquées dans une
+        section dépliable/repliable séparée — pour rester lisible sur les sites
+        très ciblés où l'auto-blocage produit beaucoup d'entrées
+
+    version 2.5.1 - 22/09/2026
+        fix compteur du widget public "Visiteurs" : une IP blocklistée après coup
+        (manuellement ou auto-bloquée par le score bot) continuait à alimenter le
+        décompte de visites tant que ses anciennes lignes restaient dans la fenêtre
+        de période — incohérent avec la définition "Normal"/"Humains" du Journal
+        depuis la v2.5, qui exclut déjà l'appartenance à la blocklist
+
     version 2.5 - 22/09/2026
         ajouté 4ème levier de blocage : score de suspicion bot (bot_score),
         calculé en différé (ip_location_classify_recent()) à partir de plusieurs
@@ -306,6 +341,57 @@ function ip_location_get_conf()
     }
     $cache = $default;
     return $cache;
+}
+
+/**
+ * Périodes proposées pour le widget public "Visiteurs" (nav + panel flottant) et pour
+ * la section d'audit "Détail des visites comptabilisées" (admin.php) — source unique
+ * pour que les deux restent synchronisés (même piège que ip_location_bot_ua_keywords()).
+ */
+function ip_location_visitors_periods()
+{
+    return [
+        'week'      => ['interval' => '7 DAY',  'days' => 7],
+        'fortnight' => ['interval' => '15 DAY', 'days' => 15],
+        'month'     => ['interval' => '30 DAY', 'days' => 30],
+        'quarter'   => ['interval' => '90 DAY', 'days' => 90],
+    ];
+}
+
+/**
+ * Fragment SQL définissant une "visite qualifiée" du widget public Visiteurs : accès
+ * présumé humain (non-bot, non-bloqué, IP absente de la blocklist .htaccess) à une page
+ * photo ou une section d'album (hors accueil), précédé ou suivi d'une autre URL de la
+ * même IP dans les ±30 min. Utilisée par ajax_visitors.php (agrégat par pays) et
+ * admin.php (détail ligne par ligne) — source unique pour que les deux calculs ne
+ * divergent jamais (même piège que ip_location_bot_ua_keywords()).
+ *
+ * @param string $prefixeTable
+ * @param string $alias  Alias de ip_location_log dans la requête appelante.
+ * @return string Fragment à insérer après WHERE (sans le mot-clé WHERE lui-même).
+ */
+function ip_location_qualifying_visit_where($prefixeTable, $alias = 'l1')
+{
+    $in_blocklist_sql = "{$alias}.ip IN (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin != 'exempt')";
+
+    return "
+   {$alias}.is_bot        = 0
+   AND {$alias}.is_blocked    = 0
+   AND NOT ({$in_blocklist_sql})
+   AND {$alias}.country_code != ''
+   AND (
+         {$alias}.url LIKE '%/picture.php%'
+      OR {$alias}.url REGEXP '/category/[0-9]+|/list/[0-9]|/recent_pics|/most_visited|/best_rated|/tag/[0-9]|/search/[0-9]|/favorites'
+   )
+   AND EXISTS (
+         SELECT 1
+           FROM {$prefixeTable}ip_location_log l2
+          WHERE l2.ip  = {$alias}.ip
+            AND l2.url != {$alias}.url
+            AND l2.visit_date BETWEEN
+                DATE_SUB({$alias}.visit_date, INTERVAL 30 MINUTE)
+                AND DATE_ADD({$alias}.visit_date, INTERVAL 30 MINUTE)
+       )";
 }
 
 // Hooks de visite
@@ -1546,6 +1632,19 @@ UPDATE ' . $prefixeTable . 'ip_location_log
 }
 
 /**
+ * Extrait le préfixe "A.B." d'une ligne de blocklist au format "A.B.0.0/16" — seul
+ * format de plage jamais généré par ce plugin (bouton "Ajouter /16", cf. JS de
+ * admin.tpl/config.tpl). Retourne null si $ip n'est pas dans ce format (IP exacte).
+ */
+function ip_location_manual_range_prefix($ip)
+{
+    if (preg_match('/^(\d+\.\d+)\.0\.0\/16$/', $ip, $m)) {
+        return $m[1] . '.';
+    }
+    return null;
+}
+
+/**
  * IP actuellement éligibles au blocage automatique selon le mode/seuil courants
  * (score ou is_bot) d'une config donnée, en excluant la liste blanche de bots
  * légitimes et la whitelist IP du plugin. Fenêtre glissante de 7 jours, comme le
@@ -1591,6 +1690,18 @@ function ip_location_get_bot_candidates($plugin_conf)
     $ip_whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
     foreach ($ip_whitelist as $wip) {
         $where[] = "t.ip != '" . pwg_db_real_escape_string($wip) . "'";
+    }
+
+    // Plages manuelles existantes ("A.B.0.0/16", seul format de plage généré par ce
+    // plugin) : les IP qu'elles couvrent ne doivent jamais (re)devenir candidates au
+    // blocage auto — un blocage manuel plus large prévaut toujours, sinon une entrée
+    // 'auto' redondante réapparaîtrait au prochain passage de classification.
+    $result_ranges = pwg_query("SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin = 'manuel' AND ip LIKE '%.0.0/16'");
+    while ($rr = pwg_db_fetch_row($result_ranges)) {
+        $prefix = ip_location_manual_range_prefix($rr[0]);
+        if ($prefix !== null) {
+            $where[] = "t.ip NOT LIKE '" . pwg_db_real_escape_string($prefix) . "%'";
+        }
     }
 
     // Exemption suite à un retrait manuel (voir docblock) : ignorer les visites
