@@ -136,7 +136,8 @@
            data-observer-desc="{'Aucun accès n\'est refusé : tout est journalisé en « Normal » ou « Bots non bloqués ».'|@translate}"
            data-blocking-name="{'Observation + blocage'|@translate}"
            data-blocking-desc="{'leviers de blocage actifs'|@translate}"
-           data-unsaved="{'modifications non enregistrées'|@translate}">
+           data-unsaved="{'modifications non enregistrées'|@translate}"
+           data-robots-noblock="{'Actif, aucun robot bloqué : ne refuse rien, protège les robots autorisés'|@translate}">
     <div>
       <span class="eyebrow">{'Mode actuel'|@translate}</span>
       <span class="name {if $LEVERS_ON == 0}observer{else}blocking{/if}" data-mode-name>{if $LEVERS_ON == 0}{'Observateur'|@translate}{else}{'Observation + blocage'|@translate}{/if}</span>
@@ -559,25 +560,36 @@
   // Bandeau "Mode actuel" : recalculé à partir des interrupteurs de la page. Il reflète
   // l'état enregistré au chargement ; une bascule non enregistrée est signalée.
   var mode = document.getElementById('iplc-mode');
+  // Pastille allumée = interrupteur du bloc activé (pour tous les blocs).
   function leverOn(key){
     var card = document.getElementById('ipl-card-' + key);
     var sw = card && card.querySelector('[data-card-switch]');
-    if (!sw || !sw.checked) return false;
-    // Robots : un levier de blocage seulement si au moins un robot est "Bloqué"
-    if (key === 'robots') return card.querySelectorAll('input[type="radio"][value="block"]:checked').length > 0;
+    return !!(sw && sw.checked);
+  }
+  // Levier qui refuse effectivement des accès : Robots seulement si au moins un robot
+  // est "Bloqué" (sinon le bloc ne fait que protéger les robots autorisés) ; le filtre
+  // des téléchargements n'est pas compté parmi les 5 leviers de blocage des pages.
+  function leverBlocks(key){
+    if (!leverOn(key) || key === 'download') return false;
+    if (key === 'robots') {
+      return document.getElementById('ipl-card-robots').querySelectorAll('input[type="radio"][value="block"]:checked').length > 0;
+    }
     return true;
   }
   var initialLevers = { };
-  if (mode) mode.querySelectorAll('[data-lever]').forEach(function(a){ initialLevers[a.getAttribute('data-lever')] = a.classList.contains('on'); });
+  if (mode) mode.querySelectorAll('[data-lever]').forEach(function(a){ initialLevers[a.getAttribute('data-lever')] = leverOn(a.getAttribute('data-lever')) + '|' + leverBlocks(a.getAttribute('data-lever')); });
   function refreshMode(){
     if (!mode) return;
     var blocking = 0, changed = false;
     mode.querySelectorAll('[data-lever]').forEach(function(a){
       var key = a.getAttribute('data-lever');
-      var on = leverOn(key);
+      var on = leverOn(key), blocks = leverBlocks(key);
       a.classList.toggle('on', on);
-      if (on && key !== 'download') blocking++;
-      if (on !== initialLevers[key]) changed = true;
+      if (key === 'robots') {
+        a.title = on && !blocks ? mode.getAttribute('data-robots-noblock') : '';
+      }
+      if (blocks) blocking++;
+      if ((on + '|' + blocks) !== initialLevers[key]) changed = true;
     });
     var name = mode.querySelector('[data-mode-name]');
     name.textContent = blocking ? mode.getAttribute('data-blocking-name') : mode.getAttribute('data-observer-name');
@@ -592,6 +604,7 @@
   }
   var robotsCardForMode = document.getElementById('ipl-card-robots');
   if (robotsCardForMode) robotsCardForMode.addEventListener('change', refreshMode);
+  refreshMode(); // infobulle de la pastille Robots dès le chargement
 
   // Pastilles (liste blanche, pays, mots-clés, pays autorisés) liées à un champ caché
   function chipValues(hidden, sep){

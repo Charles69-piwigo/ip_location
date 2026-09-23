@@ -420,3 +420,4 @@ $lang['Téléchargements'] = 'Downloads';
 $lang['IP %s bloquée.'] = 'IP %s blocked.';
 $lang['IP %s débloquée.'] = 'IP %s unblocked.';
 $lang['modifications non enregistrées'] = 'unsaved changes';
+$lang['Actif, aucun robot bloqué : ne refuse rien, protège les robots autorisés'] = 'On, no robot blocked: refuses nothing, protects allowed robots';

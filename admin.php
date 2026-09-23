@@ -609,16 +609,21 @@ if ($tab === 'config') {
     // Widget Visiteurs : nombre de pays des visites comptées
     $visitor_countries = count(array_unique(array_column($visitor_detail_rows, 'country')));
 
-    // Bandeau de mode : leviers de blocage actifs (le téléchargement est un filtre à part)
+    // Bandeau de mode : 'on' = interrupteur du bloc (pastille allumée). Le décompte des
+    // leviers de blocage ne retient Robots que si au moins un robot est bloqué (sinon il
+    // ne refuse rien), et jamais le filtre des téléchargements (filtre à part).
     $levers = [
-        ['key' => 'robots',   'label' => l10n('Robots'),          'on' => $plugin_conf['robots_enabled'] === '1' && $robots_blocked > 0],
+        ['key' => 'robots',   'label' => l10n('Robots'),          'on' => $plugin_conf['robots_enabled'] === '1'],
         ['key' => 'manual',   'label' => l10n('Par IP'),          'on' => $plugin_conf['htaccess_enabled'] === '1'],
         ['key' => 'country',  'label' => l10n('Par pays'),        'on' => $plugin_conf['blocking_enabled'] === '1'],
         ['key' => 'keyword',  'label' => l10n('Par mot-clé'),     'on' => $plugin_conf['keyword_block_enabled'] === '1'],
         ['key' => 'auto',     'label' => l10n('Automatique'),     'on' => $plugin_conf['bot_block_enabled'] === '1'],
         ['key' => 'download', 'label' => l10n('Téléchargements'), 'on' => $plugin_conf['download_filter_enabled'] === '1'],
     ];
-    $levers_on = count(array_filter($levers, function ($l) { return $l['on'] && $l['key'] !== 'download'; }));
+    $levers_on = count(array_filter($levers, function ($l) use ($robots_blocked) {
+        if (!$l['on'] || $l['key'] === 'download') return false;
+        return $l['key'] !== 'robots' || $robots_blocked > 0;
+    }));
 
     // Googlebot et le blocage des États-Unis
     $us_blocked = $plugin_conf['blocking_enabled'] === '1'

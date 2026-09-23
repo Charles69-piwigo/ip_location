@@ -16,7 +16,9 @@ Has Settings: webmaster
         le bandeau "Mode actuel" (Observateur / Observation + blocage, pastilles des
         leviers) est recalculé en direct à chaque bascule — y compris le passage d'un
         robot en "Bloqué" — avec la mention "modifications non enregistrées" tant que
-        l'état affiché diffère de l'état enregistré
+        l'état affiché diffère de l'état enregistré. La pastille Robots suit son
+        interrupteur comme les autres ; elle ne compte parmi les leviers de blocage que
+        si au moins un robot est bloqué (infobulle sinon)
 
     version 2.6.3 - 23/09/2026
         onglet Configuration réécrit en blocs (maquette validée) : bandeau "Mode actuel"
