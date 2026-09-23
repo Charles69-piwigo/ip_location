@@ -389,11 +389,10 @@ $date_from = isset($_GET['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_
 $date_to   = isset($_GET['date_to'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'])   ? $_GET['date_to']   : '';
 $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', trim($_GET['ip_filter'])) : '';
 
-// Jusqu'en v2.6, "Bloqués" couvrait aussi les anciennes lignes des IP mises en blocklist
-// après coup. v2.6.1 : ce marquage rétroactif est abandonné — "l'historique est l'historique".
-// Une visite servie avant la mise en liste de son IP garde sa catégorie (badge "EN LISTE"
-// dans le Journal) ; "Bloqués" = accès réellement refusés (is_blocked=1), que le plugin
-// journalise désormais avec leur motif (block_reason), y compris les refus de la blocklist.
+// Le Journal reflète l'état actuel (v2.6.8, après un essai "historique figé" en v2.6.1) :
+// une ligne servie avant le blocage de son IP / robot passe dans "Bloqués" (badge "Bloquée
+// depuis le …"), tant que le levier correspondant est allumé. Les refus réels portent leur
+// motif (block_reason).
 // Filtres hors catégorie (pays, dates, IP) : partagés par les compteurs cliquables et le
 // tableau. "robots" (v2.6.6) = accès servis à un robot autorisé et authentique.
 $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
@@ -402,12 +401,15 @@ if ($country_filter !== '') $base_parts[] = "country_code = '" . pwg_db_real_esc
 if ($date_from !== '') $base_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
 if ($date_to   !== '') $base_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
 if ($ip_filter !== '')  $base_parts[] = "ip LIKE '" . pwg_db_real_escape_string($ip_filter) . "%'";
+// "Bloqués" = refus réels OU IP/robot actuellement bloqué (le Journal reflète l'état
+// actuel depuis v2.6.8 ; seuls les leviers allumés comptent, cf. ip_location_currently_blocked_sql()).
+$currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable);
 $category_sql = [
     'all'     => '1',
-    'normal'  => 'is_bot = 0 AND is_blocked = 0',
-    'bot'     => 'is_bot = 1 AND is_blocked = 0',
-    'robots'  => 'is_blocked = 0 AND ' . $allowed_robot_sql,
-    'blocked' => 'is_blocked = 1',
+    'normal'  => 'is_bot = 0 AND is_blocked = 0 AND NOT ' . $currently_blocked_sql,
+    'bot'     => 'is_bot = 1 AND is_blocked = 0 AND NOT ' . $currently_blocked_sql,
+    'robots'  => 'is_blocked = 0 AND ' . $allowed_robot_sql . ' AND NOT ' . $currently_blocked_sql,
+    'blocked' => '(is_blocked = 1 OR ' . $currently_blocked_sql . ')',
 ];
 $where_parts = $base_parts;
 if ($filter !== 'all') $where_parts[] = $category_sql[$filter];
@@ -542,8 +544,9 @@ foreach ($blocklist_manual as $b) {
         $blocked_range_prefixes[$prefix] = $b['blocked_at'];
     }
 }
-// Date de blocage par IP exacte (badge "Bloquée depuis le …" du Journal)
-$blocked_since = array_column($blocklist, 'blocked_at', 'ip');
+// Entrées de blocage par IP exacte (badge "Bloquée depuis le …" du Journal)
+$blocklist_by_ip = array_column($blocklist, null, 'ip');
+$ipl_conf_now = ip_location_get_conf();
 $fmt_since = function ($datetime) {
     return $datetime ? date('d/m/Y', strtotime($datetime)) : '';
 };
@@ -586,15 +589,31 @@ foreach ($logs as &$log) {
     $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
     $log['is_exempt']    = in_array($log['ip'], $exempt_ips);
     $log['in_range']     = false;
-    $log['listed_since'] = $log['in_blocklist'] ? $fmt_since($blocked_since[$log['ip']] ?? '') : '';
-    if (!$log['in_blocklist']) {
+    $log['listed_since'] = '';
+    if ($log['in_blocklist']) {
+        // Même règle que ip_location_currently_blocked_sql() : levier de l'entrée allumé
+        $entry = $blocklist_by_ip[$log['ip']];
+        $active = $entry['origin'] === 'auto'
+            ? ($ipl_conf_now['bot_block_enabled'] === '1' && (empty($entry['expires_at']) || $entry['expires_at'] >= date('Y-m-d')))
+            : $ipl_conf_now['htaccess_enabled'] === '1';
+        if ($active) {
+            $log['listed_since'] = $fmt_since($entry['blocked_at']);
+        }
+    } else {
         foreach ($blocked_range_prefixes as $prefix => $since) {
             if (strpos($log['ip'], $prefix) === 0) {
                 $log['in_range'] = true;
-                $log['listed_since'] = $fmt_since($since);
+                if ($ipl_conf_now['htaccess_enabled'] === '1') {
+                    $log['listed_since'] = $fmt_since($since);
+                }
                 break;
             }
         }
+    }
+    // Robot marqué "Bloqué" (bloc Robots allumé) : ses accès passent dans "Bloqués"
+    $log['robot_blocked'] = '';
+    if ($robots_enabled_now && ($rb = ip_location_match_robot($log['user_agent'])) && ($rb['status'] ?? 'allow') === 'block') {
+        $log['robot_blocked'] = $rb['name'];
     }
 }
 unset($log);

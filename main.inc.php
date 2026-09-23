@@ -10,6 +10,18 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.8 - 23/09/2026
+        le Journal reflète l'état actuel (revient sur le choix "historique figé" de la
+        2.6.1) : "Bloqués" = refus réels + tous les accès des IP et robots actuellement
+        bloqués, même servis avant le blocage — une ligne "Bots non bloqués" ne peut plus
+        porter "Bloquée depuis le …". Seuls les leviers allumés comptent (liste manuelle
+        si blocage par IP activé, liste auto non expirée si blocage auto activé, robots
+        "Bloqué" si bloc Robots activé) : tous coupés, "Bloqués" ne contient que les refus
+        réels. Les règles portant sur la requête (pays, mot-clé) ne reclassent pas
+        l'historique. Nouvelle fonction commune ip_location_currently_blocked_sql()
+        (Journal, Statistiques, widget Visiteurs), qui remplace
+        ip_location_in_blocklist_sql() ; badge "Robot bloqué · nom" dans le Journal
+
     version 2.6.7 - 23/09/2026
         Journal : le badge "EN LISTE" devient "Bloquée depuis le jj/mm/aaaa" (date de
         l'entrée de blocage, ou de la plage /16 qui couvre l'IP), infobulle "Accès servi
@@ -503,20 +515,40 @@ function ip_location_visitors_periods()
 }
 
 /**
- * Fragment SQL (parenthésé) vrai si l'IP de la colonne donnée est actuellement dans la
- * blocklist : IP exacte (manuelle ou auto, hors 'exempt') OU couverte par une plage
- * manuelle "A.B.0.0/16" (seul format de plage généré par le plugin). Source unique pour
- * la catégorie "Bloqués" du Journal, les séries des Statistiques et les visites
- * qualifiées du widget — auparavant chacun testait l'IP exacte seulement, si bien que
- * les lignes d'une plage bloquée apparaissaient en "Bots non bloqués"/"Normal".
+ * Fragment SQL (parenthésé) vrai si la ligne de journal vient d'une IP ou d'un robot
+ * ACTUELLEMENT bloqué (v2.6.8 : le Journal reflète l'état actuel — une ligne servie avant
+ * le blocage passe dans "Bloqués"). Seuls les leviers allumés comptent :
+ *   - liste manuelle (IP exacte ou plage "A.B.0.0/16") si le blocage par IP est activé ;
+ *   - liste automatique (non expirée) si le blocage automatique est activé ;
+ *   - User-Agent d'un robot marqué "Bloqué" si le bloc Robots est activé.
+ * Les règles portant sur la requête (pays, mot-clé) ne reclassent pas l'historique : seul
+ * un refus réel (is_blocked=1) les fait apparaître. '0' si aucun levier concerné n'est
+ * allumé (mode observateur). Source unique pour le Journal, les séries des Statistiques et
+ * les visites qualifiées du widget.
  * IPv6 : SUBSTRING_INDEX ne trouve pas de '.', la clé construite ne correspond jamais
  * à une plage — seule la correspondance exacte s'applique (pas de plage IPv6).
  */
-function ip_location_in_blocklist_sql($prefixeTable, $col = 'ip')
+function ip_location_currently_blocked_sql($prefixeTable, $ip_col = 'ip', $ua_col = 'user_agent')
 {
-    return "({$col} IN (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin != 'exempt')"
-        . " OR CONCAT(SUBSTRING_INDEX({$col}, '.', 2), '.0.0/16') IN"
-        . " (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin = 'manuel'))";
+    $plugin_conf = ip_location_get_conf();
+    $parts = [];
+    if ($plugin_conf['htaccess_enabled'] === '1') {
+        $parts[] = "{$ip_col} IN (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin = 'manuel')";
+        $parts[] = "CONCAT(SUBSTRING_INDEX({$ip_col}, '.', 2), '.0.0/16') IN"
+            . " (SELECT ip FROM {$prefixeTable}ip_location_blocklist WHERE origin = 'manuel')";
+    }
+    if ($plugin_conf['bot_block_enabled'] === '1') {
+        $parts[] = "{$ip_col} IN (SELECT ip FROM {$prefixeTable}ip_location_blocklist"
+            . " WHERE origin = 'auto' AND (expires_at IS NULL OR expires_at > NOW()))";
+    }
+    if ($plugin_conf['robots_enabled'] === '1') {
+        foreach (ip_location_get_robots() as $robot) {
+            if (($robot['status'] ?? 'allow') === 'block' && $robot['ua'] !== '') {
+                $parts[] = "{$ua_col} LIKE '%" . pwg_db_real_escape_string($robot['ua']) . "%'";
+            }
+        }
+    }
+    return empty($parts) ? '0' : '(' . implode(' OR ', $parts) . ')';
 }
 
 /**
@@ -533,7 +565,7 @@ function ip_location_in_blocklist_sql($prefixeTable, $col = 'ip')
  */
 function ip_location_qualifying_visit_where($prefixeTable, $alias = 'l1')
 {
-    $in_blocklist_sql = ip_location_in_blocklist_sql($prefixeTable, "{$alias}.ip");
+    $in_blocklist_sql = ip_location_currently_blocked_sql($prefixeTable, "{$alias}.ip", "{$alias}.user_agent");
 
     return "
    {$alias}.is_bot        = 0

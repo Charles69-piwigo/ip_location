@@ -159,7 +159,7 @@ $lang['→ entrées bloquées par le blocage pays.'] = '→ entrées bloquées p
 $lang['→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).'] = '→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).';
 $lang['→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).'] = '→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).';
 $lang['→ entrées bloquées (pays ou mot-clé), qu\'il s\'agisse d\'un bot ou non.'] = '→ entrées bloquées (pays ou mot-clé), qu\'il s\'agisse d\'un bot ou non.';
-$lang['→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « Bloquée depuis le … ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.'] = '→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « Bloquée depuis le … ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.';
+$lang['→ accès refusés (avec leur motif : pays, mot-clé, liste IP, blocage auto, robot, téléchargement), ainsi que tous les accès des IP et des robots actuellement bloqués — même ceux servis avant le blocage (badge « Bloquée depuis le … » ou « Robot bloqué »). Le Journal reflète l\'état actuel. Seuls les leviers activés comptent : tous désactivés, le plugin ne fait qu\'observer.'] = '→ accès refusés (avec leur motif : pays, mot-clé, liste IP, blocage auto, robot, téléchargement), ainsi que tous les accès des IP et des robots actuellement bloqués — même ceux servis avant le blocage (badge « Bloquée depuis le … » ou « Robot bloqué »). Le Journal reflète l\'état actuel. Seuls les leviers activés comptent : tous désactivés, le plugin ne fait qu\'observer.';
 
 // Filtre pays sur les téléchargements
 $lang['Filtre pays sur les téléchargements'] = 'Filtre pays sur les téléchargements';
@@ -448,3 +448,5 @@ $lang['Bloquer la plage'] = 'Bloquer la plage';
 $lang['Aucun accès ne correspond à ces filtres.'] = 'Aucun accès ne correspond à ces filtres.';
 $lang['Bloquée depuis le'] = 'Bloquée depuis le';
 $lang['Accès servi normalement : il date d\'avant le blocage de cette IP'] = 'Accès servi normalement : il date d\'avant le blocage de cette IP';
+$lang['Robot bloqué'] = 'Robot bloqué';
+$lang['Robot marqué « Bloqué » dans le bloc Robots d\'indexation'] = 'Robot marqué « Bloqué » dans le bloc Robots d\'indexation';
