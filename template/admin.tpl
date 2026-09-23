@@ -201,15 +201,25 @@
   .iplj-pager a{ font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; min-width:28px; text-align:center; padding:3px 7px; border-radius:6px; border:1px solid var(--c-border); background:var(--c-surface); color:var(--c-text); text-decoration:none; }
   .iplj-pager a.active{ background:var(--c-accent); color:var(--c-accent-ink); border-color:var(--c-accent); }
   .iplj-pager .gap{ color:var(--c-muted); padding:0 3px; }
-  .iplj-scroll{ overflow-x:auto; }
-  table.iplj-table{ min-width:980px; }
-  table.iplj-table td{ white-space:nowrap; }
-  table.iplj-table td.when{ white-space:normal; min-width:150px; }
+  /* Le tableau tient dans la largeur disponible (colonnes fixes + URL / navigateur qui se
+     partagent le reste, tronqués) : la colonne Actions reste toujours visible, et son menu
+     n'est pas coupé par un conteneur à défilement. Défilement horizontal seulement sur
+     écran étroit. */
+  .iplj-scroll{ overflow:visible; }
+  table.iplj-table{ width:100%; table-layout:fixed; }
+  table.iplj-table col.c-when{ width:150px; } table.iplj-table col.c-ip{ width:128px; }
+  table.iplj-table col.c-country{ width:110px; } table.iplj-table col.c-city{ width:105px; }
+  table.iplj-table col.c-score{ width:56px; } table.iplj-table col.c-ua{ width:24%; }
+  table.iplj-table col.c-actions{ width:96px; }
+  @media (max-width:1100px){ .iplj-scroll{ overflow-x:auto; } table.iplj-table{ min-width:900px; } }
+  table.iplj-table td{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  table.iplj-table td.when{ white-space:normal; }
   table.iplj-table td.when .d{ display:block; font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; }
-  table.iplj-table td.url{ max-width:300px; overflow:hidden; text-overflow:ellipsis; font-size:12px; }
+  table.iplj-table td.url{ font-size:12px; }
   table.iplj-table td.url a{ color:var(--c-text-2); text-decoration:none; border-bottom:1px dotted var(--c-border-strong); }
   table.iplj-table td.url a:hover{ color:var(--c-accent); }
-  table.iplj-table td.ua{ max-width:260px; overflow:hidden; text-overflow:ellipsis; font-size:11.8px; color:var(--c-text-2); }
+  table.iplj-table td.ua{ font-size:11.8px; color:var(--c-text-2); }
+  table.iplj-table td.actions{ overflow:visible; text-align:right; }
   table.iplj-table tr.cat-bot td{ background:#f7f3ea; }
   table.iplj-table tr.cat-blocked td{ background:#fbece8; }
   .iplj-badge{ display:inline-block; font-size:10.3px; font-weight:600; letter-spacing:.02em; padding:1px 6px; border-radius:4px; margin:3px 4px 0 0; }
@@ -346,6 +356,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
     </div>
     <div class="iplj-scroll">
       <table class="iplc-t iplj-table">
+        <colgroup><col class="c-when"><col class="c-ip"><col class="c-country"><col class="c-city"><col class="c-score"><col class="c-url"><col class="c-ua"><col class="c-actions"></colgroup>
         <thead><tr><th>{'Date'|@translate}</th><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th class="num">{'Score'|@translate}</th><th>{'URL'|@translate}</th><th>{'Navigateur / robot'|@translate}</th><th></th></tr></thead>
         <tbody>
         {foreach from=$LOGS item=log}
@@ -365,7 +376,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <td class="num mono">{$log.bot_score}</td>
             <td class="url"><a href="{$log.url|escape}" target="_blank" rel="noopener" title="{$log.url|escape}">{$log.url|escape}</a></td>
             <td class="ua" title="{$log.user_agent|escape}">{$log.user_agent|escape}</td>
-            <td class="num">
+            <td class="num actions">
               <details class="iplj-menu">
                 <summary class="iplc-btn ghost sm">{'Actions'|@translate} ▾</summary>
                 <div class="pop">

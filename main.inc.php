@@ -10,6 +10,13 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.12 - 23/09/2026
+        Journal : le tableau tient dans la largeur disponible (colonnes à largeur fixe,
+        URL et navigateur tronqués avec "…", texte complet au survol) — le bouton Actions
+        n'est plus repoussé hors de l'écran sur un écran de ~1280 px, et son menu n'est
+        plus coupé par le conteneur à défilement. Défilement horizontal conservé sous
+        1100 px de large
+
     version 2.6.11 - 23/09/2026
         Journal : filtre "Score" (0, > 0, ≥ 30, ≥ 50, ≥ seuil courant du blocage auto)
         avec l'effectif de chaque tranche, combinable avec les autres filtres (dont le
