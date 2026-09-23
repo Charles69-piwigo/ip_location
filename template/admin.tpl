@@ -195,7 +195,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
           <form method="post" action="" style="margin:0;">
             <input type="hidden" name="action" value="unblock_ip">
             <input type="hidden" name="ip" value="{$log.ip|escape}">
-            <button type="submit" class="ipl-btn-unblock">{'Retirer du .htaccess'|@translate}</button>
+            <button type="submit" class="ipl-btn-unblock">{'Débloquer'|@translate}</button>
           </form>
         {elseif $log.in_range}
           <span style="font-size:0.85em;color:#888;" title="{'Plage /16 bloquée manuellement : à retirer depuis la liste des IP.'|@translate}">{'Plage /16 bloquée'|@translate}</span>
@@ -238,23 +238,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 </div>
 {/if}
 
-<!-- ── Gestion de l'historique ───────────────────────────────────────────── -->
-<h3>{'Gestion de l\'historique'|@translate}</h3>
-
-<form method="post" action="" style="margin-left:20px;">
-  <input type="hidden" name="action" value="purge_before_date">
-  {'Supprimer les logs avant le'|@translate}
-  <input type="date" name="before_date" style="display:inline;margin:0 6px;">
-  <button type="submit" class="buttonLike">{'Supprimer'|@translate}</button>
-</form>
-
-<!-- ── Vidage du cache de géolocalisation ───────────────────────────────── -->
-<h3>{'Cache de géolocalisation'|@translate}</h3>
-
-<form method="post" action="" style="margin-left:20px;">
-  <input type="hidden" name="action" value="purge_cache">
-  <button type="submit" class="buttonLike" onclick="return confirm('Vider tout le cache de géolocalisation ?');">{'Vider le cache'|@translate}</button>
-  <span style="margin-left:10px;color:#777;font-size:0.9em;">{'Forcer la résolution géographique de toutes les IPs lors de leur prochaine visite.'|@translate}</span>
-</form>
+{* Suppression des accès anciens et vidage du cache géo : bloc "Conservation du journal"
+   de l'onglet Configuration (config.tpl) depuis v2.6.3. *}
 
 {/if}

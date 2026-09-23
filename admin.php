@@ -6,13 +6,13 @@ defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 if (isset($_POST['action'])) {
     if ($_POST['action'] === 'purge_cache') {
         pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache');
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=cache_purged');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=cache_purged#ipl-card-retention');
     } elseif ($_POST['action'] === 'purge_before_date') {
         $date = trim($_POST['before_date'] ?? '');
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_log
   WHERE visit_date < \'' . pwg_db_real_escape_string($date) . '\'');
-            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged');
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged#ipl-card-retention');
         }
     } elseif ($_POST['action'] === 'save_visitors_config') {
         $visitors_enabled = isset($_POST['visitors_enabled']) ? '1' : '0';
@@ -23,26 +23,79 @@ if (isset($_POST['action'])) {
             'visitors_enabled' => $visitors_enabled,
             'visitors_period'  => $visitors_period,
         ])));
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
-    } elseif ($_POST['action'] === 'save_htaccess_config') {
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-visitors');
+    } elseif ($_POST['action'] === 'save_ip_block') {
+        // Interrupteur du bloc "Blocage par IP" (clé historique htaccess_enabled) : pilote
+        // le .htaccess ET le contrôle PHP des IP bloquées manuellement (v2.6.1).
         $htaccess_enabled = isset($_POST['htaccess_enabled']) ? '1' : '0';
-        $whitelist = trim($_POST['whitelist_ips'] ?? '');
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'htaccess_enabled' => $htaccess_enabled,
-            'whitelist'        => $whitelist,
         ])));
         $htaccess_result = ip_location_write_htaccess($htaccess_enabled);
         $msg = ($htaccess_result === true) ? 'config_saved' : ($htaccess_result === 'missing' ? 'htaccess_missing' : 'htaccess_error');
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . $msg);
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . $msg . '#ipl-card-manual');
+    } elseif ($_POST['action'] === 'save_whitelist') {
+        $whitelist = trim(stripslashes($_POST['whitelist_ips'] ?? ''));
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'whitelist' => $whitelist,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-whitelist');
+    } elseif ($_POST['action'] === 'save_retention') {
+        $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'max_records' => $max_records,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-retention');
+    } elseif ($_POST['action'] === 'save_robots') {
+        // Bloc "Robots d'indexation" (v2.6.2/2.6.3). Tableaux POST robots[i][…] :
+        // Piwigo applique addslashes() à tout $_POST (récursivement), d'où stripslashes().
+        $allowed_fams = ['search', 'social', 'ai'];
+        $robots = [];
+        foreach ((array)($_POST['robots'] ?? []) as $row) {
+            if (!is_array($row) || !empty($row['remove'])) {
+                continue;
+            }
+            $name = mb_substr(trim(stripslashes($row['name'] ?? '')), 0, 64);
+            $ua   = mb_substr(trim(stripslashes($row['ua'] ?? '')), 0, 64);
+            if ($name === '' || $ua === '') {
+                continue;
+            }
+            $robots[] = [
+                'name'   => $name,
+                'ua'     => $ua,
+                'fam'    => in_array($row['fam'] ?? '', $allowed_fams, true) ? $row['fam'] : 'search',
+                'verify' => preg_replace('/[^a-z0-9. -]/i', '', stripslashes($row['verify'] ?? '')),
+                'status' => ($row['status'] ?? '') === 'block' ? 'block' : 'allow',
+            ];
+        }
+        $new_name = mb_substr(trim(stripslashes($_POST['new_robot_name'] ?? '')), 0, 64);
+        $new_ua   = mb_substr(trim(stripslashes($_POST['new_robot_ua'] ?? '')), 0, 64);
+        if ($new_name !== '' && $new_ua !== '') {
+            $robots[] = [
+                'name'   => $new_name,
+                'ua'     => $new_ua,
+                'fam'    => in_array($_POST['new_robot_fam'] ?? '', $allowed_fams, true) ? $_POST['new_robot_fam'] : 'search',
+                'verify' => '',
+                'status' => 'allow',
+            ];
+        }
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'robots_enabled' => isset($_POST['robots_enabled']) ? '1' : '0',
+            'robots'         => $robots,
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-robots');
     } elseif ($_POST['action'] === 'save_url_config') {
-        $keywords = trim($_POST['blocked_url_keywords'] ?? '');
+        $keywords = trim(stripslashes($_POST['blocked_url_keywords'] ?? ''));
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'blocked_url_keywords'  => $keywords,
             'keyword_block_enabled' => isset($_POST['keyword_block_enabled']) ? '1' : '0',
         ])));
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-keyword');
     } elseif ($_POST['action'] === 'save_download_config') {
         $download_filter_enabled    = isset($_POST['download_filter_enabled']) ? '1' : '0';
         $download_allowed_countries = strtoupper(trim($_POST['download_allowed_countries'] ?? ''));
@@ -53,7 +106,7 @@ if (isset($_POST['action'])) {
             'download_allowed_countries' => $download_allowed_countries,
             'download_geo_fail_mode'     => $download_geo_fail_mode,
         ])));
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-download');
     } elseif ($_POST['action'] === 'save_bot_block_config') {
         $conf_cur = ip_location_get_conf();
         $bot_block_score_threshold = max(10, min(90, (int)($_POST['bot_block_score_threshold'] ?? 70)));
@@ -73,18 +126,17 @@ if (isset($_POST['action'])) {
         // Libère aussitôt les IP auto-bloquées qui ne correspondent plus au nouveau
         // seuil, sans attendre leur expiration TTL (cf. ip_location_reconcile_auto_blocks()).
         ip_location_reconcile_auto_blocks($new_conf);
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-auto');
     } elseif ($_POST['action'] === 'save_config') {
-        $blocked = strtoupper(trim($_POST['blocked_countries'] ?? ''));
+        // Bloc "Blocage par pays" (max_records a son propre bloc depuis v2.6.3)
+        $blocked = strtoupper(preg_replace('/[^A-Za-z,]/', '', $_POST['blocked_countries'] ?? ''));
         $blocking_enabled = isset($_POST['blocking_enabled']) ? '1' : '0';
-        $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'blocked_countries' => $blocked,
             'blocking_enabled'  => $blocking_enabled,
-            'max_records'       => $max_records,
         ])));
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-country');
     } elseif ($_POST['action'] === 'block_ip') {
         $ip      = trim($_POST['ip'] ?? '');
         $country = trim($_POST['country'] ?? '');
@@ -361,8 +413,8 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'config_saved') $page['infos'][] = l10n('Configuration enregistrée.');
     if ($_GET['msg'] === 'htaccess_error')   $page['errors'][] = l10n('.htaccess non accessible en écriture.');
     if ($_GET['msg'] === 'htaccess_missing') $page['errors'][] = l10n('Fichier .htaccess inexistant : vous devez le créer manuellement à la racine de Piwigo.');
-    if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s ajoutée au .htaccess.'), $_GET['ip'] ?? '');
-    if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s retirée du .htaccess.'), $_GET['ip'] ?? '');
+    if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s bloquée.'), $_GET['ip'] ?? '');
+    if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s débloquée.'), $_GET['ip'] ?? '');
     if ($_GET['msg'] === 'preset_saved')    $page['infos'][] = l10n('Préréglage enregistré.');
     if ($_GET['msg'] === 'preset_deleted')  $page['infos'][] = l10n('Préréglage supprimé.');
     if ($_GET['msg'] === 'preset_invalid')  $page['errors'][] = l10n('Préréglage invalide.');
@@ -448,6 +500,165 @@ foreach ($logs as &$log) {
     }
 }
 unset($log);
+
+// ── Onglet Configuration › Réglages en blocs (v2.6.3) ─────────────────────────
+// Données propres aux blocs : noms de pays, refus sur 7 jours par entrée/mot-clé,
+// statistiques des robots, impact du seuil du blocage automatique.
+
+$cfg_blocks = [];
+if ($tab === 'config') {
+    // Noms de pays connus (journal) pour afficher "United States (US)" dans les pastilles
+    $country_names = [];
+    $r = pwg_query('SELECT country_code, MIN(country) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE country_code != \'\' GROUP BY country_code');
+    while ($row = pwg_db_fetch_row($r)) {
+        $country_names[$row[0]] = $row[1];
+    }
+    $country_chips = function ($csv) use ($country_names) {
+        $out = [];
+        foreach (array_filter(array_map('trim', explode(',', strtoupper($csv)))) as $cc) {
+            $out[] = ['code' => $cc, 'name' => $country_names[$cc] ?? $cc];
+        }
+        return $out;
+    };
+
+    // Refus sur 7 jours par motif (colonne block_reason, v2.6.1)
+    $refusals_7d = function ($reason, $extra_where = '') use ($prefixeTable) {
+        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE is_blocked = 1 AND block_reason = \'' . $reason . '\'
+    AND visit_date >= NOW() - INTERVAL 7 DAY' . $extra_where);
+        list($n) = pwg_db_fetch_row($r);
+        return (int)$n;
+    };
+
+    // Blocage par IP : refus par entrée (plage /16 : préfixe "A.B.")
+    $manual_rows = [];
+    foreach ($blocklist_manual as $b) {
+        $prefix = ip_location_manual_range_prefix($b['ip']);
+        $match = $prefix !== null
+            ? ' AND ip LIKE \'' . pwg_db_real_escape_string($prefix) . '%\''
+            : ' AND ip = \'' . pwg_db_real_escape_string($b['ip']) . '\'';
+        $b['is_range'] = $prefix !== null;
+        $b['refusals'] = $refusals_7d('ip', $match);
+        $manual_rows[] = $b;
+    }
+
+    // Mots-clés : refus par mot
+    $keyword_rows = [];
+    foreach (array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords']))) as $kw) {
+        $keyword_rows[] = [
+            'word'     => $kw,
+            'refusals' => $refusals_7d('keyword', ' AND url LIKE \'%' . pwg_db_real_escape_string($kw) . '%\''),
+        ];
+    }
+
+    // Pays bloqués : refus par pays
+    $country_rows = [];
+    foreach ($country_chips($plugin_conf['blocked_countries']) as $c) {
+        $c['refusals'] = $refusals_7d('country', ' AND country_code = \'' . pwg_db_real_escape_string($c['code']) . '\'');
+        $country_rows[] = $c;
+    }
+
+    // Robots : passages sur 7 jours et dernier passage, en une seule requête
+    $robots = ip_location_get_robots();
+    $robot_rows = [];
+    if (!empty($robots)) {
+        $cols = [];
+        foreach ($robots as $i => $rb) {
+            $like = 'user_agent LIKE \'%' . pwg_db_real_escape_string($rb['ua']) . '%\'';
+            $cols[] = 'SUM(' . $like . ') AS n' . $i . ', MAX(CASE WHEN ' . $like . ' THEN visit_date END) AS d' . $i;
+        }
+        $r = pwg_query('SELECT ' . implode(', ', $cols) . ' FROM ' . $prefixeTable . 'ip_location_log
+  WHERE visit_date >= NOW() - INTERVAL 7 DAY');
+        $robot_stats = pwg_db_fetch_assoc($r) ?: [];
+        foreach ($robots as $i => $rb) {
+            $rb['seen'] = (int)($robot_stats['n' . $i] ?? 0);
+            $rb['last'] = !empty($robot_stats['d' . $i]) ? substr($robot_stats['d' . $i], 0, 10) : '';
+            $rb['verifiable'] = trim($rb['verify'] ?? '') !== '';
+            $robot_rows[] = $rb;
+        }
+    }
+    $robots_blocked = count(array_filter($robots, function ($rb) { return ($rb['status'] ?? 'allow') === 'block'; }));
+    $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_robot_check
+  WHERE verified = 0 AND checked_at >= NOW() - INTERVAL 7 DAY');
+    list($robots_spoofed) = pwg_db_fetch_row($r);
+    $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
+    $robots_seen_7d = 0;
+    if ($allowed_robot_sql !== '0') {
+        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE visit_date >= NOW() - INTERVAL 7 DAY AND ' . $allowed_robot_sql);
+        list($robots_seen_7d) = pwg_db_fetch_row($r);
+    }
+
+    // Blocage automatique : score max par IP sur la fenêtre "récente" (curseur en direct)
+    $recent_hours = max(1, (int)$conf['ip_location_auto_block_recent_hours']);
+    $recent_scores = [];
+    $r = pwg_query('SELECT ip, MAX(bot_score) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE visit_date >= NOW() - INTERVAL ' . $recent_hours . ' HOUR AND bot_score > 0
+  GROUP BY ip');
+    while ($row = pwg_db_fetch_row($r)) {
+        if (ip_location_is_public_ip($row[0])) {
+            $recent_scores[] = (int)$row[1];
+        }
+    }
+
+    // Conservation : bornes du journal
+    $r = pwg_query('SELECT MIN(visit_date), MAX(visit_date) FROM ' . $prefixeTable . 'ip_location_log');
+    list($log_first, $log_last) = pwg_db_fetch_row($r);
+
+    // Widget Visiteurs : nombre de pays des visites comptées
+    $visitor_countries = count(array_unique(array_column($visitor_detail_rows, 'country')));
+
+    // Bandeau de mode : leviers de blocage actifs (le téléchargement est un filtre à part)
+    $levers = [
+        ['key' => 'robots',   'label' => l10n('Robots'),          'on' => $plugin_conf['robots_enabled'] === '1' && $robots_blocked > 0],
+        ['key' => 'manual',   'label' => l10n('Par IP'),          'on' => $plugin_conf['htaccess_enabled'] === '1'],
+        ['key' => 'country',  'label' => l10n('Par pays'),        'on' => $plugin_conf['blocking_enabled'] === '1'],
+        ['key' => 'keyword',  'label' => l10n('Par mot-clé'),     'on' => $plugin_conf['keyword_block_enabled'] === '1'],
+        ['key' => 'auto',     'label' => l10n('Automatique'),     'on' => $plugin_conf['bot_block_enabled'] === '1'],
+        ['key' => 'download', 'label' => l10n('Téléchargements'), 'on' => $plugin_conf['download_filter_enabled'] === '1'],
+    ];
+    $levers_on = count(array_filter($levers, function ($l) { return $l['on'] && $l['key'] !== 'download'; }));
+
+    // Googlebot et le blocage des États-Unis
+    $us_blocked = $plugin_conf['blocking_enabled'] === '1'
+        && in_array('US', array_map('trim', explode(',', strtoupper($plugin_conf['blocked_countries']))), true);
+    $googlebot_allowed = false;
+    foreach ($robots as $rb) {
+        if (stripos($rb['ua'], 'Googlebot') !== false && ($rb['status'] ?? 'allow') === 'allow') {
+            $googlebot_allowed = true;
+        }
+    }
+    $google_warning = '';
+    if ($us_blocked && $plugin_conf['robots_enabled'] !== '1') {
+        $google_warning = 'robots_off';
+    } elseif ($us_blocked && !$googlebot_allowed) {
+        $google_warning = 'googlebot_not_allowed';
+    }
+
+    $cfg_blocks = [
+        'LEVERS'             => $levers,
+        'LEVERS_ON'          => $levers_on,
+        'MANUAL_ROWS'        => $manual_rows,
+        'KEYWORD_ROWS'       => $keyword_rows,
+        'COUNTRY_ROWS'       => $country_rows,
+        'DOWNLOAD_ROWS'      => $country_chips($plugin_conf['download_allowed_countries']),
+        'ROBOT_ROWS'         => $robot_rows,
+        'ROBOTS_ENABLED'     => $plugin_conf['robots_enabled'] === '1',
+        'ROBOTS_BLOCKED'     => $robots_blocked,
+        'ROBOTS_ALLOWED'     => count($robots) - $robots_blocked,
+        'ROBOTS_SEEN_7D'     => (int)$robots_seen_7d,
+        'ROBOTS_SPOOFED'     => (int)$robots_spoofed,
+        'RECENT_SCORES_JSON' => json_encode($recent_scores),
+        'RECENT_HOURS'       => $recent_hours,
+        'EXEMPT_COUNT'       => count($exempt_ips),
+        'LOG_FIRST'          => $log_first ? substr($log_first, 0, 10) : '',
+        'LOG_LAST'           => $log_last ? substr($log_last, 0, 10) : '',
+        'VISITOR_COUNTRIES'  => $visitor_countries,
+        'GOOGLE_WARNING'     => $google_warning,
+        'AUTO_TTL_DAYS'      => (int)$conf['ip_location_auto_block_ttl_days'],
+    ];
+}
 
 // ── Onglet Statistiques dynamiques (requêtes/i18n chargées seulement si actif) ─
 
@@ -595,6 +806,9 @@ $template->assign([
     'TOTAL_NORMAL'  => $total_normal,
 ]);
 
+if (!empty($cfg_blocks)) {
+    $template->assign($cfg_blocks);
+}
 $template->set_filename('ip_location_tab', $tab_tpl);
 $template->assign_var_from_handle('TAB_CONTENT', 'ip_location_tab');
 

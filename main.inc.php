@@ -10,6 +10,19 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.3 - 23/09/2026
+        onglet Configuration réécrit en blocs (maquette validée) : bandeau "Mode actuel"
+        (Observateur / Observation + blocage, leviers actifs) ; groupe Observation
+        (widget Visiteurs, conservation du journal avec suppression des anciens accès et
+        vidage du cache géo, liste blanche) ; groupe Leviers de blocage (Robots
+        d'indexation éditables, IP manuelles, pays, mots-clés, blocage auto avec sa
+        propre liste d'IP, filtre des téléchargements). Un formulaire par bloc
+        (nouvelles actions save_ip_block, save_whitelist, save_retention, save_robots ;
+        max_records sorti de save_config), pastilles pour les listes, refus sur 7 jours
+        par entrée / pays / mot-clé, impact du seuil en direct, avertissement Googlebot
+        quand les États-Unis sont bloqués. Libellés "Bloquer / Débloquer" au lieu de
+        "Ajouter au / Retirer du .htaccess"
+
     version 2.6.2 - 23/09/2026
         robots d'indexation (moteur ; l'écran d'édition arrive avec la refonte de l'onglet
         Configuration) : liste par défaut de 20 robots (moteurs de recherche, aperçus de
