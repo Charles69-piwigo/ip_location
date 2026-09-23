@@ -10,6 +10,12 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.11 - 23/09/2026
+        Journal : filtre "Score" (0, > 0, ≥ 30, ≥ 50, ≥ seuil courant du blocage auto)
+        avec l'effectif de chaque tranche, combinable avec les autres filtres (dont le
+        motif), pris en compte par les compteurs, conservé par la pagination et le retour
+        après Bloquer / Débloquer — pratique pour régler le seuil du blocage automatique
+
     version 2.6.10 - 23/09/2026
         Journal : filtre "Motif de blocage" (pays, mot-clé, liste IP, blocage auto, robot,
         téléchargement, "Bloquée depuis" = servi avant le blocage de son IP / robot,

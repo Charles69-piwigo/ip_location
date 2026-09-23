@@ -301,8 +301,18 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <option value="unknown"{if $REASON_FILTER eq 'unknown'} selected{/if}>{'Motif inconnu (avant la 2.6.1)'|@translate} ({$REASON_COUNTS.unknown})</option>
           </select>
         </label>
+        <label class="field">{'Score'|@translate}
+          <select name="score" onchange="this.form.submit()">
+            <option value="">{'Tous les scores'|@translate}</option>
+            <option value="zero"{if $SCORE_FILTER eq 'zero'} selected{/if}>{'Score 0'|@translate} ({$SCORE_COUNTS.zero})</option>
+            <option value="pos"{if $SCORE_FILTER eq 'pos'} selected{/if}>{'Score > 0'|@translate} ({$SCORE_COUNTS.pos})</option>
+            <option value="30"{if $SCORE_FILTER eq '30'} selected{/if}>{'Score ≥ 30'|@translate} ({$SCORE_COUNTS.30})</option>
+            <option value="50"{if $SCORE_FILTER eq '50'} selected{/if}>{'Score ≥ 50'|@translate} ({$SCORE_COUNTS.50})</option>
+            <option value="thr"{if $SCORE_FILTER eq 'thr'} selected{/if}>{'Score ≥ seuil du blocage auto'|@translate} {$SCORE_THRESHOLD_NOW} ({$SCORE_COUNTS.thr})</option>
+          </select>
+        </label>
         <button type="submit" class="iplc-btn ghost sm">{'Filtrer'|@translate}</button>
-        {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq ''}
+        {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq '' or $SCORE_FILTER neq ''}
           <a class="iplj-reset" href="{$BASE_URL|escape}&amp;sub=journal{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}">{'Réinitialiser'|@translate}</a>
         {/if}
       </form>

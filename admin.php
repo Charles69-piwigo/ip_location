@@ -10,7 +10,7 @@ function ip_location_admin_return_qs()
 {
     parse_str(stripslashes($_POST['return_qs'] ?? ''), $in);
     $out = '';
-    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'reason', 'pnum'] as $k) {
+    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'reason', 'score', 'pnum'] as $k) {
         if (isset($in[$k]) && is_string($in[$k]) && preg_match('/^[A-Za-z0-9.:\/-]{1,45}$/', $in[$k])) {
             $out .= '&' . $k . '=' . urlencode($in[$k]);
         }
@@ -393,6 +393,10 @@ $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', 
 // antérieur à la 2.6.1, sans motif enregistré).
 $reason_keys   = ['country', 'keyword', 'ip', 'auto', 'robot', 'download', 'listed', 'unknown'];
 $reason_filter = isset($_GET['reason']) && in_array($_GET['reason'], $reason_keys, true) ? $_GET['reason'] : '';
+// Tranche de score de suspicion (v2.6.11) ; "thr" = seuil courant du blocage automatique
+$score_keys   = ['zero', 'pos', '30', '50', 'thr'];
+$score_filter = isset($_GET['score']) && in_array($_GET['score'], $score_keys, true) ? $_GET['score'] : '';
+$score_threshold_now = (int)(ip_location_get_conf()['bot_block_score_threshold'] ?? 70);
 
 // Le Journal reflète l'état actuel (v2.6.8, après un essai "historique figé" en v2.6.1) :
 // une ligne servie avant le blocage de son IP / robot passe dans "Bloqués" (badge "Bloquée
@@ -430,8 +434,35 @@ $row = pwg_db_fetch_assoc($r) ?: [];
 foreach ($reason_keys as $rk) {
     $reason_counts[$rk] = (int)($row['r_' . $rk] ?? 0);
 }
+
+// Filtre "Score" : même principe (effectifs calculés avec le motif éventuel, mais avant
+// d'appliquer le score lui-même, pour que chaque option montre ce qu'elle donnerait).
+$score_sql = [
+    'zero' => 'bot_score = 0',
+    'pos'  => 'bot_score > 0',
+    '30'   => 'bot_score >= 30',
+    '50'   => 'bot_score >= 50',
+    'thr'  => 'bot_score >= ' . $score_threshold_now,
+];
+$score_cols = [];
+foreach ($score_sql as $sk => $sql) {
+    $score_cols[] = 'SUM(' . $sql . ') AS s_' . $sk;
+}
+$score_base = $base_parts;
+if ($reason_filter !== '') $score_base[] = '(' . $reason_sql[$reason_filter] . ')';
+$r = pwg_query('SELECT ' . implode(', ', $score_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
+    . (empty($score_base) ? '' : ' WHERE ' . implode(' AND ', $score_base)));
+$score_counts = [];
+$row = pwg_db_fetch_assoc($r) ?: [];
+foreach ($score_keys as $sk) {
+    $score_counts[$sk] = (int)($row['s_' . $sk] ?? 0);
+}
+
 if ($reason_filter !== '') {
     $base_parts[] = '(' . $reason_sql[$reason_filter] . ')';
+}
+if ($score_filter !== '') {
+    $base_parts[] = $score_sql[$score_filter];
 }
 
 $category_sql = [
@@ -481,7 +512,7 @@ $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
 $sub = 'settings';
 if ($tab === 'config' && (($_GET['sub'] ?? '') === 'journal'
     || isset($_GET['filter']) || isset($_GET['country']) || isset($_GET['date_from'])
-    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['reason']) || isset($_GET['pnum']))) {
+    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['reason']) || isset($_GET['score']) || isset($_GET['pnum']))) {
     $sub = 'journal';
 }
 
@@ -494,6 +525,7 @@ if ($date_from !== '')      $journal_qs .= '&date_from=' . urlencode($date_from)
 if ($date_to !== '')        $journal_qs .= '&date_to=' . urlencode($date_to);
 if ($ip_filter !== '')      $journal_qs .= '&ip_filter=' . urlencode($ip_filter);
 if ($reason_filter !== '')  $journal_qs .= '&reason=' . urlencode($reason_filter);
+if ($score_filter !== '')   $journal_qs .= '&score=' . urlencode($score_filter);
 $return_qs = ltrim($journal_qs, '&') . ($filter !== 'all' ? '&filter=' . $filter : '') . '&pnum=' . $current_page;
 $pager = [];
 if ($total_pages > 1) {
@@ -957,6 +989,9 @@ $template->assign([
     'JOURNAL_COUNTS'=> $journal_counts,
     'REASON_FILTER' => $reason_filter,
     'REASON_COUNTS' => $reason_counts,
+    'SCORE_FILTER'  => $score_filter,
+    'SCORE_COUNTS'  => $score_counts,
+    'SCORE_THRESHOLD_NOW' => $score_threshold_now,
     'JOURNAL_QS'    => $journal_qs,
     'RETURN_QS'     => $return_qs,
     'PAGER'         => $pager,

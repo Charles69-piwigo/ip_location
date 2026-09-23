@@ -524,3 +524,11 @@ $lang['Refusé · robot'] = 'Refusé · robot';
 $lang['Refusé · téléchargement'] = 'Refusé · téléchargement';
 $lang['Bloquée depuis (servi avant le blocage)'] = 'Bloquée depuis (servi avant le blocage)';
 $lang['Motif inconnu (avant la 2.6.1)'] = 'Motif inconnu (avant la 2.6.1)';
+
+// v2.6.11 — filtre Score du Journal
+$lang['Tous les scores'] = 'Tous les scores';
+$lang['Score 0'] = 'Score 0';
+$lang['Score > 0'] = 'Score > 0';
+$lang['Score ≥ 30'] = 'Score ≥ 30';
+$lang['Score ≥ 50'] = 'Score ≥ 50';
+$lang['Score ≥ seuil du blocage auto'] = 'Score ≥ seuil du blocage auto';
