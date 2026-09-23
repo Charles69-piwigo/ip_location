@@ -422,3 +422,27 @@ $lang['IP %s débloquée.'] = 'IP %s débloquée.';
 $lang['modifications non enregistrées'] = 'modifications non enregistrées';
 $lang['Actif, aucun robot bloqué : ne refuse rien, protège les robots autorisés'] = 'Actif, aucun robot bloqué : ne refuse rien, protège les robots autorisés';
 $lang['Refus journalisés sur 7 jours — un refus répété de la même IP n\'est journalisé qu\'une fois toutes les 10 minutes'] = 'Refus journalisés sur 7 jours — un refus répété de la même IP n\'est journalisé qu\'une fois toutes les 10 minutes';
+
+
+// v2.6.6 — sous-onglet Journal des accès
+$lang['Réglages'] = 'Réglages';
+$lang['Tous les accès'] = 'Tous les accès';
+$lang['dont robots autorisés'] = 'dont robots autorisés';
+$lang['Bloqués (refusés)'] = 'Bloqués (refusés)';
+$lang['Du'] = 'Du';
+$lang['Au'] = 'Au';
+$lang['IP commençant par'] = 'IP commençant par';
+$lang['Réinitialiser'] = 'Réinitialiser';
+$lang['Répartition par pays'] = 'Répartition par pays';
+$lang['bots'] = 'bots';
+$lang['accès'] = 'accès';
+$lang['page'] = 'page';
+$lang['Navigateur / robot'] = 'Navigateur / robot';
+$lang['Robot autorisé'] = 'Robot autorisé';
+$lang['faux robot'] = 'faux robot';
+$lang['Refusé'] = 'Refusé';
+$lang['Actions'] = 'Actions';
+$lang['Filtrer sur cette IP'] = 'Filtrer sur cette IP';
+$lang['Bloquer l\'IP'] = 'Bloquer l\'IP';
+$lang['Bloquer la plage'] = 'Bloquer la plage';
+$lang['Aucun accès ne correspond à ces filtres.'] = 'Aucun accès ne correspond à ces filtres.';

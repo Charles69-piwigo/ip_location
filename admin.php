@@ -1,6 +1,23 @@
 <?php
 defined('PHPWG_ROOT_PATH') or die('Hacking attempt!');
 
+/**
+ * Paramètres de retour après "Bloquer / Débloquer" depuis le Journal (v2.6.6) : le
+ * formulaire transmet sa vue (sous-onglet, filtres, page) dans return_qs ; seuls les
+ * paramètres connus du Journal sont repris, valeurs filtrées.
+ */
+function ip_location_admin_return_qs()
+{
+    parse_str(stripslashes($_POST['return_qs'] ?? ''), $in);
+    $out = '';
+    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'pnum'] as $k) {
+        if (isset($in[$k]) && is_string($in[$k]) && preg_match('/^[A-Za-z0-9.:\/-]{1,45}$/', $in[$k])) {
+            $out .= '&' . $k . '=' . urlencode($in[$k]);
+        }
+    }
+    return $out;
+}
+
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
@@ -171,7 +188,7 @@ DELETE FROM ' . $prefixeTable . 'ip_location_blocklist
  WHERE origin = \'auto\' AND ip LIKE \'' . pwg_db_real_escape_string($range_prefix) . '%\'');
                 }
                 ip_location_write_htaccess();
-                redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_blocked&ip=' . urlencode($ip));
+                redirect(get_root_url() . 'admin.php?page=plugin-ip_location' . ip_location_admin_return_qs() . '&msg=ip_blocked&ip=' . urlencode($ip));
             }
         }
     } elseif ($_POST['action'] === 'unblock_ip') {
@@ -190,7 +207,7 @@ UPDATE ' . $prefixeTable . 'ip_location_blocklist
    SET origin = \'exempt\', blocked_at = NOW(), expires_at = NULL
  WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
             ip_location_write_htaccess();
-            redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=ip_unblocked&ip=' . urlencode($ip));
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location' . ip_location_admin_return_qs() . '&msg=ip_unblocked&ip=' . urlencode($ip));
         }
     } elseif ($_POST['action'] === 'save_stats_preset') {
         $slot = (int)($_POST['slot'] ?? -1);
@@ -364,7 +381,7 @@ $per_page     = 50;
 $current_page = isset($_GET['pnum']) ? max(1, (int)$_GET['pnum']) : 1;
 $offset       = ($current_page - 1) * $per_page;
 
-$filter = isset($_GET['filter']) && in_array($_GET['filter'], ['normal','bot','blocked']) ? $_GET['filter'] : 'all';
+$filter = isset($_GET['filter']) && in_array($_GET['filter'], ['normal','bot','robots','blocked']) ? $_GET['filter'] : 'all';
 $country_filter = isset($_GET['country']) ? strtoupper(trim($_GET['country'])) : '';
 if (!preg_match('/^[A-Z]{0,2}$/', $country_filter)) $country_filter = '';
 
@@ -377,19 +394,40 @@ $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', 
 // Une visite servie avant la mise en liste de son IP garde sa catégorie (badge "EN LISTE"
 // dans le Journal) ; "Bloqués" = accès réellement refusés (is_blocked=1), que le plugin
 // journalise désormais avec leur motif (block_reason), y compris les refus de la blocklist.
-$where_parts = [];
-if ($filter === 'normal')  $where_parts[] = "is_bot = 0 AND is_blocked = 0";
-if ($filter === 'bot')     $where_parts[] = "is_bot = 1 AND is_blocked = 0";
-if ($filter === 'blocked') $where_parts[] = "is_blocked = 1";
-if ($country_filter !== '') $where_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
-if ($date_from !== '') $where_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
-if ($date_to   !== '') $where_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
-if ($ip_filter !== '')  $where_parts[] = "ip LIKE '" . pwg_db_real_escape_string($ip_filter) . "%'";
+// Filtres hors catégorie (pays, dates, IP) : partagés par les compteurs cliquables et le
+// tableau. "robots" (v2.6.6) = accès servis à un robot autorisé et authentique.
+$allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
+$base_parts = [];
+if ($country_filter !== '') $base_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
+if ($date_from !== '') $base_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
+if ($date_to   !== '') $base_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
+if ($ip_filter !== '')  $base_parts[] = "ip LIKE '" . pwg_db_real_escape_string($ip_filter) . "%'";
+$category_sql = [
+    'all'     => '1',
+    'normal'  => 'is_bot = 0 AND is_blocked = 0',
+    'bot'     => 'is_bot = 1 AND is_blocked = 0',
+    'robots'  => 'is_blocked = 0 AND ' . $allowed_robot_sql,
+    'blocked' => 'is_blocked = 1',
+];
+$where_parts = $base_parts;
+if ($filter !== 'all') $where_parts[] = $category_sql[$filter];
 $filter_where = empty($where_parts) ? '' : 'WHERE ' . implode(' AND ', $where_parts);
 
-$total_result = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log ' . $filter_where);
-list($total_visits) = pwg_db_fetch_row($total_result);
-$total_pages = max(1, ceil($total_visits / $per_page));
+// Compteurs par catégorie (mêmes filtres hors catégorie), en une requête
+$journal_counts = ['all' => 0, 'normal' => 0, 'bot' => 0, 'robots' => 0, 'blocked' => 0];
+$count_cols = [];
+foreach ($category_sql as $cat => $sql) {
+    $count_cols[] = 'SUM(' . $sql . ') AS c_' . $cat;
+}
+$r = pwg_query('SELECT ' . implode(', ', $count_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
+    . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
+if ($row = pwg_db_fetch_assoc($r)) {
+    foreach ($journal_counts as $cat => $v) {
+        $journal_counts[$cat] = (int)$row['c_' . $cat];
+    }
+}
+$total_visits = $journal_counts[$filter];
+$total_pages  = max(1, ceil($total_visits / $per_page));
 
 $logs = [];
 $result = pwg_query('
@@ -406,6 +444,39 @@ while ($row = pwg_db_fetch_assoc($result)) {
 
 $tab     = in_array($_GET['tab'] ?? '', ['help', 'stats'], true) ? $_GET['tab'] : 'config';
 $tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
+// Sous-onglets de Configuration (v2.6.6) : Réglages (blocs) / Journal des accès. Tout
+// paramètre de filtre du Journal ouvre directement le Journal.
+$sub = 'settings';
+if ($tab === 'config' && (($_GET['sub'] ?? '') === 'journal'
+    || isset($_GET['filter']) || isset($_GET['country']) || isset($_GET['date_from'])
+    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['pnum']))) {
+    $sub = 'journal';
+}
+
+// Liens du Journal : filtres hors catégorie (pays, dates, IP) à propager, vue complète
+// courante (retour après Bloquer / Débloquer) et pagination fenêtrée (la prod dépasse
+// 300 pages de 50 : on n'affiche plus tous les numéros).
+$journal_qs = '&sub=journal';
+if ($country_filter !== '') $journal_qs .= '&country=' . urlencode($country_filter);
+if ($date_from !== '')      $journal_qs .= '&date_from=' . urlencode($date_from);
+if ($date_to !== '')        $journal_qs .= '&date_to=' . urlencode($date_to);
+if ($ip_filter !== '')      $journal_qs .= '&ip_filter=' . urlencode($ip_filter);
+$return_qs = ltrim($journal_qs, '&') . ($filter !== 'all' ? '&filter=' . $filter : '') . '&pnum=' . $current_page;
+$pager = [];
+if ($total_pages > 1) {
+    $window = array_unique(array_filter(array_merge(
+        [1, $total_pages], range(max(1, $current_page - 2), min($total_pages, $current_page + 2))
+    )));
+    sort($window);
+    $prev = 0;
+    foreach ($window as $p) {
+        if ($prev && $p > $prev + 1) {
+            $pager[] = ['gap' => true];
+        }
+        $pager[] = ['num' => $p, 'current' => $p == $current_page];
+        $prev = $p;
+    }
+}
 
 if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'cache_purged') $page['infos'][] = l10n('Cache de géolocalisation vidé.');
@@ -485,8 +556,28 @@ $block_reason_labels = [
     'robot'    => l10n('robot'),
     'download' => l10n('téléchargement'),
 ];
+// IP de la page démasquées comme faux robots (vérification DNS), pour ne pas leur
+// afficher le badge du robot qu'elles prétendent être.
+$page_spoof_ips = [];
+if (!empty($logs)) {
+    $ips_sql = implode(',', array_map(function ($l) { return '\'' . pwg_db_real_escape_string($l['ip']) . '\''; }, $logs));
+    $r = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_robot_check WHERE verified = 0 AND ip IN (' . $ips_sql . ')');
+    while ($row = pwg_db_fetch_row($r)) {
+        $page_spoof_ips[$row[0]] = true;
+    }
+}
+$robots_enabled_now = ip_location_get_conf()['robots_enabled'] === '1';
 foreach ($logs as &$log) {
     $log['block_reason_label'] = $block_reason_labels[$log['block_reason'] ?? ''] ?? '';
+    // Badge "Googlebot ✓" : robot autorisé de la liste, IP non démasquée
+    $log['robot_name'] = '';
+    if ($robots_enabled_now && ($rb = ip_location_match_robot($log['user_agent'])) && ($rb['status'] ?? 'allow') === 'allow'
+        && empty($page_spoof_ips[$log['ip']])) {
+        $log['robot_name'] = $rb['name'];
+    }
+    $log['is_spoof'] = !empty($page_spoof_ips[$log['ip']]);
+    // Plage /16 proposée dans le menu Actions (IPv4 uniquement)
+    $log['range16'] = preg_match('/^(\d+\.\d+)\.\d+\.\d+$/', $log['ip'], $m) ? $m[1] . '.0.0/16' : '';
     $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
     $log['is_exempt']    = in_array($log['ip'], $exempt_ips);
     $log['in_range']     = false;
@@ -506,7 +597,7 @@ unset($log);
 // statistiques des robots, impact du seuil du blocage automatique.
 
 $cfg_blocks = [];
-if ($tab === 'config') {
+if ($tab === 'config' && $sub === 'settings') {
     // Noms de pays connus (journal) pour afficher "United States (US)" dans les pastilles
     $country_names = [];
     $r = pwg_query('SELECT country_code, MIN(country) FROM ' . $prefixeTable . 'ip_location_log
@@ -805,6 +896,11 @@ $template->assign([
     'LAST_STATS_DATE_TO_JSON'    => $last_stats_date_to_json,
     'CHART_BG_COLOR'             => $chart_bg_color,
     'TAB'           => $tab,
+    'SUB'           => $sub,
+    'JOURNAL_COUNTS'=> $journal_counts,
+    'JOURNAL_QS'    => $journal_qs,
+    'RETURN_QS'     => $return_qs,
+    'PAGER'         => $pager,
     'TOTAL_ALL'     => $total_all,
     'TOTAL_BOTS'    => $total_bots,
     'TOTAL_BLOCKED' => $total_blocked,

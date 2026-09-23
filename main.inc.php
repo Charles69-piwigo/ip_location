@@ -10,6 +10,20 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.6 - 23/09/2026
+        onglet Configuration en deux sous-onglets, Réglages (blocs) et Journal des accès
+        (paramètre sub=journal ; tout filtre du Journal ouvre directement ce sous-onglet).
+        Journal : compteurs cliquables servant de filtre (Tous, Normal, Bots non bloqués,
+        dont robots autorisés — nouveau filtre "robots" —, Bloqués) calculés avec les
+        mêmes filtres pays/dates/IP ; filtres regroupés ; répartition par pays repliable
+        dont les pastilles filtrent ; badges sous la date (robot autorisé "Googlebot ✓",
+        BOT, faux robot, Refusé · motif, EN LISTE, Exempté) ; menu "Actions" par ligne
+        (filtrer sur l'IP, bloquer l'IP ou sa plage /16, débloquer) qui revient au
+        Journal avec les mêmes filtres et la même page (return_qs) ; pagination fenêtrée
+        (1 2 3 … 197 au lieu de tous les numéros). Styles des blocs déplacés dans
+        admin.tpl (partagés par les deux sous-onglets) ; les données des blocs Réglages ne
+        sont plus calculées quand le Journal est affiché
+
     version 2.6.5 - 23/09/2026
         robots d'IA (GPTBot, ClaudeBot, CCBot, Bytespider, PerplexityBot, Amazonbot)
         bloqués par défaut — GPTBot observé à ~50 requêtes/minute pendant des heures sur
