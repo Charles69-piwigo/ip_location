@@ -10,6 +10,22 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.1 - 23/09/2026
+        principe "observateur" : chaque levier ne bloque — et n'alimente "Bloqués" — que
+        s'il est activé ; tous coupés, le plugin ne fait qu'observer :
+        - blocage par IP manuel (interrupteur htaccess_enabled) : pilote désormais aussi
+          le contrôle PHP (avant : les IP manuelles restaient bloquées case décochée)
+        - blocage auto coupé : ses IP ne bloquent plus (restent listées jusqu'à expiration)
+        - nouvel interrupteur keyword_block_enabled (repris à '1' si des mots existaient)
+        "Bloqués" = accès réellement refusés : le plugin journalise aussi les refus de la
+        blocklist, et chaque refus porte son motif (nouvelle colonne block_reason :
+        country / keyword / ip / auto / download). Abandon du marquage rétroactif des
+        anciennes lignes d'une IP mise en liste après coup (badge "EN LISTE" à la place)
+        blocage auto "à partir du moment" : bot_block_enabled_at mémorisé à l'activation,
+        seule l'activité suspecte postérieure peut déclencher un blocage
+        colonne block_reason créée aussi au 1er chargement de l'admin (filet de sécurité
+        pour une copie de fichiers sans passer par la mise à jour Piwigo)
+
     version 2.6 - 23/09/2026
         intégration des versions 2.5.1 à 2.5.5
         pour diffusion PEM
@@ -370,7 +386,9 @@ function ip_location_get_conf()
         'last_stats_date_to'         => '',
         'chart_bg_color'             => '#ffffff',
         'bot_block_enabled'          => '0',
+        'bot_block_enabled_at'       => '',  // activation du blocage auto (v2.6.1), cf. ip_location_get_bot_candidates()
         'bot_block_score_threshold'  => 70,
+        'keyword_block_enabled'      => '0',
         'last_classify_at'           => '',
     ];
 
@@ -378,6 +396,12 @@ function ip_location_get_conf()
         $stored = @unserialize($conf['ip_location']);
         if (is_array($stored)) {
             $cache = array_merge($default, $stored);
+            // Interrupteur du blocage par mot-clé (v2.6.1) : avant, une liste non vide
+            // suffisait à l'activer — on reprend cet état tant que la clé n'a jamais été
+            // enregistrée, pour que la mise à jour ne change rien au comportement.
+            if (!array_key_exists('keyword_block_enabled', $stored)) {
+                $cache['keyword_block_enabled'] = trim($cache['blocked_url_keywords']) !== '' ? '1' : '0';
+            }
             return $cache;
         }
     }
@@ -953,11 +977,66 @@ function ip_location_is_prefetch_request()
 }
 
 /**
- * Blocklist (entrées manuelles et auto) appliquée en PHP, accrochée à init : 403 immédiat
- * pour un invité dont l'IP exacte, ou la plage /16 manuelle qui la couvre, est bloquée.
- * Seul mécanisme appliquant les entrées 'auto' (jamais écrites dans le .htaccess, cf.
- * ip_location_write_htaccess()) ; filet de sécurité pour les entrées manuelles si le
- * .htaccess est inopérant. Requête sur la clé primaire (2 valeurs au plus).
+ * URL complète de la requête en cours, telle que journalisée.
+ */
+function ip_location_current_url()
+{
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    return $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+}
+
+/**
+ * Géolocalisation lue dans le cache uniquement (jamais d'appel réseau), pour journaliser
+ * un refus de la blocklist sans solliciter les providers pendant un martèlement. Repli
+ * sur le pays/ville mémorisés dans la blocklist si l'IP n'est pas en cache (IP neuve
+ * d'une plage /16 bloquée, par exemple).
+ */
+function ip_location_geo_from_cache($ip_raw, $fallback_country, $fallback_city)
+{
+    global $prefixeTable;
+    $r = pwg_query('SELECT country, country_code, city FROM ' . $prefixeTable . 'ip_location_cache
+  WHERE ip = \'' . pwg_db_real_escape_string($ip_raw) . '\' LIMIT 1');
+    $row = pwg_db_fetch_assoc($r);
+    if ($row && $row['country'] !== 'Unknown') {
+        return $row;
+    }
+    return [
+        'country'      => $fallback_country !== null && $fallback_country !== '' ? $fallback_country : 'Unknown',
+        'country_code' => '',
+        'city'         => $fallback_city !== null && $fallback_city !== '' ? $fallback_city : 'Unknown',
+    ];
+}
+
+/**
+ * Vidage automatique au-delà de max_records — échantillonné (1 appel sur 50) pour éviter
+ * un COUNT(*) à chaque accès. Le léger dépassement transitoire est sans conséquence.
+ */
+function ip_location_enforce_max_records($plugin_conf)
+{
+    global $prefixeTable;
+    $max_records = (int)$plugin_conf['max_records'];
+    if ($max_records > 0 && mt_rand(1, 50) === 1) {
+        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
+        list($count) = pwg_db_fetch_row($r);
+        if ($count > $max_records) {
+            pwg_query('
+DELETE FROM ' . $prefixeTable . 'ip_location_log
+  ORDER BY visit_date ASC
+  LIMIT ' . ($count - $max_records));
+        }
+    }
+}
+
+/**
+ * Blocklist appliquée en PHP, accrochée à init : 403 immédiat pour un invité dont l'IP
+ * exacte, ou la plage /16 manuelle qui la couvre, est bloquée — mais seulement pour les
+ * leviers allumés (v2.6.1, principe "observateur") :
+ *   - entrées 'manuel' (IP et plages) : interrupteur "Blocage par IP" (htaccess_enabled) ;
+ *   - entrées 'auto' : interrupteur du blocage automatique (bot_block_enabled).
+ * Tous deux coupés : aucune requête, rien n'est bloqué. Seul mécanisme appliquant les
+ * entrées 'auto' (jamais écrites dans le .htaccess) ; filet de sécurité pour les manuelles
+ * si le .htaccess est inopérant. Chaque refus est journalisé (is_blocked=1, block_reason
+ * 'ip' ou 'auto') pour que la catégorie "Bloqués" montre les refus réels.
  */
 function ip_location_blocklist_guard()
 {
@@ -968,10 +1047,21 @@ function ip_location_blocklist_guard()
         return;
     }
 
+    $plugin_conf = ip_location_get_conf();
+    $origins = [];
+    if ($plugin_conf['htaccess_enabled'] === '1') {
+        $origins[] = '\'manuel\'';
+    }
+    if ($plugin_conf['bot_block_enabled'] === '1') {
+        $origins[] = '\'auto\'';
+    }
+    if (empty($origins)) {
+        return;
+    }
+
     $ip_raw = ip_location_visitor_ip();
 
     // Liste blanche d'IPs — toujours autorisées
-    $plugin_conf = ip_location_get_conf();
     $whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
     if (in_array($ip_raw, $whitelist)) {
         return;
@@ -983,17 +1073,62 @@ function ip_location_blocklist_guard()
         $keys[] = '\'' . $m[1] . '.0.0/16\'';
     }
 
-    // origin='exempt' exclu : retrait manuel qui ne doit plus bloquer, cf.
-    // ip_location_get_bot_candidates(). Les entrées auto expirées ne bloquent plus rien.
-    $r = pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_blocklist
+    // origin='exempt' jamais retenu (retrait manuel, cf. ip_location_get_bot_candidates()).
+    // Les entrées auto expirées ne bloquent plus rien.
+    $r = pwg_query('SELECT origin, country, city FROM ' . $prefixeTable . 'ip_location_blocklist
   WHERE ip IN (' . implode(',', $keys) . ')
-    AND origin != \'exempt\'
+    AND origin IN (' . implode(',', $origins) . ')
     AND (expires_at IS NULL OR expires_at > NOW())
   LIMIT 1');
-    if (pwg_db_num_rows($r) > 0) {
-        header('HTTP/1.0 403 Forbidden');
-        exit;
+    $hit = pwg_db_fetch_assoc($r);
+    if (!$hit) {
+        return;
     }
+
+    $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
+    ip_location_insert_log([
+        'ip'           => $ip_raw,
+        'geo'          => ip_location_geo_from_cache($ip_raw, $hit['country'], $hit['city']),
+        'url'          => ip_location_current_url(),
+        'user_agent'   => $user_agent,
+        'is_bot'       => ip_location_is_bot_ua($user_agent) ? 1 : 0,
+        'is_blocked'   => 1,
+        'log_type'     => ip_location_is_prefetch_request() ? 'prefetch' : null,
+        'block_reason' => $hit['origin'] === 'auto' ? 'auto' : 'ip',
+    ]);
+    ip_location_enforce_max_records($plugin_conf);
+
+    header('HTTP/1.0 403 Forbidden');
+    exit;
+}
+
+/**
+ * INSERT d'une ligne de journal (source unique pour log_visit, les refus de la blocklist
+ * et les tentatives de téléchargement). $row : ip (brute), geo (country/country_code/city),
+ * url, user_agent, is_bot, is_blocked, log_type (null|string), block_reason (null|string).
+ */
+function ip_location_insert_log($row)
+{
+    global $prefixeTable;
+    $str = function ($v) {
+        return $v === null ? 'NULL' : '\'' . pwg_db_real_escape_string($v) . '\'';
+    };
+    pwg_query('
+INSERT INTO ' . $prefixeTable . 'ip_location_log
+  (ip, country, country_code, city, url, user_agent, is_bot, is_blocked, log_type, block_reason, visit_date)
+  VALUES (
+    ' . $str($row['ip']) . ',
+    ' . $str($row['geo']['country']) . ',
+    ' . $str($row['geo']['country_code']) . ',
+    ' . $str($row['geo']['city']) . ',
+    ' . $str($row['url']) . ',
+    ' . $str($row['user_agent']) . ',
+    ' . (int)$row['is_bot'] . ',
+    ' . (int)$row['is_blocked'] . ',
+    ' . $str($row['log_type'] ?? null) . ',
+    ' . $str($row['block_reason'] ?? null) . ',
+    NOW()
+  )');
 }
 
 /**
@@ -1206,21 +1341,17 @@ function ip_location_download_denied_response()
  */
 function ip_location_log_download_attempt($ip, $geo, $url, $user_agent, $is_bot, $is_blocked, $prefixeTable)
 {
-    pwg_query('
-INSERT INTO ' . $prefixeTable . 'ip_location_log
-  (ip, country, country_code, city, url, user_agent, is_bot, is_blocked, log_type, visit_date)
-  VALUES (
-    \'' . $ip . '\',
-    \'' . pwg_db_real_escape_string($geo['country']) . '\',
-    \'' . pwg_db_real_escape_string($geo['country_code']) . '\',
-    \'' . pwg_db_real_escape_string($geo['city']) . '\',
-    \'' . pwg_db_real_escape_string($url) . '\',
-    \'' . pwg_db_real_escape_string($user_agent) . '\',
-    ' . $is_bot . ',
-    ' . $is_blocked . ',
-    \'download\',
-    NOW()
-  );');
+    // $ip vient de REMOTE_ADDR (toujours une IP valide, sans caractère échappable).
+    ip_location_insert_log([
+        'ip'           => $ip,
+        'geo'          => $geo,
+        'url'          => $url,
+        'user_agent'   => $user_agent,
+        'is_bot'       => $is_bot,
+        'is_blocked'   => $is_blocked,
+        'log_type'     => 'download',
+        'block_reason' => $is_blocked ? 'download' : null,
+    ]);
 }
 
 /**
@@ -1272,8 +1403,7 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     if ($override_url !== null && is_string($override_url)) {
         $url = $override_url;
     } else {
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $url    = $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+        $url = ip_location_current_url();
     }
     $user_agent = isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '';
 
@@ -1281,65 +1411,48 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     // co-visitation (scan de la table) est différée à ip_location_classify_recent()
     $is_bot = ip_location_is_bot_ua($user_agent) ? 1 : 0;
 
-    // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer)
-    $is_blocked = 0;
+    // Déterminer si la visite sera bloquée (avant l'INSERT pour l'enregistrer), et pourquoi
+    $is_blocked   = 0;
+    $block_reason = null;
 
     // Blocage par pays
     if ($plugin_conf['blocking_enabled'] === '1') {
         $blocked = array_filter(array_map('trim', explode(',', strtoupper($plugin_conf['blocked_countries']))));
         if (!empty($blocked) && in_array(strtoupper($geo['country_code']), $blocked)) {
-            $is_blocked = 1;
+            $is_blocked   = 1;
+            $block_reason = 'country';
         }
     }
 
-    // Blocage par mot-clé dans l'URL
-    if (!$is_blocked && !empty($plugin_conf['blocked_url_keywords'])) {
+    // Blocage par mot-clé dans l'URL — seulement si son interrupteur est allumé (v2.6.1)
+    if (!$is_blocked && $plugin_conf['keyword_block_enabled'] === '1' && !empty($plugin_conf['blocked_url_keywords'])) {
         $url_keywords = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
         $url_lower = strtolower($url);
         foreach ($url_keywords as $kw) {
             if (strpos($url_lower, strtolower($kw)) !== false) {
-                $is_blocked = 1;
+                $is_blocked   = 1;
+                $block_reason = 'keyword';
                 break;
             }
         }
     }
 
-    // Insertion dans le log
-    $query = '
-INSERT INTO ' . $prefixeTable . 'ip_location_log
-  (ip, country, country_code, city, url, user_agent, is_bot, is_blocked, log_type, visit_date)
-  VALUES (
-    \'' . $ip . '\',
-    \'' . pwg_db_real_escape_string($geo['country']) . '\',
-    \'' . pwg_db_real_escape_string($geo['country_code']) . '\',
-    \'' . pwg_db_real_escape_string($geo['city']) . '\',
-    \'' . pwg_db_real_escape_string($url) . '\',
-    \'' . pwg_db_real_escape_string($user_agent) . '\',
-    ' . $is_bot . ',
-    ' . $is_blocked . ',
-    ' . ($log_type !== null ? "'" . pwg_db_real_escape_string($log_type) . "'" : 'NULL') . ',
-    NOW()
-  );';
-    pwg_query($query);
+    ip_location_insert_log([
+        'ip'           => $ip_raw,
+        'geo'          => $geo,
+        'url'          => $url,
+        'user_agent'   => $user_agent,
+        'is_bot'       => $is_bot,
+        'is_blocked'   => $is_blocked,
+        'log_type'     => $log_type,
+        'block_reason' => $block_reason,
+    ]);
 
     // Marquage rétroactif par co-visitation : différé en lot à ip_location_classify_recent()
     // (appelée depuis admin.php à chaque chargement, et ci-dessous au plus 1x/jour depuis
     // le trafic public), pour éviter un scan de la table à chaque visite.
 
-    // Vidage automatique — échantillonné (1 visite sur 50) : évite un COUNT(*) sur
-    // ~98% des affichages. Le léger dépassement transitoire du seuil est sans conséquence.
-    $max_records = (int)$plugin_conf['max_records'];
-    if ($max_records > 0 && mt_rand(1, 50) === 1) {
-        $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
-        list($count) = pwg_db_fetch_row($r);
-        if ($count > $max_records) {
-            $to_delete = $count - $max_records;
-            pwg_query('
-DELETE FROM ' . $prefixeTable . 'ip_location_log
-  ORDER BY visit_date ASC
-  LIMIT ' . $to_delete);
-        }
-    }
+    ip_location_enforce_max_records($plugin_conf);
 
     // Classification bot différée (score + blocage auto), au plus une fois toutes les
     // ip_location_classify_interval_hours (défaut 4h), déclenchée par le trafic public
@@ -1826,6 +1939,11 @@ function ip_location_get_bot_candidates($plugin_conf, $recent_only = false)
     if ($recent_only) {
         $recent_hours = max(1, (int)$conf['ip_location_auto_block_recent_hours']);
         $where[] = 't.visit_date >= NOW() - INTERVAL ' . $recent_hours . ' HOUR';
+        // "À partir du moment" (v2.6.1) : à l'activation (ou réactivation) du blocage auto,
+        // seule l'activité suspecte postérieure compte — l'historique reste l'historique.
+        if (!empty($plugin_conf['bot_block_enabled_at'])) {
+            $where[] = 't.visit_date >= \'' . pwg_db_real_escape_string($plugin_conf['bot_block_enabled_at']) . '\'';
+        }
     }
     // Toujours sur le score (le mode "is_bot direct" a été supprimé en v2.5.5 : il
     // revenait à un seuil de ~10, bloquait sur un signal isolé peu fiable comme la

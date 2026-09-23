@@ -11,6 +11,7 @@
   .ipl-bot-row:hover { background:#ffe0e0 !important; }
   .ipl-bot-badge { color:#c00; font-weight:bold; font-size:0.8em; }
   .ipl-blocked-badge { color:#800; font-weight:bold; font-size:0.8em; background:#fdd; padding:1px 4px; border-radius:3px; }
+  .ipl-listed-badge { color:#8a5a00; font-weight:bold; font-size:0.8em; background:#fbeccb; padding:1px 4px; border-radius:3px; }
   .ipl-exempt-badge { color:#555; font-weight:bold; font-size:0.8em; background:#eee; padding:1px 4px; border-radius:3px; cursor:help; }
   .ipl-btn-block   { font-size:0.8em; padding:2px 7px; background:#c00; color:#fff; border:none; border-radius:3px; cursor:pointer; }
   .ipl-btn-block:hover { background:#900; }
@@ -212,7 +213,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
           </form>
         {/if}
       </td>
-      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked || $log.in_blocklist || $log.in_range} <span class="ipl-blocked-badge">BLOQUÉ</span>{/if}</td>
+      <td class="ipl-date">{$log.visit_date|escape}{if $log.is_bot} <span class="ipl-bot-badge">BOT</span>{/if}{if $log.is_blocked} <span class="ipl-blocked-badge" title="{$log.block_reason_label|escape}">BLOQUÉ</span>{if $log.block_reason_label} <span style="font-size:0.85em;color:#c0392b;">{$log.block_reason_label|escape}</span>{/if}{elseif $log.in_blocklist || $log.in_range} <span class="ipl-listed-badge" title="{'Accès servi avant la mise en liste de cette IP'|@translate}">{'EN LISTE'|@translate}</span>{/if}</td>
       <td>{$log.ip|escape}</td>
       <td>{$log.country|escape}</td>
       <td>{$log.city|escape}</td>

@@ -122,6 +122,13 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   ADD COLUMN bot_score SMALLINT UNSIGNED NOT NULL DEFAULT 0');
         }
 
+        // Migration v2.6 → v2.6.1 : motif d'un accès refusé (country, keyword, ip, auto,
+        // robot, download) — "Bloqués" = refus réels, journalisés avec leur motif.
+        if (!in_array('block_reason', $cols)) {
+            pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
+  ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
+        }
+
         $cols = [];
         $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
         while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];

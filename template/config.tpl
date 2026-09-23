@@ -64,7 +64,7 @@
     <input type="checkbox" name="htaccess_enabled" value="1" form="form_htaccess_config"{if $HTACCESS_ENABLED} checked{/if}>
     <strong style="display:inline;">{'Activer le blocage .htaccess'|@translate}</strong>
   </label>
-  <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'|@translate}</em>
+  <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IP bloquées manuellement restent dans la liste mais ne sont plus bloquées (ni par le .htaccess, ni par le plugin).'|@translate}</em>
 </div>
 
 <!-- Tableau des IPs bloquées manuellement (toujours affiché) -->
@@ -209,6 +209,13 @@
 <form method="post" action="" class="ipl-config">
   <input type="hidden" name="action" value="save_url_config">
   <p>
+    <label class="ipl-inline">
+      <input type="checkbox" name="keyword_block_enabled" value="1"{if $KEYWORD_BLOCK_ENABLED} checked{/if}>
+      <strong style="display:inline;">{'Activer le blocage par mot-clé'|@translate}</strong>
+    </label>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les mots restent dans la liste mais aucune URL n\'est bloquée.'|@translate}</em>
+  </p>
+  <p>
     <label><strong>{'Mots-clés bloqués dans l\'URL'|@translate}</strong>
       <em style="font-weight:normal;font-size:0.85em;color:#666;"> &mdash; {'un par ligne — tout accès dont l\'URL contient un de ces mots sera bloqué'|@translate}</em>
     </label>
@@ -286,6 +293,7 @@
       <strong style="display:inline;">{'Activer le blocage automatique'|@translate}</strong>
     </label>
     <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Bloque automatiquement (par le plugin, sans passer par le .htaccess) les IP récemment détectées comme bots, pour une durée limitée (jamais permanent, jamais de plage — seulement l\'IP exacte).'|@translate}</em>
+    <em style="display:block;margin-left:20px;font-size:0.85em;color:#666;">{'Quand désactivé, les IP déjà bloquées automatiquement ne sont plus bloquées (elles restent listées jusqu\'à leur expiration). À la réactivation, seule l\'activité suspecte postérieure compte.'|@translate}</em>
   </p>
   <p style="margin-left:20px;">
     <label class="ipl-inline">

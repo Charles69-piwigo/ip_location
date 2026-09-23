@@ -39,7 +39,8 @@ if (isset($_POST['action'])) {
         $keywords = trim($_POST['blocked_url_keywords'] ?? '');
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
-            'blocked_url_keywords' => $keywords,
+            'blocked_url_keywords'  => $keywords,
+            'keyword_block_enabled' => isset($_POST['keyword_block_enabled']) ? '1' : '0',
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved');
     } elseif ($_POST['action'] === 'save_download_config') {
@@ -63,6 +64,11 @@ if (isset($_POST['action'])) {
             'bot_block_enabled'         => $bot_block_enabled,
             'bot_block_score_threshold' => $bot_block_score_threshold,
         ]);
+        // Passage de coupé à allumé : mémorise l'instant, seule l'activité suspecte
+        // postérieure pourra déclencher un blocage (cf. ip_location_get_bot_candidates()).
+        if ($bot_block_enabled === '1' && $conf_cur['bot_block_enabled'] !== '1') {
+            $new_conf['bot_block_enabled_at'] = date('Y-m-d H:i:s');
+        }
         conf_update_param('ip_location', serialize($new_conf));
         // Libère aussitôt les IP auto-bloquées qui ne correspondent plus au nouveau
         // seuil, sans attendre leur expiration TTL (cf. ip_location_reconcile_auto_blocks()).
@@ -212,6 +218,17 @@ if (array_key_exists('bot_block_mode', $ipl_conf_migr)) {
 if ($ipl_conf_changed) {
     conf_update_param('ip_location', serialize($ipl_conf_migr));
 }
+
+// 3. Colonne block_reason (v2.6.1) : normalement créée par maintain.class.php::update(),
+//    mais filet de sécurité si les fichiers ont été copiés sans passer par la mise à jour
+//    Piwigo (FTP, copie de dev) — sans elle, tout INSERT du journal échouerait.
+$ipl_cols = [];
+$ipl_r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log');
+while ($ipl_row = pwg_db_fetch_row($ipl_r)) $ipl_cols[] = $ipl_row[0];
+if (!in_array('block_reason', $ipl_cols)) {
+    pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
+}
+unset($ipl_cols, $ipl_r, $ipl_row);
 unset($ipl_conf_migr, $ipl_conf_changed, $ipl_was_is_bot);
 
 // ── Compteurs globaux ─────────────────────────────────────────────────────────
@@ -293,17 +310,15 @@ $date_from = isset($_GET['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_
 $date_to   = isset($_GET['date_to'])   && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['date_to'])   ? $_GET['date_to']   : '';
 $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', trim($_GET['ip_filter'])) : '';
 
-// "Bloqués" doit aussi couvrir les IP actuellement dans la blocklist .htaccess
-// (manuelle ou auto) — pas seulement is_blocked=1, qui ne reflète que le blocage
-// pays/mot-clé décidé au moment de la visite. Sans ça, une IP bloquée après coup
-// (ex. ajoutée manuellement) continue d'apparaître comme "Normal"/"Bots non bloqués"
-// sur ses lignes déjà journalisées.
-// Couvre aussi les plages /16 manuelles (cf. ip_location_in_blocklist_sql()).
-$in_blocklist_sql = ip_location_in_blocklist_sql($prefixeTable);
+// Jusqu'en v2.6, "Bloqués" couvrait aussi les anciennes lignes des IP mises en blocklist
+// après coup. v2.6.1 : ce marquage rétroactif est abandonné — "l'historique est l'historique".
+// Une visite servie avant la mise en liste de son IP garde sa catégorie (badge "EN LISTE"
+// dans le Journal) ; "Bloqués" = accès réellement refusés (is_blocked=1), que le plugin
+// journalise désormais avec leur motif (block_reason), y compris les refus de la blocklist.
 $where_parts = [];
-if ($filter === 'normal')  $where_parts[] = "is_bot = 0 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
-if ($filter === 'bot')     $where_parts[] = "is_bot = 1 AND is_blocked = 0 AND NOT ($in_blocklist_sql)";
-if ($filter === 'blocked') $where_parts[] = "(is_blocked = 1 OR $in_blocklist_sql)";
+if ($filter === 'normal')  $where_parts[] = "is_bot = 0 AND is_blocked = 0";
+if ($filter === 'bot')     $where_parts[] = "is_bot = 1 AND is_blocked = 0";
+if ($filter === 'blocked') $where_parts[] = "is_blocked = 1";
 if ($country_filter !== '') $where_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
 if ($date_from !== '') $where_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
 if ($date_to   !== '') $where_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
@@ -316,7 +331,7 @@ $total_pages = max(1, ceil($total_visits / $per_page));
 
 $logs = [];
 $result = pwg_query('
-SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked, bot_score
+SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked, bot_score, block_reason
   FROM ' . $prefixeTable . 'ip_location_log
   ' . $filter_where . '
   ORDER BY visit_date DESC
@@ -398,7 +413,18 @@ foreach ($blocklist_manual as $b) {
 // Marquer les entrées du log dont l'IP est en blocklist (exacte) ou couverte par une
 // plage /16 manuelle — pour une ligne couverte par une plage, pas de bouton "Retirer" :
 // retirer l'IP isolée ne retirerait pas la plage (retrait depuis la Configuration).
+// Motif d'un refus (block_reason, v2.6.1) affiché à côté du badge BLOQUÉ ; NULL pour les
+// lignes antérieures à la 2.6.1 (motif inconnu).
+$block_reason_labels = [
+    'country'  => l10n('pays'),
+    'keyword'  => l10n('mot-clé'),
+    'ip'       => l10n('liste IP'),
+    'auto'     => l10n('blocage auto'),
+    'robot'    => l10n('robot'),
+    'download' => l10n('téléchargement'),
+];
 foreach ($logs as &$log) {
+    $log['block_reason_label'] = $block_reason_labels[$log['block_reason'] ?? ''] ?? '';
     $log['in_blocklist'] = in_array($log['ip'], $blocklist_ips);
     $log['is_exempt']    = in_array($log['ip'], $exempt_ips);
     $log['in_range']     = false;
@@ -516,6 +542,7 @@ $template->assign([
     'VISITOR_DETAIL_ROWS'   => $visitor_detail_rows,
     'BLOCKED_COUNTRIES'     => $blocked_countries,
     'BLOCKED_URL_KEYWORDS'  => $blocked_url_keywords,
+    'KEYWORD_BLOCK_ENABLED' => $plugin_conf['keyword_block_enabled'] === '1',
     'WHITELIST_IPS'         => $whitelist_ips,
     'BLOCKING_ENABLED'   => $blocking_enabled,
     'HTACCESS_ENABLED'   => $htaccess_enabled,

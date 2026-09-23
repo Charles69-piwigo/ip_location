@@ -62,7 +62,7 @@ $lang['enregistrements']                             = 'enregistrements';
 $lang['0 = désactivé']                               = '0 = désactivé';
 $lang['Activer le blocage .htaccess']  = 'Activer le blocage .htaccess';
 $lang['Serveur nginx détecté : le fichier .htaccess est ignoré'] = 'Serveur nginx détecté : le fichier .htaccess est ignoré';
-$lang['Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.'] = 'Quand désactivé, les IPs restent dans la liste mais le bloc .htaccess est supprimé.';
+$lang['Quand désactivé, les IP bloquées manuellement restent dans la liste mais ne sont plus bloquées (ni par le .htaccess, ni par le plugin).'] = 'Quand désactivé, les IP bloquées manuellement restent dans la liste mais ne sont plus bloquées (ni par le .htaccess, ni par le plugin).';
 $lang['Aucune IP bloquée manuellement.']      = 'Aucune IP bloquée manuellement.';
 $lang['IP bloquées automatiquement']         = 'IP bloquées automatiquement';
 $lang['Aucune IP bloquée automatiquement.']  = 'Aucune IP bloquée automatiquement.';
@@ -159,7 +159,7 @@ $lang['→ entrées bloquées par le blocage pays.'] = '→ entrées bloquées p
 $lang['→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).'] = '→ toutes les entrées (= Normal + Bots non bloqués + Bloqués).';
 $lang['→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).'] = '→ entrées détectées comme bots, non bloquées (un bot bloqué compte dans « Bloqués », pas ici).';
 $lang['→ entrées bloquées (pays ou mot-clé), qu\'il s\'agisse d\'un bot ou non.'] = '→ entrées bloquées (pays ou mot-clé), qu\'il s\'agisse d\'un bot ou non.';
-$lang['→ entrées bloquées (pays ou mot-clé), ou dont l\'IP est actuellement dans la blocklist .htaccess (manuelle ou auto), qu\'il s\'agisse d\'un bot ou non.'] = '→ entrées bloquées (pays ou mot-clé), ou dont l\'IP est actuellement dans la blocklist .htaccess (manuelle ou auto), qu\'il s\'agisse d\'un bot ou non.';
+$lang['→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « EN LISTE ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.'] = '→ accès réellement refusés, avec leur motif (pays, mot-clé, liste IP, blocage auto, téléchargement). Une visite servie avant la mise en liste de son IP garde sa catégorie d\'origine et porte seulement le badge « EN LISTE ». Chaque levier ne bloque que s\'il est activé : tous désactivés, le plugin ne fait qu\'observer.';
 
 // Filtre pays sur les téléchargements
 $lang['Filtre pays sur les téléchargements'] = 'Filtre pays sur les téléchargements';
@@ -279,3 +279,17 @@ $lang['Le calcul, le blocage et la purge des entrées expirées se font en diff�
 $lang['Les poids de chaque signal et la liste des bots légitimes exemptés sont réglables via local/config/config.inc.php (éditable depuis le plugin LocalFilesEditor), sans toucher au code.'] = 'Les poids de chaque signal et la liste des bots légitimes exemptés sont réglables via local/config/config.inc.php (éditable depuis le plugin LocalFilesEditor), sans toucher au code.';
 $lang['Cliquer sur "Retirer du .htaccess" pour une IP auto-bloquée l\'exempte durablement : ses anciennes visites ne compteront plus jamais pour un nouveau blocage automatique, même si son score affiché dans le journal reste au-dessus du seuil courant (badge « Exempté (score) » sur ces lignes, pour ne pas laisser croire à un bug). Seule une nouvelle activité suspecte, postérieure au retrait, peut refaire bloquer l\'IP.'] = 'Cliquer sur "Retirer du .htaccess" pour une IP auto-bloquée l\'exempte durablement : ses anciennes visites ne compteront plus jamais pour un nouveau blocage automatique, même si son score affiché dans le journal reste au-dessus du seuil courant (badge « Exempté (score) » sur ces lignes, pour ne pas laisser croire à un bug). Seule une nouvelle activité suspecte, postérieure au retrait, peut refaire bloquer l\'IP.';
 $lang['C\'est aussi ce qui explique qu\'en abaissant le seuil de score, une IP retirée manuellement ne réapparaisse pas dans la liste de blocage alors que d\'autres IP au score comparable y reviennent : contrairement à elles, ses anciennes visites ont été exemptées.'] = 'C\'est aussi ce qui explique qu\'en abaissant le seuil de score, une IP retirée manuellement ne réapparaisse pas dans la liste de blocage alors que d\'autres IP au score comparable y reviennent : contrairement à elles, ses anciennes visites ont été exemptées.';
+
+
+// v2.6.1 — principe observateur, motifs de refus
+$lang['Activer le blocage par mot-clé'] = 'Activer le blocage par mot-clé';
+$lang['Quand désactivé, les mots restent dans la liste mais aucune URL n\'est bloquée.'] = 'Quand désactivé, les mots restent dans la liste mais aucune URL n\'est bloquée.';
+$lang['Quand désactivé, les IP déjà bloquées automatiquement ne sont plus bloquées (elles restent listées jusqu\'à leur expiration). À la réactivation, seule l\'activité suspecte postérieure compte.'] = 'Quand désactivé, les IP déjà bloquées automatiquement ne sont plus bloquées (elles restent listées jusqu\'à leur expiration). À la réactivation, seule l\'activité suspecte postérieure compte.';
+$lang['Accès servi avant la mise en liste de cette IP'] = 'Accès servi avant la mise en liste de cette IP';
+$lang['EN LISTE'] = 'EN LISTE';
+$lang['pays'] = 'pays';
+$lang['mot-clé'] = 'mot-clé';
+$lang['liste IP'] = 'liste IP';
+$lang['blocage auto'] = 'blocage auto';
+$lang['robot'] = 'robot';
+$lang['téléchargement'] = 'téléchargement';
