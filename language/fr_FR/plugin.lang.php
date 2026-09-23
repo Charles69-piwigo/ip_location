@@ -419,3 +419,4 @@ $lang['Automatique'] = 'Automatique';
 $lang['Téléchargements'] = 'Téléchargements';
 $lang['IP %s bloquée.'] = 'IP %s bloquée.';
 $lang['IP %s débloquée.'] = 'IP %s débloquée.';
+$lang['modifications non enregistrées'] = 'modifications non enregistrées';

@@ -21,7 +21,9 @@
   .iplc-mode .eyebrow{ font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--c-muted); font-weight:500; }
   .iplc-mode .name{ font-size:18px; font-weight:600; display:block; }
   .iplc-mode .name.observer{ color:var(--c-on); } .iplc-mode .name.blocking{ color:var(--c-accent); }
-  .iplc-mode .desc{ font-size:12.5px; color:var(--c-muted); }
+  .iplc-mode .desc{ font-size:12.5px; color:var(--c-muted); display:block; }
+  .iplc-mode .desc.unsaved{ color:var(--c-warn); font-weight:500; }
+  .iplc-mode .desc.unsaved[hidden]{ display:none; }
   .iplc-levers{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
   .iplc-lever{ display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:3px 10px; border-radius:20px; border:1px solid var(--c-border); background:var(--c-surface-2); color:var(--c-muted); text-decoration:none; }
   .iplc-lever .dot{ width:7px; height:7px; border-radius:50%; background:var(--c-off); }
@@ -129,20 +131,21 @@
 <div class="iplc">
 
   {* ── Bandeau de mode ── *}
-  <section class="iplc-mode">
+  <section class="iplc-mode" id="iplc-mode"
+           data-observer-name="{'Observateur'|@translate}"
+           data-observer-desc="{'Aucun accès n\'est refusé : tout est journalisé en « Normal » ou « Bots non bloqués ».'|@translate}"
+           data-blocking-name="{'Observation + blocage'|@translate}"
+           data-blocking-desc="{'leviers de blocage actifs'|@translate}"
+           data-unsaved="{'modifications non enregistrées'|@translate}">
     <div>
       <span class="eyebrow">{'Mode actuel'|@translate}</span>
-      {if $LEVERS_ON == 0}
-        <span class="name observer">{'Observateur'|@translate}</span>
-        <span class="desc">{'Aucun accès n\'est refusé : tout est journalisé en « Normal » ou « Bots non bloqués ».'|@translate}</span>
-      {else}
-        <span class="name blocking">{'Observation + blocage'|@translate}</span>
-        <span class="desc">{$LEVERS_ON} / 5 {'leviers de blocage actifs'|@translate}</span>
-      {/if}
+      <span class="name {if $LEVERS_ON == 0}observer{else}blocking{/if}" data-mode-name>{if $LEVERS_ON == 0}{'Observateur'|@translate}{else}{'Observation + blocage'|@translate}{/if}</span>
+      <span class="desc" data-mode-desc>{if $LEVERS_ON == 0}{'Aucun accès n\'est refusé : tout est journalisé en « Normal » ou « Bots non bloqués ».'|@translate}{else}{$LEVERS_ON} / 5 {'leviers de blocage actifs'|@translate}{/if}</span>
+      <span class="desc unsaved" data-mode-unsaved hidden></span>
     </div>
     <div class="iplc-levers">
       {foreach from=$LEVERS item=l}
-        <a class="iplc-lever{if $l.on} on{/if}" href="#ipl-card-{$l.key}"><span class="dot"></span>{$l.label|escape}</a>
+        <a class="iplc-lever{if $l.on} on{/if}" href="#ipl-card-{$l.key}" data-lever="{$l.key}"><span class="dot"></span>{$l.label|escape}</a>
       {/foreach}
     </div>
   </section>
@@ -157,7 +160,7 @@
         <input type="hidden" name="action" value="save_visitors_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Widget « Visiteurs »'|@translate}</h4><span class="sub">{'Compteur public de visites qualifiées, par pays'|@translate}</span></div>
-          <span class="iplc-pill {if $VISITORS_ENABLED}on{else}off{/if}">{if $VISITORS_ENABLED}{'Affiché'|@translate}{else}{'Masqué'|@translate}{/if}</span>
+          <span class="iplc-pill {if $VISITORS_ENABLED}on{else}off{/if}" data-pill data-on="{'Affiché'|@translate}" data-off="{'Masqué'|@translate}">{if $VISITORS_ENABLED}{'Affiché'|@translate}{else}{'Masqué'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Afficher le widget'|@translate}"><input type="checkbox" name="visitors_enabled" value="1" data-card-switch{if $VISITORS_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -266,7 +269,7 @@
         <input type="hidden" name="action" value="save_robots">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Robots d\'indexation'|@translate}</h4><span class="sub">{'Un robot autorisé passe tous les leviers ci-dessous (pays, mot-clé, IP, score). Un robot bloqué reçoit un refus dès qu\'il se présente.'|@translate}</span></div>
-          <span class="iplc-pill {if $ROBOTS_ENABLED}on{else}off{/if}">{if $ROBOTS_ENABLED}{'Actif'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $ROBOTS_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}" data-off="{'Inactif'|@translate}">{if $ROBOTS_ENABLED}{'Actif'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Appliquer la liste des robots (autorisations et blocages)'|@translate}"><input type="checkbox" name="robots_enabled" value="1" data-card-switch{if $ROBOTS_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -340,7 +343,7 @@
         <input type="hidden" name="action" value="save_ip_block">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par IP'|@translate}</h4><span class="sub">{'IP et plages /16 bloquées à la main — appliqué par Apache (.htaccess) et par le plugin'|@translate}{if $SERVER_IS_NGINX} · <span style="color:var(--c-danger)">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</span></div>
-          <span class="iplc-pill {if $HTACCESS_ENABLED}on{else}off{/if}">{if $HTACCESS_ENABLED}{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $HTACCESS_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $HTACCESS_ENABLED}{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par IP'|@translate}"><input type="checkbox" name="htaccess_enabled" value="1" data-card-switch{if $HTACCESS_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body" style="padding-bottom:0;">
@@ -380,7 +383,7 @@
         <input type="hidden" name="blocked_countries" id="iplc-cc-value" value="{$BLOCKED_COUNTRIES|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par pays'|@translate}</h4><span class="sub">{'Refuse les pages aux visiteurs des pays listés'|@translate}</span></div>
-          <span class="iplc-pill {if $BLOCKING_ENABLED}on{else}off{/if}">{if $BLOCKING_ENABLED}{'Actif'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $BLOCKING_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}" data-off="{'Inactif'|@translate}">{if $BLOCKING_ENABLED}{'Actif'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par pays'|@translate}"><input type="checkbox" name="blocking_enabled" value="1" data-card-switch{if $BLOCKING_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -413,7 +416,7 @@
         <input type="hidden" name="blocked_url_keywords" id="iplc-kw-value" value="{$BLOCKED_URL_KEYWORDS|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par mot-clé d\'URL'|@translate}</h4><span class="sub">{'Refuse toute URL qui contient l\'un de ces mots'|@translate}</span></div>
-          <span class="iplc-pill {if $KEYWORD_BLOCK_ENABLED}on{else}off{/if}">{if $KEYWORD_BLOCK_ENABLED}{'Actif'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $KEYWORD_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $KEYWORD_BLOCK_ENABLED}{'Actif'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par mot-clé'|@translate}"><input type="checkbox" name="keyword_block_enabled" value="1" data-card-switch{if $KEYWORD_BLOCK_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -439,7 +442,7 @@
         <input type="hidden" name="action" value="save_bot_block_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage automatique par score'|@translate}</h4><span class="sub">{'Bloque pendant 14 jours chaque adresse jugée suspecte, une par une — jamais toute une plage d\'adresses, et jamais les appareils de votre réseau local.'|@translate}</span></div>
-          <span class="iplc-pill {if $BOT_BLOCK_ENABLED}on{else}off{/if}">{if $BOT_BLOCK_ENABLED}{'Actif'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $BOT_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}" data-off="{'Inactif'|@translate}">{if $BOT_BLOCK_ENABLED}{'Actif'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage automatique'|@translate}"><input type="checkbox" name="bot_block_enabled" value="1" data-card-switch{if $BOT_BLOCK_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -491,7 +494,7 @@
         <input type="hidden" name="download_allowed_countries" id="iplc-dl-value" value="{$DOWNLOAD_ALLOWED_COUNTRIES|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Filtre pays sur les téléchargements'|@translate}</h4><span class="sub">{'Seuls les pays listés peuvent télécharger les originaux (liste blanche)'|@translate}</span></div>
-          <span class="iplc-pill {if $DOWNLOAD_FILTER_ENABLED}on{else}off{/if}">{if $DOWNLOAD_FILTER_ENABLED}{'Actif'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $DOWNLOAD_FILTER_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}" data-off="{'Inactif'|@translate}">{if $DOWNLOAD_FILTER_ENABLED}{'Actif'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le filtre pays sur les téléchargements'|@translate}"><input type="checkbox" name="download_filter_enabled" value="1" data-card-switch{if $DOWNLOAD_FILTER_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -540,8 +543,55 @@
     form.addEventListener('change', markDirty);
     card._markDirty = markDirty;
     var sw = card.querySelector('[data-card-switch]');
-    if (sw) sw.addEventListener('change', function(){ card.classList.toggle('is-off', !sw.checked); });
+    var pill = card.querySelector('[data-pill]');
+    if (sw) sw.addEventListener('change', function(){
+      card.classList.toggle('is-off', !sw.checked);
+      // Étiquette d'état : suit l'interrupteur tout de suite, avant enregistrement
+      if (pill) {
+        pill.textContent = sw.checked ? pill.getAttribute('data-on') : pill.getAttribute('data-off');
+        pill.classList.toggle('on', sw.checked);
+        pill.classList.toggle('off', !sw.checked);
+      }
+      refreshMode();
+    });
   });
+
+  // Bandeau "Mode actuel" : recalculé à partir des interrupteurs de la page. Il reflète
+  // l'état enregistré au chargement ; une bascule non enregistrée est signalée.
+  var mode = document.getElementById('iplc-mode');
+  function leverOn(key){
+    var card = document.getElementById('ipl-card-' + key);
+    var sw = card && card.querySelector('[data-card-switch]');
+    if (!sw || !sw.checked) return false;
+    // Robots : un levier de blocage seulement si au moins un robot est "Bloqué"
+    if (key === 'robots') return card.querySelectorAll('input[type="radio"][value="block"]:checked').length > 0;
+    return true;
+  }
+  var initialLevers = { };
+  if (mode) mode.querySelectorAll('[data-lever]').forEach(function(a){ initialLevers[a.getAttribute('data-lever')] = a.classList.contains('on'); });
+  function refreshMode(){
+    if (!mode) return;
+    var blocking = 0, changed = false;
+    mode.querySelectorAll('[data-lever]').forEach(function(a){
+      var key = a.getAttribute('data-lever');
+      var on = leverOn(key);
+      a.classList.toggle('on', on);
+      if (on && key !== 'download') blocking++;
+      if (on !== initialLevers[key]) changed = true;
+    });
+    var name = mode.querySelector('[data-mode-name]');
+    name.textContent = blocking ? mode.getAttribute('data-blocking-name') : mode.getAttribute('data-observer-name');
+    name.classList.toggle('observer', !blocking);
+    name.classList.toggle('blocking', !!blocking);
+    mode.querySelector('[data-mode-desc]').textContent = blocking
+      ? blocking + ' / 5 ' + mode.getAttribute('data-blocking-desc')
+      : mode.getAttribute('data-observer-desc');
+    var unsaved = mode.querySelector('[data-mode-unsaved]');
+    unsaved.hidden = !changed;
+    unsaved.textContent = changed ? '⚠ ' + mode.getAttribute('data-unsaved') : '';
+  }
+  var robotsCardForMode = document.getElementById('ipl-card-robots');
+  if (robotsCardForMode) robotsCardForMode.addEventListener('change', refreshMode);
 
   // Pastilles (liste blanche, pays, mots-clés, pays autorisés) liées à un champ caché
   function chipValues(hidden, sep){

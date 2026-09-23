@@ -10,6 +10,14 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.4 - 23/09/2026
+        onglet Configuration : l'étiquette d'état de chaque bloc (Actif / Inactif,
+        Affiché / Masqué) suit l'interrupteur en direct, sans attendre l'enregistrement ;
+        le bandeau "Mode actuel" (Observateur / Observation + blocage, pastilles des
+        leviers) est recalculé en direct à chaque bascule — y compris le passage d'un
+        robot en "Bloqué" — avec la mention "modifications non enregistrées" tant que
+        l'état affiché diffère de l'état enregistré
+
     version 2.6.3 - 23/09/2026
         onglet Configuration réécrit en blocs (maquette validée) : bandeau "Mode actuel"
         (Observateur / Observation + blocage, leviers actifs) ; groupe Observation
