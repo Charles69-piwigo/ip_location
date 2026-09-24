@@ -10,6 +10,10 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.7 - 24/09/2026
+         intégration des v2.6.1 à 2.6.13
+         pour publication sur PEM    
+
     version 2.6.13 - 24/09/2026
         Blocs repliables : flèche ▸/▾ d'ouverture agrandie (10 px → 30 px) et centrée
         verticalement sur le libellé.
