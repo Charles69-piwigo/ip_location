@@ -279,7 +279,10 @@
               {foreach from=$COUNTRY_ROWS item=c}<span class="iplc-chip" data-value="{$c.code|escape}">{$c.name|escape} ({$c.code|escape}) <span class="meta">{$c.refusals} {'refus'|@translate}</span><button type="button" aria-label="{'Retirer'|@translate}">✕</button></span>{/foreach}
             </div>
             <div class="iplc-addrow">
-              <input type="text" data-chip-input="iplc-cc-value" maxlength="2" placeholder="{'Code pays (ex. CN)'|@translate}">
+              <select data-chip-input="iplc-cc-value">
+                <option value="">{'Choisir un pays…'|@translate}</option>
+                {foreach from=$COUNTRY_OPTIONS item=o}<option value="{$o.code}">{$o.name|escape} ({$o.code})</option>{/foreach}
+              </select>
               <button type="button" class="iplc-btn ghost sm" data-chip-add="iplc-cc-value">{'Ajouter'|@translate}</button>
             </div>
             {if $GOOGLE_WARNING eq 'robots_off'}
@@ -390,7 +393,10 @@
               {foreach from=$DOWNLOAD_ROWS item=c}<span class="iplc-chip" data-value="{$c.code|escape}">{$c.name|escape} ({$c.code|escape})<button type="button" aria-label="{'Retirer'|@translate}">✕</button></span>{/foreach}
             </div>
             <div class="iplc-addrow">
-              <input type="text" data-chip-input="iplc-dl-value" maxlength="2" placeholder="{'Code pays autorisé (ex. LU)'|@translate}">
+              <select data-chip-input="iplc-dl-value">
+                <option value="">{'Choisir un pays…'|@translate}</option>
+                {foreach from=$COUNTRY_OPTIONS item=o}<option value="{$o.code}">{$o.name|escape} ({$o.code})</option>{/foreach}
+              </select>
               <button type="button" class="iplc-btn ghost sm" data-chip-add="iplc-dl-value">{'Ajouter'|@translate}</button>
             </div>
             <div class="iplc-radio">
@@ -516,10 +522,10 @@
     if (!wrap.children.length) {
       chipValues(hidden, sep).forEach(function(v){ wrap.appendChild(makeChip(v)); });
     }
-    function makeChip(v){
+    function makeChip(v, label){
       var s = document.createElement('span');
       s.className = 'iplc-chip'; s.setAttribute('data-value', v);
-      s.appendChild(document.createTextNode(v + ' '));
+      s.appendChild(document.createTextNode((label || v) + ' '));
       var b = document.createElement('button'); b.type = 'button'; b.textContent = '✕'; b.setAttribute('aria-label', v);
       s.appendChild(b);
       return s;
@@ -533,7 +539,9 @@
       var vals = chipValues(hidden, sep);
       if (vals.indexOf(v) === -1) {
         vals.push(v); writeValues(hidden, sep, vals);
-        var chip = makeChip(v); wrap.appendChild(chip); bindChip(chip);
+        // Liste déroulante (pays) : pastille "Nom (CODE)" comme celles du serveur
+        var label = input.tagName === 'SELECT' ? input.options[input.selectedIndex].text : v;
+        var chip = makeChip(v, label); wrap.appendChild(chip); bindChip(chip);
       }
       input.value = '';
     }

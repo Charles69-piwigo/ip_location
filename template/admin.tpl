@@ -130,6 +130,7 @@
   .iplc-chip button:hover{ color:var(--c-danger); background:var(--c-surface-3); }
   .iplc-addrow{ display:flex; gap:8px; flex-wrap:wrap; }
   .iplc-addrow input[type="text"]{ flex:1; min-width:140px; }
+  .iplc-addrow select{ flex:1; min-width:140px; max-width:360px; }
 
   .iplc-tiles{ display:flex; gap:10px; flex-wrap:wrap; }
   .iplc-tile{ flex:1; min-width:110px; background:var(--c-surface-2); border-radius:9px; padding:7px 12px; display:flex; flex-direction:column; }

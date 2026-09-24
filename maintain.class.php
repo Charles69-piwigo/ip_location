@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_log (
   is_bot       TINYINT(1)   NOT NULL DEFAULT 0,
   is_blocked   TINYINT(1)   NOT NULL DEFAULT 0,
   log_type     VARCHAR(16)  DEFAULT NULL,
-  visit_date   DATETIME     NOT NULL
+  visit_date   DATETIME     NOT NULL,
+  bot_score    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  block_reason VARCHAR(16)  DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
         pwg_query('
@@ -66,7 +68,9 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   ip           VARCHAR(45)  PRIMARY KEY,
   country      VARCHAR(64),
   city         VARCHAR(64),
-  blocked_at   DATETIME     NOT NULL
+  blocked_at   DATETIME     NOT NULL,
+  origin       VARCHAR(8)   NOT NULL DEFAULT \'manuel\',
+  expires_at   DATETIME     DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
         // Migration v1.4 → v1.5 : remplacer reason par country + city
@@ -129,6 +133,21 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
         }
 
+        // Migration v2.4 → v2.5 : origine d'un blocage (manuel / auto / exempt) et
+        // expiration des blocages auto. (De la v2.6.2 à la v2.7, ce bloc se trouvait par
+        // erreur après le return de robot_check_table_sql() : il n'était jamais exécuté.)
+        $cols = [];
+        $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
+        while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];
+        if (!in_array('origin', $cols)) {
+            pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist
+  ADD COLUMN origin VARCHAR(8) NOT NULL DEFAULT \'manuel\'');
+        }
+        if (!in_array('expires_at', $cols)) {
+            pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist
+  ADD COLUMN expires_at DATETIME DEFAULT NULL');
+        }
+
         // Migration v2.6.1 → v2.6.2 : cache de vérification DNS des robots d'indexation
         pwg_query(ip_location_maintain::robot_check_table_sql($prefixeTable));
     }
@@ -146,18 +165,6 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
   verified    TINYINT(1)  NOT NULL DEFAULT 0,
   checked_at  DATETIME    NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;';
-
-        $cols = [];
-        $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
-        while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];
-        if (!in_array('origin', $cols)) {
-            pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist
-  ADD COLUMN origin VARCHAR(8) NOT NULL DEFAULT \'manuel\'');
-        }
-        if (!in_array('expires_at', $cols)) {
-            pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist
-  ADD COLUMN expires_at DATETIME DEFAULT NULL');
-        }
     }
 
     function deactivate()

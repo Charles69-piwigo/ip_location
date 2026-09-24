@@ -18,6 +18,41 @@ function ip_location_admin_return_qs()
     return $out;
 }
 
+// Filets de sécurité sur le schéma : normalement créé par maintain.class.php::update(),
+// mais à refaire si les fichiers ont été copiés sans passer par la mise à jour Piwigo
+// (FTP, copie de dev), ou si une migration a été sautée. Placés AVANT les actions POST
+// et ip_location_classify_recent(), qui utilisent déjà ces colonnes.
+// a. Colonne block_reason (v2.6.1) — sans elle, tout INSERT du journal échouerait.
+$ipl_cols = [];
+$ipl_r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log');
+while ($ipl_row = pwg_db_fetch_row($ipl_r)) $ipl_cols[] = $ipl_row[0];
+if (!in_array('block_reason', $ipl_cols)) {
+    pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
+}
+
+// b. Colonnes origin / expires_at de la blocklist (v2.5) — de la v2.6.2 à la v2.7, leur
+//    migration dans maintain.class.php n'était jamais exécutée (code après un return).
+$ipl_cols = [];
+$ipl_r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_blocklist');
+while ($ipl_row = pwg_db_fetch_row($ipl_r)) $ipl_cols[] = $ipl_row[0];
+if (!in_array('origin', $ipl_cols)) {
+    pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist ADD COLUMN origin VARCHAR(8) NOT NULL DEFAULT \'manuel\'');
+}
+if (!in_array('expires_at', $ipl_cols)) {
+    pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_blocklist ADD COLUMN expires_at DATETIME DEFAULT NULL');
+}
+unset($ipl_cols, $ipl_r, $ipl_row);
+
+// c. Table de vérification DNS des robots (v2.6.2) — même définition que
+//    maintain.class.php::robot_check_table_sql() (non chargée ici).
+pwg_query('
+CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
+  ip          VARCHAR(45) PRIMARY KEY,
+  robot       VARCHAR(64) NOT NULL,
+  verified    TINYINT(1)  NOT NULL DEFAULT 0,
+  checked_at  DATETIME    NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
+
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
@@ -287,27 +322,6 @@ if (array_key_exists('bot_block_mode', $ipl_conf_migr)) {
 if ($ipl_conf_changed) {
     conf_update_param('ip_location', serialize($ipl_conf_migr));
 }
-
-// 3. Colonne block_reason (v2.6.1) : normalement créée par maintain.class.php::update(),
-//    mais filet de sécurité si les fichiers ont été copiés sans passer par la mise à jour
-//    Piwigo (FTP, copie de dev) — sans elle, tout INSERT du journal échouerait.
-$ipl_cols = [];
-$ipl_r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log');
-while ($ipl_row = pwg_db_fetch_row($ipl_r)) $ipl_cols[] = $ipl_row[0];
-if (!in_array('block_reason', $ipl_cols)) {
-    pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD COLUMN block_reason VARCHAR(16) DEFAULT NULL');
-}
-unset($ipl_cols, $ipl_r, $ipl_row);
-
-// 4. Table de vérification DNS des robots (v2.6.2) — même filet de sécurité ; même
-//    définition que maintain.class.php::robot_check_table_sql() (non chargée ici).
-pwg_query('
-CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
-  ip          VARCHAR(45) PRIMARY KEY,
-  robot       VARCHAR(64) NOT NULL,
-  verified    TINYINT(1)  NOT NULL DEFAULT 0,
-  checked_at  DATETIME    NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 unset($ipl_conf_migr, $ipl_conf_changed, $ipl_was_is_bot);
 
 // ── Compteurs globaux ─────────────────────────────────────────────────────────
@@ -807,6 +821,9 @@ if ($tab === 'config' && $sub === 'settings') {
     while ($row = pwg_db_fetch_row($r)) {
         $country_names[$row[0]] = $row[1];
     }
+    // Noms ISO dans la langue de l'admin (v2.7.1), prioritaires sur ceux du journal
+    include_once IP_LOCATION_PATH . 'countries.inc.php';
+    $country_names = array_merge($country_names, ip_location_country_names());
     $country_chips = function ($csv) use ($country_names) {
         $out = [];
         foreach (array_filter(array_map('trim', explode(',', strtoupper($csv)))) as $cc) {
@@ -940,6 +957,7 @@ if ($tab === 'config' && $sub === 'settings') {
         'MANUAL_ROWS'        => $manual_rows,
         'KEYWORD_ROWS'       => $keyword_rows,
         'COUNTRY_ROWS'       => $country_rows,
+        'COUNTRY_OPTIONS'    => ip_location_country_options(),
         'DOWNLOAD_ROWS'      => $country_chips($plugin_conf['download_allowed_countries']),
         'ROBOT_ROWS'         => $robot_rows,
         'ROBOTS_ENABLED'     => $plugin_conf['robots_enabled'] === '1',

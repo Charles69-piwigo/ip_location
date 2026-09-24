@@ -10,6 +10,32 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.7a - 24/09/2026
+         regroupement des v2.7.1 et v2.7.2
+         
+
+    version 2.7.2 - 24/09/2026
+        Correctif : « Unknown column 'origin' » à l'ouverture de la configuration sur une
+        installation mise à jour depuis une version antérieure à 2.5. Depuis la v2.6.2,
+        la migration des colonnes origin / expires_at de la blocklist se trouvait par
+        erreur après le return de robot_check_table_sql() (maintain.class.php) : elle
+        n'était jamais exécutée. Remise dans activate(), et ajoutée aux filets de
+        sécurité sur le schéma d'admin.php, désormais placés en tête (avant les actions
+        POST et la classification, qui utilisent déjà ces colonnes) : la seule ouverture
+        de la page de configuration répare la table.
+        Installation neuve : les CREATE TABLE déclarent désormais directement toutes les
+        colonnes (origin / expires_at pour la blocklist, bot_score / block_reason pour le
+        journal), sans dépendre des migrations — conservées pour les mises à jour.
+
+    version 2.7.1 - 24/09/2026
+        Blocage par pays : la case de saisie du code est remplacée par une liste
+        déroulante des 250 pays « Nom (CODE) », triée par nom (accents ignorés), en
+        français si l'admin est en français (noms intégrés, sans dépendre de l'extension
+        intl), sinon via intl si présente, sinon en anglais (nouveau countries.inc.php).
+        Les pastilles des pays bloqués affichent ce même nom, y compris pour un pays
+        jamais vu dans le journal.
+        Filtre pays des téléchargements : même liste déroulante pour les pays autorisés.
+
     version 2.7 - 24/09/2026
          intégration des v2.6.1 à 2.6.13
          pour publication sur PEM    
