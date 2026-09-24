@@ -91,6 +91,7 @@
   .iplc-pill{ font-size:10.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap; margin-top:2px; }
   .iplc-pill.on{ background:var(--c-on-wash); color:var(--c-on); } .iplc-pill.off{ background:var(--c-off-wash); color:var(--c-off); }
   .iplc-pill.info{ background:var(--c-accent-wash); color:var(--c-accent); }
+  .iplc-pill.danger{ background:var(--c-danger-wash); color:var(--c-danger); text-transform:none; letter-spacing:0; cursor:help; }
 
   .iplc-switch{ position:relative; display:inline-flex; flex:none; margin-top:1px; }
   .iplc-switch input{ position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; z-index:1; }
@@ -104,6 +105,7 @@
   .iplc-card.is-off .dimmable{ opacity:.55; }
   .iplc-offnote{ font-size:12.3px; color:var(--c-text-2); background:var(--c-off-wash); border-radius:8px; padding:7px 10px; }
   .iplc-card:not(.is-off) .iplc-offnote{ display:none; }
+  .iplc-card.is-off .iplc-pill.danger{ display:none; }
   .iplc-foot{ display:flex; align-items:center; gap:10px; justify-content:flex-end; padding:9px 16px; border-top:1px solid var(--c-border); background:var(--c-surface-2); border-radius:0 0 12px 12px; }
   .iplc-foot .dirty{ font-size:12.3px; color:var(--c-warn); font-weight:500; margin-right:auto; }
   .iplc-foot .dirty[hidden]{ display:none; }
@@ -161,10 +163,10 @@
   .iplc-remove{ cursor:pointer; color:var(--c-muted); font-size:13px; }
   .iplc-remove input{ display:none; }
 
-  details.iplc-fold > summary{ cursor:pointer; font-size:12.8px; color:var(--c-text-2); font-weight:500; list-style:none; }
+  details.iplc-fold > summary{ cursor:pointer; font-size:12.8px; color:var(--c-text-2); font-weight:500; list-style:none; display:flex; align-items:center; gap:6px; }
   details.iplc-fold > summary::-webkit-details-marker{ display:none; }
-  details.iplc-fold > summary::before{ content:"▸ "; font-size:10px; color:var(--c-muted); }
-  details.iplc-fold[open] > summary::before{ content:"▾ "; }
+  details.iplc-fold > summary::before{ content:"▸"; font-size:30px; line-height:1; margin-top:-0.12em; color:var(--c-muted); }
+  details.iplc-fold[open] > summary::before{ content:"▾"; }
   details.iplc-fold > .fold-body{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
   .iplc-threshold{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   .iplc-threshold input[type="range"]{ flex:1; min-width:160px; accent-color:var(--c-accent); }
@@ -322,6 +324,16 @@ if (window.location.search.indexOf('msg=') !== -1) {
           </select>
         </label>
         <button type="submit" class="iplc-btn ghost sm">{'Filtrer'|@translate}</button>
+        {assign var=export_url value="`$BASE_URL``$JOURNAL_QS`"}
+        {if $FILTER neq 'all'}{assign var=export_url value="`$export_url`&filter=`$FILTER`"}{/if}
+        <details class="iplj-menu">
+          <summary class="iplc-btn ghost sm" title="{'Exporte tous les accès correspondant aux filtres appliqués (toutes les pages)'|@translate}">{'Exporter'|@translate} ▾</summary>
+          <div class="pop">
+            <a href="{$export_url|escape}&amp;export=csv">CSV · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
+            <a href="{$export_url|escape}&amp;export=sql">SQL · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
+            <a href="{$export_url|escape}&amp;export=json">JSON · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
+          </div>
+        </details>
         {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq '' or $SCORE_FILTER neq ''}
           <a class="iplj-reset" href="{$BASE_URL|escape}&amp;sub=journal{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}">{'Réinitialiser'|@translate}</a>
         {/if}

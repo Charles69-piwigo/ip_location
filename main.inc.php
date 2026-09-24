@@ -10,6 +10,36 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.6.13 - 24/09/2026
+        Blocs repliables : flèche ▸/▾ d'ouverture agrandie (10 px → 30 px) et centrée
+        verticalement sur le libellé.
+        Journal : bouton « Exporter ▾ » à droite de « Filtrer » — CSV (séparateur ;, UTF-8
+        avec BOM pour Excel), SQL (INSERT) ou JSON ; exporte toutes les lignes des filtres
+        appliqués (catégorie comprise, toutes pages), colonnes brutes de la table.
+        Conservation : nombre maximal d'accès conservés par défaut porté de 10 000 à 50 000
+        (sans effet sur une valeur déjà enregistrée).
+        Cache de géolocalisation : plafond relevé de 5 000 à 50 000 entrées (évite des
+        appels externes répétés lors d'une vague de robots sur de nombreuses IP).
+        Blocage par IP : pastille « ⚠ .htaccess inopérant sur ce serveur » à gauche de
+        ACTIF, si un refus "liste IP" a été journalisé par le plugin dans les 7 derniers
+        jours pour une IP/plage manuelle présente dans le .htaccess, après son blocage
+        (preuve que le .htaccess a été franchi) ; infobulle avec le nombre d'accès et la
+        date. Remplace l'avertissement nginx du sous-titre (même pastille).
+        Blocage par IP : pastille « ⚠ IP absentes du .htaccess » si le fichier est absent
+        ou ne contient pas toutes les entrées manuelles (renommé, réécrit par un tiers) ;
+        le blocage reste assuré par le plugin.
+        Ces pastilles d'alerte .htaccess ne s'affichent que si l'interrupteur « Blocage par
+        IP » est allumé (masquées aussitôt qu'on le coupe). « Inopérant » ne compte que
+        les refus postérieurs à la dernière modification / au dernier renommage du
+        .htaccess et au repère htaccess_complete_since (posé par l'admin quand la section
+        redevient complète) : un fichier renommé puis remis ne déclenche plus l'alerte.
+        Aide : filtres Motif / Score du Journal, bouton Exporter, pastilles .htaccess.
+        Score : signal « récidive » supprimé (ip_location_recurrence, désactivé par défaut,
+        jamais testé) — le signal « pas de trace JS » touchant toutes les lignes d'une IP,
+        il revenait à pénaliser le nombre d'accès, donc les visiteurs humains assidus ; le
+        blocage auto étant par IP, il n'ajoutait rien sur les vrais bots. Une valeur posée
+        dans local/config/config.inc.php est désormais ignorée.
+
     version 2.6.12 - 23/09/2026
         Journal : le tableau tient dans la largeur disponible (colonnes à largeur fixe,
         URL et navigateur tronqués avec "…", texte complet au survol) — le bouton Actions
@@ -432,7 +462,6 @@ $ip_location_score_defaults = [
     'ip_location_score_shared_ua'     => 30,  // < seuils usuels : doit être confirmé par un 2e signal
     'ip_location_score_outdated_browser' => 20,
     'ip_location_score_no_js'         => 20,
-    'ip_location_recurrence'          => 0,  // 0 = désactivé (même convention que max_records)
     'ip_location_auto_block_ttl_days' => 14,
     'ip_location_auto_block_recent_hours' => 24, // seules les IP actives depuis N h sont auto-bloquées
     'ip_location_score_bot_spoof'     => 50, // UA d'un moteur connu depuis une IP qui ne lui appartient pas (v2.6.2)
@@ -492,7 +521,8 @@ function ip_location_get_conf()
         'whitelist'            => '',
         'blocking_enabled'     => '0',
         'htaccess_enabled'     => '0',
-        'max_records'          => 10000,
+        'htaccess_complete_since' => '', // repère posé par l'admin (pastille .htaccess inopérant)
+        'max_records'          => 50000,
         'visitors_enabled'     => '0',
         'visitors_period'      => 'week',
         'download_filter_enabled'    => '0',
@@ -934,7 +964,7 @@ function ip_location_is_public_ip($ip)
  * (jamais géolocalisable, jamais mise en cache), sinon cache (30 jours pour un succès,
  * 2 h pour un 'Unknown' — voir $use_negative_cache) puis providers en cascade
  * (ip-api.com → freeipapi.com → ipwho.is → geoplugin.net → ipapi.co). Le cache est
- * alimenté dans tous les cas (y compris les échecs) et nettoyé (30 jours + limite 5000).
+ * alimenté dans tous les cas (y compris les échecs) et nettoyé (30 jours + limite 50 000).
  *
  * @param string $ip                 IP déjà échappée pour SQL (pwg_db_real_escape_string).
  * @param string $prefixeTable
@@ -1064,13 +1094,13 @@ INSERT INTO ' . $prefixeTable . 'ip_location_cache
     pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
   WHERE resolved_at < NOW() - INTERVAL 30 DAY');
 
-    // Limite de taille : garder les 5000 entrées les plus récentes
+    // Limite de taille : garder les 50 000 entrées les plus récentes
     $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_cache');
     list($cache_count) = pwg_db_fetch_row($r);
-    if ($cache_count > 5000) {
+    if ($cache_count > 50000) {
         pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache
   ORDER BY resolved_at ASC
-  LIMIT ' . ($cache_count - 5000));
+  LIMIT ' . ($cache_count - 50000));
     }
 
     return $geo;
@@ -2101,8 +2131,8 @@ WHERE t.is_bot = 0
     // ── Score de suspicion bot (4ème levier de blocage, optionnel) ──────────
     // Recalculé intégralement à chaque passage (remise à 0 puis réaccumulation) plutôt
     // qu'incrémenté : contrairement à is_bot (booléen, idempotent via WHERE is_bot=0),
-    // bot_score doit refléter l'état actuel du signal de récidive, qui peut évoluer
-    // d'un passage à l'autre à mesure que de nouvelles lignes suspectes s'accumulent.
+    // bot_score doit refléter l'état actuel des signaux agrégés sur l'IP ou l'UA (absence
+    // de JS, UA partagé...), qui évoluent d'un passage à l'autre avec les nouvelles lignes.
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log
    SET bot_score = 0
@@ -2247,25 +2277,6 @@ JOIN (
 ) g ON t.ip = g.ip
 SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_no_js'] . '
 WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-    }
-
-    // Récidive : += poids × nombre d'autres lignes déjà suspectes (score > 0) de la
-    // même IP sur la fenêtre. Formule linéaire, sans cas particulier pour la 1ère
-    // occurrence. 0 = désactivé (même convention que max_records).
-    $recurrence_weight = (int)$conf['ip_location_recurrence'];
-    if ($recurrence_weight > 0) {
-        pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT ip, COUNT(*) AS suspicious_count
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND bot_score > 0
-     GROUP BY ip
-) g ON t.ip = g.ip
-SET t.bot_score = t.bot_score + ' . $recurrence_weight . ' * GREATEST(g.suspicious_count - 1, 0)
-WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-  AND t.bot_score > 0');
     }
 
     // Faux robots (v2.6.2) : UA d'un moteur vérifiable, mais IP démasquée par la

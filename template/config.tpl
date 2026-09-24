@@ -220,7 +220,15 @@
       <form method="post" action="" data-card-form id="iplc-f-manual">
         <input type="hidden" name="action" value="save_ip_block">
         <div class="iplc-head">
-          <div class="iplc-title"><h4>{'Blocage par IP'|@translate}</h4><span class="sub">{'IP et plages /16 bloquées à la main — appliqué par Apache (.htaccess) et par le plugin'|@translate}{if $SERVER_IS_NGINX} · <span style="color:var(--c-danger)">&#9888; {'Serveur nginx détecté : le fichier .htaccess est ignoré'|@translate}</span>{/if}</span></div>
+          <div class="iplc-title"><h4>{'Blocage par IP'|@translate}</h4><span class="sub">{'IP et plages /16 bloquées à la main — appliqué par Apache (.htaccess) et par le plugin'|@translate}</span></div>
+          {if $HTACCESS_ENABLED and $SERVER_IS_NGINX}
+            <span class="iplc-pill danger" title="{'Serveur nginx détecté : le fichier .htaccess est ignoré. Le blocage reste assuré par le plugin.'|@translate}">&#9888; {'.htaccess inopérant sur ce serveur'|@translate}</span>
+          {elseif $HTACCESS_BYPASS}
+            <span class="iplc-pill danger" title="{$HTACCESS_BYPASS.count} {'accès d\'IP bloquées à la main ont franchi le .htaccess depuis le'|@translate} {$HTACCESS_BYPASS.since} {'(7 derniers jours) ; ils ont été refusés par le plugin : le blocage reste effectif.'|@translate}">&#9888; {'.htaccess inopérant sur ce serveur'|@translate}</span>
+          {/if}
+          {if !$SERVER_IS_NGINX and $HTACCESS_MISSING > 0}
+            <span class="iplc-pill danger" title="{'Le .htaccess est absent ou ne contient pas'|@translate} {$HTACCESS_MISSING} {'des IP bloquées à la main ; le blocage reste assuré par le plugin. Pour réécrire le fichier : désactivez puis réactivez le blocage par IP, ou modifiez la liste.'|@translate}">&#9888; {'IP absentes du .htaccess'|@translate}</span>
+          {/if}
           <span class="iplc-pill {if $HTACCESS_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $HTACCESS_ENABLED}{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par IP'|@translate}"><input type="checkbox" name="htaccess_enabled" value="1" data-card-switch{if $HTACCESS_ENABLED} checked{/if}><span class="track"></span></label>
         </div>

@@ -60,7 +60,7 @@ if (isset($_POST['action'])) {
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-whitelist');
     } elseif ($_POST['action'] === 'save_retention') {
-        $max_records = max(0, (int)($_POST['max_records'] ?? 10000));
+        $max_records = max(0, (int)($_POST['max_records'] ?? 50000));
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'max_records' => $max_records,
@@ -476,6 +476,53 @@ $where_parts = $base_parts;
 if ($filter !== 'all') $where_parts[] = $category_sql[$filter];
 $filter_where = empty($where_parts) ? '' : 'WHERE ' . implode(' AND ', $where_parts);
 
+// Export du Journal (v2.6.13) : toutes les lignes correspondant aux filtres en cours
+// (catégorie comprise, sans pagination), colonnes brutes de la table, en CSV / SQL / JSON.
+if (in_array($_GET['export'] ?? '', ['csv', 'sql', 'json'], true)) {
+    $format = $_GET['export'];
+    @set_time_limit(0);
+    while (ob_get_level()) ob_end_clean();
+    $log_table = $prefixeTable . 'ip_location_log';
+    $result = pwg_query('SELECT * FROM ' . $log_table . ' ' . $filter_where . ' ORDER BY visit_date DESC');
+    $mime = ['csv' => 'text/csv', 'sql' => 'application/sql', 'json' => 'application/json'];
+    header('Content-Type: ' . $mime[$format] . '; charset=utf-8');
+    header('Content-Disposition: attachment; filename="ip_location_journal_' . date('Ymd_His') . '.' . $format . '"');
+    header('Cache-Control: no-store');
+    $int_cols = ['id', 'is_bot', 'is_blocked', 'bot_score'];
+    $out = fopen('php://output', 'w');
+    $first = true;
+    if ($format === 'sql') {
+        fwrite($out, '-- ip_location : export du Journal des accès, ' . date('Y-m-d H:i:s') . "\n\n");
+    } elseif ($format === 'json') {
+        fwrite($out, "[\n");
+    } else {
+        fwrite($out, "\xEF\xBB\xBF"); // BOM : accents lus correctement par Excel
+    }
+    while ($row = pwg_db_fetch_assoc($result)) {
+        if ($format === 'csv') {
+            if ($first) fputcsv($out, array_keys($row), ';');
+            fputcsv($out, $row, ';');
+        } elseif ($format === 'sql') {
+            $vals = [];
+            foreach ($row as $col => $v) {
+                $vals[] = $v === null ? 'NULL'
+                    : (in_array($col, $int_cols, true) ? (int)$v : "'" . pwg_db_real_escape_string($v) . "'");
+            }
+            fwrite($out, 'INSERT INTO `' . $log_table . '` (`' . implode('`, `', array_keys($row)) . '`) VALUES ('
+                . implode(', ', $vals) . ");\n");
+        } else {
+            foreach ($int_cols as $col) {
+                if (isset($row[$col])) $row[$col] = (int)$row[$col];
+            }
+            fwrite($out, ($first ? '  ' : ",\n  ") . json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+        }
+        $first = false;
+    }
+    if ($format === 'json') fwrite($out, "\n]\n");
+    fclose($out);
+    exit;
+}
+
 // Compteurs par catégorie (mêmes filtres hors catégorie), en une requête
 $journal_counts = ['all' => 0, 'normal' => 0, 'bot' => 0, 'robots' => 0, 'blocked' => 0];
 $count_cols = [];
@@ -567,6 +614,72 @@ $visitors_period       = $plugin_conf['visitors_period'] ?? 'week';
 $max_records           = (int)$plugin_conf['max_records'];
 $server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !== false
                       && stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'apache') === false;
+
+// .htaccess inopérant (v2.6.13) : une IP bloquée à la main et présente dans la section
+// ip_location du .htaccess n'atteint jamais PHP si Apache applique le fichier. Un refus
+// "liste IP" journalisé par ip_location_blocklist_guard() pour une telle IP, après son
+// blocage, prouve donc que le .htaccess a été franchi (non lu, ou IP vue via un proxy).
+// Fenêtre de 7 jours : l'alerte s'éteint d'elle-même si l'hébergeur corrige sa config.
+// Sans refus récent on ne sait rien : aucune alerte (jamais "le .htaccess fonctionne").
+// IP absentes du .htaccess (v2.6.13) : fichier absent / renommé, ou réécrit par un tiers
+// (autre plugin, mise à jour, FTP) sans la section ip_location. Les entrées manuelles
+// concernées ne sont plus appliquées que par le plugin.
+$htaccess_bypass  = null;
+$htaccess_missing = 0;
+if ($htaccess_enabled && !$server_is_nginx) {
+    $ht_ips = [];
+    $ht_content = @file_get_contents(PHPWG_ROOT_PATH . '.htaccess');
+    if ($ht_content !== false
+        && preg_match('/# BEGIN ip_location\b(.*?)# END ip_location/s', $ht_content, $m)
+        && preg_match_all('/^\s*Require not ip (\S+)/m', $m[1], $mm)) {
+        $ht_ips = array_flip($mm[1]);
+    }
+    $r = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin = \'manuel\'');
+    while ($row = pwg_db_fetch_row($r)) {
+        if (!isset($ht_ips[$row[0]])) $htaccess_missing++;
+    }
+    // Repère "section complète depuis" : seuls les refus postérieurs prouvent un .htaccess
+    // franchi (sinon un fichier renommé puis remis, comme lors d'un test, laisserait des
+    // refus antérieurs compter). Plus récent de : modification / changement d'état du
+    // fichier (un renommage met à jour ctime sous Linux), et marqueur posé par l'admin
+    // quand il retrouve la section complète après l'avoir vue incomplète.
+    $ht_marker = $plugin_conf['htaccess_complete_since'] ?? '';
+    if (empty($ht_ips) || $htaccess_missing > 0) {
+        if ($ht_marker !== '') {
+            conf_update_param('ip_location', serialize(array_merge(ip_location_get_conf(), ['htaccess_complete_since' => ''])));
+        }
+    } else {
+        if ($ht_marker === '') {
+            list($ht_marker) = pwg_db_fetch_row(pwg_query('SELECT NOW()'));
+            conf_update_param('ip_location', serialize(array_merge(ip_location_get_conf(), ['htaccess_complete_since' => $ht_marker])));
+        }
+        clearstatcache();
+        $ht_file_age = time() - max((int)@filemtime(PHPWG_ROOT_PATH . '.htaccess'), (int)@filectime(PHPWG_ROOT_PATH . '.htaccess'));
+    }
+    if (!empty($ht_ips) && $htaccess_missing === 0) {
+        $r = pwg_query('
+SELECT l.ip, b.ip AS entry, COUNT(*) AS n, MIN(l.visit_date) AS first_seen
+  FROM ' . $prefixeTable . 'ip_location_log l
+  JOIN ' . $prefixeTable . 'ip_location_blocklist b
+    ON b.origin = \'manuel\'
+   AND (b.ip = l.ip OR b.ip = CONCAT(SUBSTRING_INDEX(l.ip, \'.\', 2), \'.0.0/16\'))
+  WHERE l.is_blocked = 1 AND l.block_reason = \'ip\'
+    AND l.visit_date >= NOW() - INTERVAL 7 DAY
+    AND l.visit_date > b.blocked_at
+    AND l.visit_date > \'' . pwg_db_real_escape_string($ht_marker) . '\'
+    AND l.visit_date > NOW() - INTERVAL ' . max(0, $ht_file_age) . ' SECOND
+  GROUP BY l.ip, b.ip');
+        $n = 0; $first = null;
+        while ($row = pwg_db_fetch_assoc($r)) {
+            if (!isset($ht_ips[$row['entry']])) continue;
+            $n += (int)$row['n'];
+            if ($first === null || $row['first_seen'] < $first) $first = $row['first_seen'];
+        }
+        if ($n > 0) {
+            $htaccess_bypass = ['count' => $n, 'since' => substr($first, 0, 10)];
+        }
+    }
+}
 
 $download_filter_enabled    = $plugin_conf['download_filter_enabled'] === '1';
 $download_allowed_countries = $plugin_conf['download_allowed_countries'] ?? '';
@@ -953,6 +1066,8 @@ $template->assign([
     'BLOCKING_ENABLED'   => $blocking_enabled,
     'HTACCESS_ENABLED'   => $htaccess_enabled,
     'SERVER_IS_NGINX'    => $server_is_nginx,
+    'HTACCESS_BYPASS'    => $htaccess_bypass,
+    'HTACCESS_MISSING'   => $htaccess_missing,
     'MAX_RECORDS'        => $max_records,
     'DOWNLOAD_FILTER_ENABLED'    => $download_filter_enabled,
     'DOWNLOAD_ALLOWED_COUNTRIES' => $download_allowed_countries,
