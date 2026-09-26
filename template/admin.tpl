@@ -150,7 +150,9 @@
   table.iplc-t tr.removed td{ opacity:.4; text-decoration:line-through; }
   table.iplc-t td form{ display:inline; margin:0; }
   .iplc-tag{ font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px; background:var(--c-accent-wash); color:var(--c-accent); margin-left:6px; }
-  .iplc-verif{ font-size:11.3px; font-weight:500; } .iplc-verif.ok{ color:var(--c-on); } .iplc-verif.na{ color:var(--c-muted); }
+  .iplc-verif{ font-size:11.3px; font-weight:500; } .iplc-verif.ok{ color:var(--c-on); } .iplc-verif.na{ color:var(--c-muted); } .iplc-verif.warn{ color:var(--c-warn); font-weight:600; }
+  .iplc-robotstxt{ display:flex; gap:10px; align-items:flex-start; }
+  .iplc-robotstxt pre{ flex:1; min-width:0; margin:0; max-height:220px; overflow:auto; background:var(--c-surface-2); border:1px solid var(--c-border); border-radius:8px; padding:8px 12px; font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; line-height:1.45; color:var(--c-text); white-space:pre; user-select:all; }
 
   .iplc-seg{ display:inline-flex; gap:2px; background:var(--c-surface-2); border:1px solid var(--c-border); border-radius:8px; padding:2px; flex-wrap:wrap; }
   .iplc-seg button{ font-family:inherit; font-size:12px; font-weight:600; color:var(--c-text-2); background:none; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; }
@@ -192,6 +194,7 @@
   .iplj-tile .l{ font-size:12px; color:var(--c-text-2); display:flex; align-items:center; gap:6px; }
   .iplj-tile .sw{ width:8px; height:8px; border-radius:50%; background:var(--c-muted); }
   .iplj-tile .sw-normal, .iplj-tile .sw-robots{ background:var(--c-on); }
+  .iplj-counted{ margin:-12px 2px 0; font-size:12px; color:var(--c-muted); }
   .iplj-tile .sw-bot{ background:var(--c-text-2); } .iplj-tile .sw-blocked{ background:var(--c-danger); }
   .iplj-filters{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin:0; }
   .iplj-reset{ font-size:12.5px; color:var(--c-accent); margin-bottom:6px; }
@@ -204,24 +207,25 @@
   .iplj-pager a{ font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; min-width:28px; text-align:center; padding:3px 7px; border-radius:6px; border:1px solid var(--c-border); background:var(--c-surface); color:var(--c-text); text-decoration:none; }
   .iplj-pager a.active{ background:var(--c-accent); color:var(--c-accent-ink); border-color:var(--c-accent); }
   .iplj-pager .gap{ color:var(--c-muted); padding:0 3px; }
-  /* Le tableau tient dans la largeur disponible (colonnes fixes + URL / navigateur qui se
-     partagent le reste, tronqués) : la colonne Actions reste toujours visible, et son menu
-     n'est pas coupé par un conteneur à défilement. Défilement horizontal seulement sur
-     écran étroit. */
-  .iplj-scroll{ overflow:visible; }
-  table.iplj-table{ width:100%; table-layout:fixed; }
-  table.iplj-table col.c-when{ width:150px; } table.iplj-table col.c-ip{ width:128px; }
-  table.iplj-table col.c-country{ width:110px; } table.iplj-table col.c-city{ width:105px; }
-  table.iplj-table col.c-score{ width:56px; } table.iplj-table col.c-ua{ width:24%; }
-  table.iplj-table col.c-actions{ width:96px; }
-  @media (max-width:1100px){ .iplj-scroll{ overflow-x:auto; } table.iplj-table{ min-width:900px; } }
-  table.iplj-table td{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Journal en pleine largeur d'écran (v2.7a.3) ; URL et navigateur affichés en entier, sur
+     une ligne, sans troncature — ascenseur horizontal quand la ligne dépasse l'écran. La
+     colonne Actions reste collée au bord droit pendant le défilement, et son menu est
+     positionné en fixed (script en bas de page) pour ne pas être coupé par la zone qui défile. */
+  #ipl-journal{ max-width:none; }
+  .iplj-scroll{ overflow-x:auto; }
+  table.iplj-table{ min-width:100%; }
+  table.iplj-table td{ white-space:nowrap; }
   table.iplj-table td.when{ white-space:normal; }
-  table.iplj-table td.when .d{ display:block; font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; }
-  table.iplj-table td.url{ font-size:12px; }
-  table.iplj-table td.url a{ color:var(--c-text-2); text-decoration:none; border-bottom:1px dotted var(--c-border-strong); }
-  table.iplj-table td.url a:hover{ color:var(--c-accent); }
-  table.iplj-table td.ua{ font-size:11.8px; color:var(--c-text-2); }
+  table.iplj-table td.when .d{ display:block; white-space:nowrap; font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; }
+  table.iplj-table td.req{ width:100%; }
+  table.iplj-table th.actions, table.iplj-table td.actions{ position:sticky; right:0; z-index:1; box-shadow:-8px 0 8px -8px rgba(60,40,10,.35); }
+  table.iplj-table th.actions{ z-index:2; }
+  table.iplj-table td.actions{ background:var(--c-surface); }
+  /* Une cellule, deux lignes : l'URL, puis le navigateur (plus discret) en dessous */
+  table.iplj-table td.req .url{ display:block; font-size:12px; }
+  table.iplj-table td.req .url a{ color:var(--c-text); text-decoration:none; border-bottom:1px dotted var(--c-border-strong); }
+  table.iplj-table td.req .url a:hover{ color:var(--c-accent); }
+  table.iplj-table td.req .ua{ display:block; font-size:11.3px; color:var(--c-muted); margin-top:1px; }
   table.iplj-table td.actions{ overflow:visible; text-align:right; }
   table.iplj-table tr.cat-bot td{ background:#f7f3ea; }
   table.iplj-table tr.cat-blocked td{ background:#fbece8; }
@@ -277,11 +281,14 @@ if (window.location.search.indexOf('msg=') !== -1) {
   <div class="iplj-tiles">
     {foreach from=['all','normal','bot','robots','blocked'] item=cat}
       <a class="iplj-tile{if $FILTER eq $cat} active{/if}" href="{$BASE_URL|escape}{$JOURNAL_QS|escape}{if $cat neq 'all'}&amp;filter={$cat}{/if}">
-        <span class="n">{$JOURNAL_COUNTS[$cat]}</span>
+        <span class="n">{if $cat eq 'all' or $cat eq 'bot' or $cat eq 'robots'}{$JOURNAL_COUNTS[$cat]+$JOURNAL_COUNTED}{else}{$JOURNAL_COUNTS[$cat]}{/if}</span>
         <span class="l"><span class="sw sw-{$cat}"></span>{if $cat eq 'all'}{'Tous les accès'|@translate}{elseif $cat eq 'normal'}{'Normal'|@translate}{elseif $cat eq 'bot'}{'Bots non bloqués'|@translate}{elseif $cat eq 'robots'}{'dont robots autorisés'|@translate}{else}{'Bloqués (refusés)'|@translate}{/if}</span>
       </a>
     {/foreach}
   </div>
+  {if $JOURNAL_COUNTED > 0}
+  <p class="iplj-counted">{'Dont %d accès de robots vérifiés comptés mais non journalisés (au-delà de %d par robot et par jour) : ils figurent dans les compteurs et les courbes, pas dans le tableau.'|@translate|@sprintf:$JOURNAL_COUNTED:$ROBOT_LOG_LIMIT}</p>
+  {/if}
 
   {* Filtres *}
   <section class="iplc-card">
@@ -369,8 +376,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
     </div>
     <div class="iplj-scroll">
       <table class="iplc-t iplj-table">
-        <colgroup><col class="c-when"><col class="c-ip"><col class="c-country"><col class="c-city"><col class="c-score"><col class="c-url"><col class="c-ua"><col class="c-actions"></colgroup>
-        <thead><tr><th>{'Date'|@translate}</th><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th class="num">{'Score'|@translate}</th><th>{'URL'|@translate}</th><th>{'Navigateur / robot'|@translate}</th><th></th></tr></thead>
+        <thead><tr><th>{'Date'|@translate}</th><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th class="num">{'Score'|@translate}</th><th>{'URL'|@translate} / {'Navigateur / robot'|@translate}</th><th class="actions"></th></tr></thead>
         <tbody>
         {foreach from=$LOGS item=log}
           <tr class="{if $log.is_blocked or $log.listed_since or $log.robot_blocked}cat-blocked{elseif $log.is_bot}cat-bot{/if}">
@@ -387,8 +393,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <td>{$log.country|escape}</td>
             <td class="muted">{$log.city|escape}</td>
             <td class="num mono">{$log.bot_score}</td>
-            <td class="url"><a href="{$log.url|escape}" target="_blank" rel="noopener" title="{$log.url|escape}">{$log.url|escape}</a></td>
-            <td class="ua" title="{$log.user_agent|escape}">{$log.user_agent|escape}</td>
+            <td class="req"><span class="url"><a href="{$log.url|escape}" target="_blank" rel="noopener">{$log.url|escape}</a></span><span class="ua">{$log.user_agent|escape}</span></td>
             <td class="num actions">
               <details class="iplj-menu">
                 <summary class="iplc-btn ghost sm">{'Actions'|@translate} ▾</summary>
@@ -409,7 +414,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             </td>
           </tr>
         {foreachelse}
-          <tr><td colspan="8" class="muted" style="text-align:center;padding:14px;">{'Aucun accès ne correspond à ces filtres.'|@translate}</td></tr>
+          <tr><td colspan="7" class="muted" style="text-align:center;padding:14px;">{'Aucun accès ne correspond à ces filtres.'|@translate}</td></tr>
         {/foreach}
         </tbody>
       </table>
@@ -422,12 +427,31 @@ if (window.location.search.indexOf('msg=') !== -1) {
   var menus = document.querySelectorAll('.iplj-menu');
   menus.forEach(function(m){
     m.addEventListener('toggle', function(){
-      if (m.open) menus.forEach(function(o){ if (o !== m) o.open = false; });
+      // Cellule Actions (sticky, z-index 1) de cette ligne au premier plan tant que le menu
+      // est ouvert : sinon les cellules Actions des lignes suivantes passent par-dessus.
+      var td = m.closest('td');
+      if (td) td.style.zIndex = m.open ? '5' : '';
+      if (!m.open) return;
+      menus.forEach(function(o){ if (o !== m) o.open = false; });
+      // Menu du tableau : position fixed calée sous le bouton (au-dessus s'il manque de
+      // place en bas), pour ne pas être coupé par la zone à défilement horizontal.
+      if (!m.closest('.iplj-scroll')) return;
+      var pop = m.querySelector('.pop'), r = m.querySelector('summary').getBoundingClientRect();
+      pop.style.position = 'fixed';
+      pop.style.right = 'auto';
+      var top = r.bottom + 4;
+      if (top + pop.offsetHeight > window.innerHeight - 4) top = Math.max(4, r.top - pop.offsetHeight - 4);
+      pop.style.top = top + 'px';
+      pop.style.left = Math.max(4, r.right - pop.offsetWidth) + 'px';
     });
   });
   document.addEventListener('click', function(e){
     menus.forEach(function(m){ if (m.open && !m.contains(e.target)) m.open = false; });
   });
+  // Un menu en position fixed ne suit pas le défilement : on le ferme.
+  function closeAll(){ menus.forEach(function(m){ if (m.open) m.open = false; }); }
+  window.addEventListener('scroll', closeAll, true);
+  window.addEventListener('resize', closeAll);
 })();
 </script>
 {/if}

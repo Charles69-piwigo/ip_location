@@ -130,7 +130,7 @@
             <input type="text" data-chip-input="iplc-wl-value" placeholder="{'Ajouter une IP (ex. 93.12.150.175)'|@translate}">
             <button type="button" class="iplc-btn ghost sm" data-chip-add="iplc-wl-value">{'Ajouter'|@translate}</button>
           </div>
-          <p class="hint">{'Les IP du réseau local (192.168.x, 10.x…) ne sont de toute façon jamais bloquées automatiquement.'|@translate}</p>
+          <p class="hint">{'Les IP du réseau local (192.168.x, 10.x…) ne sont jamais bloquées automatiquement, mais elles sont enregistrées. Depuis chez vous, vos visites par le nom de domaine apparaissent souvent sous l\'adresse de votre box (ex. 192.168.1.1) : ajoutez-la ici pour ne plus les voir dans le journal.'|@translate}</p>
         </div>
       </form>
       <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-whitelist" data-save disabled>{'Enregistrer'|@translate}</button></div>
@@ -206,6 +206,37 @@
                     <p class="hint">{'Le robot est ajouté (autorisé) à l\'enregistrement. Un robot absent de cette liste reste traité par le score de suspicion.'|@translate}</p>
                   </div>
                 </details>
+              </div>
+            </details>
+            {* robots.txt suggéré (v2.7a.7) *}
+            <details class="iplc-fold">
+              <summary>{'robots.txt suggéré'|@translate}
+                {if $ROBOTS_TXT_COUNT > 0}
+                  {if $ROBOTS_TXT_STATE eq 'ok'}<span class="iplc-verif ok">✓ {'à jour'|@translate}</span>
+                  {elseif $ROBOTS_TXT_STATE eq 'absent' or $ROBOTS_TXT_STATE eq 'partial'}<span class="iplc-verif warn">{$ROBOTS_TXT_MISSING_N} {'robot(s) à ajouter'|@translate}</span>{/if}
+                {/if}
+              </summary>
+              <div class="fold-body">
+                {if $ROBOTS_TXT_COUNT == 0}
+                  <p class="hint">{'Aucun robot bloqué : rien à ajouter au robots.txt.'|@translate}</p>
+                {else}
+                  <p class="hint">{'Un robot bloqué par le plugin reçoit un refus (403) mais revient souvent essayer. Le fichier robots.txt, lu par les robots « polis » avant d\'explorer, leur interdit le site : ils ne demandent alors plus aucune page. Suggestion d\'après les statuts enregistrés :'|@translate}</p>
+                  {if $ROBOTS_TXT_STATE eq 'ok'}
+                    <p class="hint">{'Votre robots.txt interdit déjà le site à tous les robots bloqués.'|@translate}</p>
+                  {elseif $ROBOTS_TXT_STATE eq 'absent'}
+                    <p class="hint">{'Aucun fichier robots.txt à la racine du site : téléchargez-le et déposez-le à la racine.'|@translate}</p>
+                  {elseif $ROBOTS_TXT_STATE eq 'partial'}
+                    <p class="hint">{'Votre robots.txt n\'interdit pas encore le site à :'|@translate} <b>{$ROBOTS_TXT_MISSING|escape}</b>. {'Le fichier téléchargé reprend votre robots.txt actuel, complété des lignes manquantes : il remplace l\'ancien.'|@translate}</p>
+                  {/if}
+                  {if $ROBOTS_TXT_SUBDIR neq ''}
+                    <p class="hint">{'Piwigo est installé dans un sous-dossier (%s) : le robots.txt se place à la racine du domaine, c\'est-à-dire dans le dossier qui contient celui de Piwigo, et vaut pour tous les sites servis par ce domaine.'|@translate|@sprintf:"/`$ROBOTS_TXT_SUBDIR`/"|escape}</p>
+                    {if $ROBOTS_TXT_MISPLACED}
+                      <p class="hint" style="color:var(--c-warn);font-weight:600;">{'Un robots.txt se trouve dans le dossier de Piwigo (à côté du .htaccess) : les robots ne le lisent pas à cet endroit. Déplacez-le à la racine du domaine, dans le dossier qui contient celui de Piwigo.'|@translate}</p>
+                    {/if}
+                  {/if}
+                  <div class="iplc-robotstxt"><pre>{$ROBOTS_TXT_SUGGEST|escape}</pre>{if $ROBOTS_TXT_STATE neq 'ok'}<a class="iplc-btn ghost sm" href="{$BASE_URL|escape}&amp;robots_txt=download">{'Télécharger robots.txt'|@translate}</a>{/if}</div>
+                  <p class="hint">{'Les robots qui ne respectent pas le robots.txt, ou qui mentent sur leur nom, continuent de recevoir le refus du plugin. Un moteur de recherche (Googlebot, Bingbot…) passé en « Bloqué » figure aussi ci-dessus : vos pages disparaîtront peu à peu de ses résultats.'|@translate}</p>
+                {/if}
               </div>
             </details>
             <p class="hint">{'« Vérifié DNS » : l\'IP est contrôlée auprès du moteur (DNS inverse puis direct, résultat gardé 30 jours). Un faux Googlebot est traité comme un visiteur ordinaire, et l\'usurpation augmente son score.'|@translate}</p>

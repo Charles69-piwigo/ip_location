@@ -53,6 +53,20 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
   checked_at  DATETIME    NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
+// d. Compteurs des accès de robots vérifiés non journalisés (v2.7a.5) — même définition
+//    que maintain.class.php::robot_count_table_sql().
+pwg_query('
+CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_count (
+  day           DATE         NOT NULL,
+  robot         VARCHAR(64)  NOT NULL,
+  ip            VARCHAR(45)  NOT NULL,
+  country_code  CHAR(2)      DEFAULT NULL,
+  country       VARCHAR(64)  DEFAULT NULL,
+  logged        INT UNSIGNED NOT NULL DEFAULT 0,
+  counted       INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, robot, ip)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
+
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
@@ -64,6 +78,8 @@ if (isset($_POST['action'])) {
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_log
   WHERE visit_date < \'' . pwg_db_real_escape_string($date) . '\'');
+            pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_robot_count
+  WHERE day < \'' . pwg_db_real_escape_string($date) . '\'');
             redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=purged#ipl-card-retention');
         }
     } elseif ($_POST['action'] === 'save_visitors_config') {
@@ -178,6 +194,9 @@ if (isset($_POST['action'])) {
         // Libère aussitôt les IP auto-bloquées qui ne correspondent plus au nouveau
         // seuil, sans attendre leur expiration TTL (cf. ip_location_reconcile_auto_blocks()).
         ip_location_reconcile_auto_blocks($new_conf);
+        // Nouveau seuil / interrupteur : recalcul complet dès le rechargement qui suit,
+        // sans attendre l'intervalle de ip_location_classify_if_due().
+        conf_update_param('ip_location_last_classify', 0);
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-auto');
     } elseif ($_POST['action'] === 'save_config') {
         // Bloc "Blocage par pays" (max_records a son propre bloc depuis v2.6.3)
@@ -284,11 +303,22 @@ UPDATE ' . $prefixeTable . 'ip_location_blocklist
     }
 }
 
-// Classification différée des bots par co-visitation (scan lourd, réservé à cette
-// consultation admin — jamais déclenché depuis un chemin public comme ajax_visitors.php).
-// Placé après les actions POST (qui redirigent) pour ne pas payer ce coût inutilement
-// sur une simple sauvegarde de configuration.
-ip_location_classify_recent();
+// Téléchargement du robots.txt suggéré (v2.7a.7) : fichier existant complété des robots
+// bloqués qu'il n'interdit pas encore, ou fichier neuf — prêt à remplacer l'ancien.
+if (($_GET['robots_txt'] ?? '') === 'download') {
+    $robots_txt = ip_location_robots_txt_info(ip_location_get_robots());
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Content-Disposition: attachment; filename="robots.txt"');
+    echo $robots_txt['file'];
+    exit;
+}
+
+// Classification différée des bots (scan lourd de toute la fenêtre glissante). Placée
+// après les actions POST (qui redirigent) pour ne pas payer ce coût sur une simple
+// sauvegarde. Au plus une fois toutes les ip_location_classify_admin_interval_minutes
+// (défaut 10, v2.7a.4) : relancée à chaque chargement, elle faisait attendre des dizaines
+// de secondes sur un site très exploré (journal plein de passages de Googlebot).
+ip_location_classify_if_due(max(0, (int)$conf['ip_location_classify_admin_interval_minutes']) * 60);
 
 // Migrations v2.5.5, une seule fois chacune. Faites ici et non dans
 // maintain.class.php::update() : pendant update(), c'est encore l'ancien main.inc.php qui
@@ -514,8 +544,10 @@ if (in_array($_GET['export'] ?? '', ['csv', 'sql', 'json'], true)) {
     }
     while ($row = pwg_db_fetch_assoc($result)) {
         if ($format === 'csv') {
-            if ($first) fputcsv($out, array_keys($row), ';');
-            fputcsv($out, $row, ';');
+            // $escape explicite (PHP 8.4 : Deprecated sinon, écrit dans l'export). '' = CSV
+            // standard (guillemets doublés, pas d'échappement par \), celui que lit Excel.
+            if ($first) fputcsv($out, array_keys($row), ';', '"', '');
+            fputcsv($out, $row, ';', '"', '');
         } elseif ($format === 'sql') {
             $vals = [];
             foreach ($row as $col => $v) {
@@ -552,6 +584,18 @@ if ($row = pwg_db_fetch_assoc($r)) {
 }
 $total_visits = $journal_counts[$filter];
 $total_pages  = max(1, ceil($total_visits / $per_page));
+
+// Accès de robots vérifiés comptés mais non journalisés (v2.7a.5) : ajoutés aux tuiles
+// Tous / Bots non bloqués / dont robots autorisés, avec les mêmes filtres pays, dates et
+// IP. Jamais refusés et de score 0 : exclus dès qu'un filtre de motif ou de score > 0 est
+// actif. Le tableau et sa pagination restent sur les seules lignes journalisées.
+$journal_counted = 0;
+if ($reason_filter === '' && in_array($score_filter, ['', 'zero'], true)) {
+    $r = pwg_query('SELECT SUM(counted) FROM ' . $prefixeTable . 'ip_location_robot_count WHERE '
+        . ip_location_robot_counted_where($country_filter !== '' ? [$country_filter] : [], $ip_filter, [], $date_from, $date_to));
+    list($journal_counted) = pwg_db_fetch_row($r);
+    $journal_counted = (int)$journal_counted;
+}
 
 $logs = [];
 $result = pwg_query('
@@ -881,8 +925,15 @@ if ($tab === 'config' && $sub === 'settings') {
         $r = pwg_query('SELECT ' . implode(', ', $cols) . ' FROM ' . $prefixeTable . 'ip_location_log
   WHERE visit_date >= NOW() - INTERVAL 7 DAY');
         $robot_stats = pwg_db_fetch_assoc($r) ?: [];
+        // Accès comptés mais non journalisés (v2.7a.5) : ajoutés aux passages sur 7 jours
+        $robot_counted = [];
+        $r = pwg_query('SELECT robot, SUM(counted) FROM ' . $prefixeTable . 'ip_location_robot_count
+  WHERE day >= DATE(NOW() - INTERVAL 7 DAY) GROUP BY robot');
+        while ($row = pwg_db_fetch_row($r)) {
+            $robot_counted[$row[0]] = (int)$row[1];
+        }
         foreach ($robots as $i => $rb) {
-            $rb['seen'] = (int)($robot_stats['n' . $i] ?? 0);
+            $rb['seen'] = (int)($robot_stats['n' . $i] ?? 0) + ($robot_counted[$rb['name']] ?? 0);
             $rb['last'] = !empty($robot_stats['d' . $i]) ? substr($robot_stats['d' . $i], 0, 10) : '';
             $rb['verifiable'] = trim($rb['verify'] ?? '') !== '';
             $robot_rows[] = $rb;
@@ -898,7 +949,11 @@ if ($tab === 'config' && $sub === 'settings') {
         $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log
   WHERE visit_date >= NOW() - INTERVAL 7 DAY AND ' . $allowed_robot_sql);
         list($robots_seen_7d) = pwg_db_fetch_row($r);
+        $robots_seen_7d = (int)$robots_seen_7d + array_sum($robot_counted ?? []);
     }
+
+    // robots.txt suggéré (v2.7a.7), cf. ip_location_robots_txt_info()
+    $robots_txt = ip_location_robots_txt_info($robots);
 
     // Blocage automatique : score max par IP sur la fenêtre "récente" (curseur en direct)
     $recent_hours = max(1, (int)$conf['ip_location_auto_block_recent_hours']);
@@ -965,6 +1020,13 @@ if ($tab === 'config' && $sub === 'settings') {
         'ROBOTS_ALLOWED'     => count($robots) - $robots_blocked,
         'ROBOTS_SEEN_7D'     => (int)$robots_seen_7d,
         'ROBOTS_SPOOFED'     => (int)$robots_spoofed,
+        'ROBOTS_TXT_SUGGEST' => $robots_txt['suggest'],
+        'ROBOTS_TXT_COUNT'   => count($robots_txt['tokens']),
+        'ROBOTS_TXT_STATE'   => $robots_txt['state'],
+        'ROBOTS_TXT_MISSING' => implode(', ', $robots_txt['missing']),
+        'ROBOTS_TXT_MISSING_N' => count($robots_txt['missing']),
+        'ROBOTS_TXT_SUBDIR'  => $robots_txt['subdir'],
+        'ROBOTS_TXT_MISPLACED' => $robots_txt['misplaced'],
         'RECENT_SCORES_JSON' => json_encode($recent_scores),
         'RECENT_HOURS'       => $recent_hours,
         'EXEMPT_COUNT'       => count($exempt_ips),
@@ -1120,6 +1182,8 @@ $template->assign([
     'TAB'           => $tab,
     'SUB'           => $sub,
     'JOURNAL_COUNTS'=> $journal_counts,
+    'JOURNAL_COUNTED'=> $journal_counted,
+    'ROBOT_LOG_LIMIT'=> max(0, (int)$conf['ip_location_robot_log_limit']),
     'REASON_FILTER' => $reason_filter,
     'REASON_COUNTS' => $reason_counts,
     'SCORE_FILTER'  => $score_filter,

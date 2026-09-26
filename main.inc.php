@@ -10,6 +10,91 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.7b - 26/09/2026
+        regroupement de v2.7a.1 à v2.7a.7 
+        pour publication sur PEM
+
+    version 2.7a.7 - 26/09/2026
+        Robots d'indexation : volet « robots.txt suggéré » — texte « User-agent / Disallow: / »
+        des robots marqués Bloqués. Un robot bloqué reçoit un 403 mais revient souvent
+        essayer ; un robot poli qui lit le robots.txt ne demande plus rien.
+        Le robots.txt existant est analysé : à jour, absent, ou liste des robots bloqués
+        qu'il n'interdit pas encore (badge dans le titre du volet). Bouton « Télécharger
+        robots.txt » : fichier existant intact complété des seuls robots manquants (ou
+        fichier neuf), prêt à remplacer l'ancien ; masqué quand le fichier est à jour.
+        Avertissement si un robots.txt est déposé dans le dossier de Piwigo installé en
+        sous-dossier (à côté du .htaccess) : les robots ne le lisent pas à cet endroit.
+        Aide : entrée « robots.txt » (rôle, volet et téléchargement, emplacement selon que
+        Piwigo est à la racine du domaine ou en sous-dossier, moteurs de recherche à exclure). Il est cherché à la
+        racine du domaine : dossier de Piwigo, ou, Piwigo en sous-dossier, autant de
+        dossiers au-dessus que de sous-dossiers dans l'URL (avec une note : le fichier vaut
+        alors pour tous les sites du domaine). Aucune adresse de site n'est affichée.
+        Compteurs « passages de robots autorisés sur 7 j » et colonne « Vu 7 j » : incluent
+        désormais les accès comptés mais non journalisés (oubli de la 2.7a.5).
+
+    version 2.7a.6 - 26/09/2026
+        Aide et Réglages : il était dit que les IP du réseau local ne sont pas
+        géolocalisées / jamais bloquées automatiquement, ce qui laissait croire qu'elles
+        ne sont pas journalisées — elles le sont. Textes précisés, avec le cas courant :
+        depuis chez soi par le nom de domaine, les visites apparaissent sous l'adresse de
+        la box (ex. 192.168.1.1), à mettre en liste blanche pour ne plus les voir. Texte
+        du blocage automatique mis à jour (calcul au plus toutes les 10 min depuis l'admin,
+        relancé à l'enregistrement du bloc).
+        Journal : le menu Actions d'une ligne passait sous les cellules Actions (sticky) des
+        lignes suivantes — la cellule de la ligne passe au premier plan pendant l'ouverture.
+
+    version 2.7a.5 - 26/09/2026
+        Robots vérifiés comptés au lieu d'être journalisés : au-delà de 100 accès par jour
+        ($conf['ip_location_robot_log_limit'], 0 = tout journaliser), les accès d'un robot
+        autorisé et vérifiable par DNS (Googlebot, Bingbot, Applebot, Yandex, Baidu) ne
+        sont plus écrits dans le journal mais comptés dans la nouvelle table
+        ip_location_robot_count (jour / robot / IP / pays ; créée à l'installation, à la
+        mise à jour et par le filet de sécurité d'admin.php). Sur un site très exploré, 90 %
+        du journal était du Googlebot : 50 000 lignes ne couvraient qu'une journée, et la
+        classification recalculait surtout ces lignes-là. Les robots autorisés sans
+        vérification DNS, les faux robots et les robots bloqués restent journalisés.
+        Journal : les tuiles Tous / Bots non bloqués / dont robots autorisés incluent les
+        accès comptés (filtres pays, dates, IP), avec une mention sous les tuiles ; le
+        tableau et sa pagination restent sur les lignes journalisées.
+        Statistiques : les séries Tous et Bots incluent les accès comptés (filtres pays et
+        IP), pour qu'une submersion reste visible sur les courbes ; pas les séries filtrées
+        par mot-clé (l'URL n'est pas gardée). Compteurs purgés avec le journal (purge par
+        date, limite du nombre d'enregistrements). Aide mise à jour.
+
+    version 2.7a.4 - 26/09/2026
+        Performance : la classification bot (score, is_bot, blocage auto), relancée à
+        chaque ouverture de l'onglet admin, faisait attendre de longues secondes sur un
+        site très exploré (journal de 31 000 lignes en 14 h, dont 90 % de Googlebot). Elle
+        ne tourne plus qu'au plus une fois toutes les 10 minutes depuis l'admin
+        ($conf['ip_location_classify_admin_interval_minutes'], 0 = à chaque chargement) ;
+        l'enregistrement du bloc Blocage automatique force un recalcul immédiat.
+        Nouvelle fonction ip_location_classify_if_due(), point d'entrée unique (admin et
+        trafic public). L'heure du dernier passage est désormais un paramètre de config à
+        part (ip_location_last_classify), écrit AVANT le calcul : le trafic public ne
+        réécrit plus toute la conf du plugin (risque d'écraser un réglage admin), et les
+        requêtes arrivant pendant un passage n'en relancent plus un second en parallèle.
+
+    version 2.7a.3 - 26/09/2026
+        Journal des accès : pleine largeur d'écran (au lieu de 1240 px au plus) ; URL et
+        navigateur réunis dans une seule colonne, l'un sous l'autre (URL en 1re ligne,
+        navigateur en 2e), affichés en entier sans troncature — ascenseur horizontal
+        quand la ligne dépasse l'écran. La colonne Actions reste collée au bord
+        droit pendant le défilement, et son menu s'ouvre par-dessus le tableau (position
+        fixed) pour ne pas être coupé.
+
+    version 2.7a.2 - 26/09/2026
+        Export CSV du Journal : « Deprecated: fputcsv(): the $escape parameter must be
+        provided » écrit dans le fichier sur chaque ligne sous PHP 8.4. Paramètre $escape
+        désormais explicite ('' : CSV standard, guillemets doublés).
+
+    version 2.7a.1 - 25/09/2026
+        Widget Visiteurs : placé par défaut juste après « Albums » au lieu de la fin du
+        menu (hook blockmanager_prepare_display), tant que l'admin n'a pas fixé lui-même
+        sa position dans Configuration → Menus — son choix reste prioritaire.
+        Panel : s'ouvre au-dessus du lien quand la place manque en dessous (menu vertical,
+        lien en bas d'écran), hauteur bornée à la place disponible — il ne sort plus de
+        l'écran.
+
     version 2.7a - 24/09/2026
          regroupement des v2.7.1 et v2.7.2
          
@@ -498,6 +583,8 @@ $ip_location_score_defaults = [
     'ip_location_robot_check_days'    => 30, // durée de validité d'une vérification DNS de robot
     'ip_location_refusal_log_minutes' => 10, // un refus répété (même IP, même motif) n'est journalisé qu'une fois par période ; 0 = tous
     'ip_location_classify_interval_hours' => 4,
+    'ip_location_classify_admin_interval_minutes' => 10, // passage depuis l'onglet admin (v2.7a.4)
+    'ip_location_robot_log_limit'     => 100, // accès journalisés par robot vérifié et par jour, au-delà comptés seulement ; 0 = tout journaliser (v2.7a.5)
     'ip_location_classify_window_days' => 7,
 ];
 // Ancienne liste blanche de robots (réglage fin jusqu'en v2.6.1) : remplacée par le bloc
@@ -569,7 +656,6 @@ function ip_location_get_conf()
         'keyword_block_enabled'      => '0',
         'robots_enabled'             => '1',   // bloc "Robots d'indexation" (v2.6.2)
         'robots'                     => null,  // null = liste par défaut, cf. ip_location_get_robots()
-        'last_classify_at'           => '',
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -708,6 +794,26 @@ add_event_handler('loc_begin_page_tail', 'ip_location_inject_pswp_logger');
 // ─── Blockmanager : bouton dans la barre de navigation ────────────────────
 add_event_handler('blockmanager_register_blocks', 'ip_location_register_visitors_block');
 add_event_handler('blockmanager_apply',           'ip_location_apply_visitors_block');
+add_event_handler('blockmanager_prepare_display', 'ip_location_position_visitors_block');
+
+/**
+ * Position par défaut du bloc : juste après « Albums » (mbCategories) plutôt qu'en fin
+ * de menu — sur un menu vertical, un bloc tout en bas ouvrait son panel hors écran.
+ * Seulement tant que l'admin n'a pas fixé lui-même sa position dans Configuration →
+ * Menus (clé présente dans $conf['blk_menubar']) : son choix reste prioritaire.
+ */
+function ip_location_position_visitors_block($menu_ref_arr)
+{
+    global $conf;
+    $menu = &$menu_ref_arr[0];
+    if ($menu->get_id() != 'menubar' || $menu->is_hidden('mbIplVisitors') || $menu->is_hidden('mbCategories')) return;
+
+    $mb_conf = isset($conf['blk_menubar']) ? $conf['blk_menubar'] : array();
+    if (!is_array($mb_conf)) $mb_conf = @unserialize($mb_conf);
+    if (is_array($mb_conf) && isset($mb_conf['mbIplVisitors'])) return;
+
+    $menu->set_block_position('mbIplVisitors', $menu->get_block('mbCategories')->get_position() + 1);
+}
 
 function ip_location_register_visitors_block($menu_ref_arr)
 {
@@ -813,7 +919,15 @@ window.iplVisToggle=function(anchorEl){
   if(anchor){
     var r=anchor.getBoundingClientRect();
     var pw=p.offsetWidth||320,dw=document.documentElement.clientWidth;
-    p.style.top=r.bottom+'px';
+    // Sous l'ancre par défaut ; au-dessus si la place manque en dessous et qu'il y en a
+    // plus au-dessus (menu vertical, lien en bas d'écran). Ancré par bottom, le panel
+    // grandit vers le haut quand les données arrivent. Hauteur bornée à la place dispo.
+    var vh=document.documentElement.clientHeight,below=vh-r.bottom-4,above=r.top-4;
+    var up=below<430&&above>below,avail=Math.max(up?above:below,150);
+    if(up){p.style.top='auto';p.style.bottom=(vh-r.top)+'px';}
+    else{p.style.bottom='auto';p.style.top=r.bottom+'px';}
+    p.style.maxHeight=Math.min(avail,430)+'px';
+    document.getElementById('ipl-vis-body').style.maxHeight=(Math.min(avail,430)-60)+'px';
     // Aligner le bord gauche du panel sur le bord gauche de l'ancre,
     // mais si ça déborde à droite, aligner les bords droits.
     var left=r.left;
@@ -821,7 +935,7 @@ window.iplVisToggle=function(anchorEl){
     p.style.left=Math.max(left,4)+'px';
     p.style.right='auto';
   } else {
-    p.style.top='44px';p.style.right='12px';p.style.left='auto';
+    p.style.top='44px';p.style.bottom='auto';p.style.right='12px';p.style.left='auto';
   }
   p.style.display='block';
   // Revérifier le TTL à chaque ouverture (même si données déjà en mémoire)
@@ -1331,6 +1445,85 @@ REPLACE INTO ' . $prefixeTable . 'ip_location_robot_check (ip, robot, verified, 
 }
 
 /**
+ * robots.txt suggéré (v2.7a.7) : un robot poli qui lit « Disallow: / » ne demande plus
+ * aucune page, là où le refus 403 du plugin le laisse revenir. Le robots.txt n'est lu qu'à
+ * la racine du domaine : Piwigo en sous-dossier (/photodev2/), on le cherche autant de
+ * dossiers au-dessus qu'il y a de sous-dossiers dans l'URL (disposition usuelle, la racine
+ * web du domaine contenant le dossier de Piwigo).
+ * Retourne tokens (User-agent des robots bloqués), suggest (leurs seules lignes), state
+ * (ok / partial / absent), missing (robots bloqués que le fichier n'interdit pas), subdir
+ * et file (contenu complet à télécharger : fichier existant + lignes manquantes).
+ */
+function ip_location_robots_txt_info($robots)
+{
+    $tokens = [];
+    foreach ($robots as $rb) {
+        if (($rb['status'] ?? 'allow') === 'block' && trim($rb['ua']) !== '') {
+            $tokens[] = trim($rb['ua']);
+        }
+    }
+    $groups = function ($list) {
+        $out = '';
+        foreach ($list as $tok) {
+            $out .= "User-agent: " . $tok . "\nDisallow: /\n\n";
+        }
+        return rtrim($out) . "\n";
+    };
+
+    $subdir = trim(parse_url(get_absolute_root_url(), PHP_URL_PATH) ?: '/', '/');
+    $depth  = $subdir === '' ? 0 : count(explode('/', $subdir));
+    $txt    = @file_get_contents(PHPWG_ROOT_PATH . str_repeat('../', $depth) . 'robots.txt');
+
+    $missing = $tokens;
+    if ($txt !== false) {
+        // Groupes « User-agent » consécutifs, puis leurs règles : un « Disallow: / » exact
+        // couvre tous les User-agent du groupe (« * » couvre tout le monde).
+        $disallowed = [];
+        $group = [];
+        $in_rules = false;
+        foreach (preg_split('/\r\n|\r|\n/', $txt) as $line) {
+            $line = trim(preg_replace('/#.*$/', '', $line));
+            if ($line === '' || strpos($line, ':') === false) continue;
+            list($field, $value) = array_map('trim', explode(':', $line, 2));
+            $field = strtolower($field);
+            if ($field === 'user-agent') {
+                if ($in_rules) { $group = []; $in_rules = false; }
+                $group[] = strtolower($value);
+            } else {
+                $in_rules = true;
+                if ($field === 'disallow' && $value === '/') {
+                    foreach ($group as $g) $disallowed[$g] = true;
+                }
+            }
+        }
+        $missing = array_values(array_filter($tokens, function ($tok) use ($disallowed) {
+            return !isset($disallowed[strtolower($tok)]) && !isset($disallowed['*']);
+        }));
+    }
+
+    // Fichier à télécharger : l'existant intact, complété des seuls robots manquants
+    if ($txt === false) {
+        $file = "# Robots bloqués par IP Location (plugin Piwigo)\n\n" . $groups($tokens);
+    } elseif (empty($missing)) {
+        $file = $txt;
+    } else {
+        $file = rtrim($txt) . "\n\n# Robots bloqués par IP Location (plugin Piwigo)\n\n" . $groups($missing);
+    }
+
+    return [
+        'tokens'  => $tokens,
+        // robots.txt déposé dans le dossier de Piwigo installé en sous-dossier : les robots
+        // ne le lisent pas là (seul /robots.txt du domaine compte), à signaler.
+        'misplaced' => $depth > 0 && is_file(PHPWG_ROOT_PATH . 'robots.txt'),
+        'suggest' => $groups($tokens),
+        'state'   => $txt === false ? 'absent' : (empty($missing) ? 'ok' : 'partial'),
+        'missing' => $missing,
+        'subdir'  => $subdir,
+        'file'    => $file,
+    ];
+}
+
+/**
  * Statut "robot" de la requête en cours (calculé une fois par requête) :
  *   null      — bloc Robots coupé, invité inconnu, ou robot hors liste (→ score) ;
  *   'allowed' — robot autorisé et authentique : passe tous les leviers ;
@@ -1457,6 +1650,11 @@ function ip_location_enforce_max_records($plugin_conf)
 DELETE FROM ' . $prefixeTable . 'ip_location_log
   ORDER BY visit_date ASC
   LIMIT ' . ($count - $max_records));
+            // Compteurs de robots (v2.7a.5) : même période que le journal conservé, sinon
+            // les courbes montreraient des robots sur des jours sans aucun autre accès.
+            pwg_query('
+DELETE FROM ' . $prefixeTable . 'ip_location_robot_count
+  WHERE day < (SELECT d FROM (SELECT DATE(MIN(visit_date)) AS d FROM ' . $prefixeTable . 'ip_location_log) m)');
         }
     }
 }
@@ -1590,6 +1788,71 @@ INSERT INTO ' . $prefixeTable . 'ip_location_log
     ' . $str($row['block_reason'] ?? null) . ',
     NOW()
   )');
+}
+
+/**
+ * Compte un accès de robot autorisé et vérifié (v2.7a.5) et indique s'il faut aussi le
+ * journaliser : oui tant que ce robot a eu moins de $conf['ip_location_robot_log_limit']
+ * accès journalisés aujourd'hui (0 = toujours). Les accès au-delà ne sont que comptés
+ * (colonne counted), par jour / robot / IP avec le pays, pour que les courbes et les
+ * compteurs du Journal les reprennent avec leurs filtres pays et IP. Deux requêtes
+ * légères sur une table de quelques dizaines de lignes par jour, au lieu d'une ligne de
+ * journal par accès — un site très exploré recevait des dizaines de milliers d'accès
+ * Googlebot par jour, qui remplissaient le journal et alourdissaient la classification.
+ */
+function ip_location_count_robot_hit($robot_name, $ip_raw, $geo)
+{
+    global $prefixeTable, $conf;
+    $limit = max(0, (int)$conf['ip_location_robot_log_limit']);
+    if ($limit === 0) {
+        return true;
+    }
+
+    $robot_sql = pwg_db_real_escape_string(mb_substr($robot_name, 0, 64));
+    $r = pwg_query('SELECT SUM(logged) FROM ' . $prefixeTable . 'ip_location_robot_count
+  WHERE day = CURDATE() AND robot = \'' . $robot_sql . '\'');
+    list($logged_today) = pwg_db_fetch_row($r);
+    $do_log = (int)$logged_today < $limit;
+
+    $str = function ($v) {
+        return $v === null || $v === '' ? 'NULL' : '\'' . pwg_db_real_escape_string($v) . '\'';
+    };
+    $col = $do_log ? 'logged' : 'counted';
+    pwg_query('
+INSERT INTO ' . $prefixeTable . 'ip_location_robot_count
+  (day, robot, ip, country_code, country, logged, counted)
+  VALUES (CURDATE(), \'' . $robot_sql . '\', ' . $str($ip_raw) . ', '
+    . $str($geo['country_code'] ?? null) . ', ' . $str($geo['country'] ?? null) . ', '
+    . ($do_log ? '1, 0' : '0, 1') . ')
+  ON DUPLICATE KEY UPDATE ' . $col . ' = ' . $col . ' + 1');
+
+    return $do_log;
+}
+
+/**
+ * Fragment SQL (sans WHERE) des accès de robots comptés mais non journalisés, pour les
+ * mêmes filtres pays / IP / période que le journal (v2.7a.5). $ip_prefix : début d'IP
+ * (filtre du Journal) ; $ips : liste d'IP exactes (séries des statistiques).
+ */
+function ip_location_robot_counted_where($country_codes, $ip_prefix, $ips, $day_from, $day_to)
+{
+    $w = ['counted > 0'];
+    if (!empty($country_codes)) {
+        $w[] = 'country_code IN (' . implode(',', array_map(function ($c) {
+            return '\'' . pwg_db_real_escape_string($c) . '\'';
+        }, $country_codes)) . ')';
+    }
+    if ($ip_prefix !== '') {
+        $w[] = 'ip LIKE \'' . pwg_db_real_escape_string($ip_prefix) . '%\'';
+    }
+    if (!empty($ips)) {
+        $w[] = 'ip IN (' . implode(',', array_map(function ($ip) {
+            return '\'' . pwg_db_real_escape_string($ip) . '\'';
+        }, $ips)) . ')';
+    }
+    if ($day_from !== '') $w[] = 'day >= \'' . pwg_db_real_escape_string($day_from) . '\'';
+    if ($day_to !== '')   $w[] = 'day <= \'' . pwg_db_real_escape_string($day_to) . '\'';
+    return implode(' AND ', $w);
 }
 
 /**
@@ -1907,36 +2170,40 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
         }
     }
 
-    ip_location_insert_log([
-        'ip'           => $ip_raw,
-        'geo'          => $geo,
-        'url'          => $url,
-        'user_agent'   => $user_agent,
-        'is_bot'       => $is_bot,
-        'is_blocked'   => $is_blocked,
-        'log_type'     => $log_type,
-        'block_reason' => $block_reason,
-    ]);
+    // Robot autorisé ET vérifiable par DNS (Googlebot, Bingbot…) : au-delà de
+    // ip_location_robot_log_limit accès dans la journée, l'accès est seulement compté
+    // (v2.7a.5). Un robot autorisé sans vérification DNS reste toujours journalisé : son
+    // User-Agent seul peut être usurpé.
+    $do_log = true;
+    if ($robot_allowed && !empty($robot_state['robot']['verify'])) {
+        $do_log = ip_location_count_robot_hit($robot_state['robot']['name'], $ip_raw, $geo);
+    }
 
-    // Marquage rétroactif par co-visitation : différé en lot à ip_location_classify_recent()
-    // (appelée depuis admin.php à chaque chargement, et ci-dessous au plus 1x/jour depuis
-    // le trafic public), pour éviter un scan de la table à chaque visite.
+    if ($do_log) {
+        ip_location_insert_log([
+            'ip'           => $ip_raw,
+            'geo'          => $geo,
+            'url'          => $url,
+            'user_agent'   => $user_agent,
+            'is_bot'       => $is_bot,
+            'is_blocked'   => $is_blocked,
+            'log_type'     => $log_type,
+            'block_reason' => $block_reason,
+        ]);
 
-    ip_location_enforce_max_records($plugin_conf);
+        // Marquage rétroactif par co-visitation : différé en lot à ip_location_classify_recent()
+        // (depuis admin.php et ci-dessous depuis le trafic public, cf.
+        // ip_location_classify_if_due()), pour éviter un scan de la table à chaque visite.
+
+        ip_location_enforce_max_records($plugin_conf);
+    }
 
     // Classification bot différée (score + blocage auto), au plus une fois toutes les
     // ip_location_classify_interval_hours (défaut 4h), déclenchée par le trafic public
     // puisqu'aucune visite admin ne le garantit sinon (ip_location_classify_recent()
     // n'était auparavant appelée que depuis admin.php, donc jamais mise à jour sur un
     // site peu administré).
-    $last_classify     = $plugin_conf['last_classify_at'] ?? '';
-    $classify_interval = (int)$conf['ip_location_classify_interval_hours'] * 3600;
-    if ($last_classify === '' || strtotime($last_classify) <= time() - $classify_interval) {
-        ip_location_classify_recent();
-        conf_update_param('ip_location', serialize(array_merge($plugin_conf, [
-            'last_classify_at' => date('Y-m-d H:i:s'),
-        ])));
-    }
+    ip_location_classify_if_due((int)$conf['ip_location_classify_interval_hours'] * 3600);
 
     if ($is_blocked && $do_block) {
         header('HTTP/1.0 403 Forbidden');
@@ -2073,6 +2340,33 @@ function ip_location_is_bot_ua($user_agent)
 }
 
 /**
+ * Lance ip_location_classify_recent() si le dernier passage date d'au moins
+ * $interval_seconds, et retourne true dans ce cas. Seul point d'entrée du calcul :
+ * depuis admin.php (au plus 1x/ip_location_classify_admin_interval_minutes, défaut 10,
+ * v2.7a.4 — avant, à chaque chargement de l'onglet, soit des dizaines de secondes
+ * d'attente sur un site très exploré) et depuis ip_location_log_visit() (trafic public,
+ * au plus 1x/ip_location_classify_interval_hours) pour garantir que le blocage auto
+ * fonctionne même sans visite admin régulière.
+ */
+function ip_location_classify_if_due($interval_seconds)
+{
+    // Heure du dernier passage : paramètre de config à part (et non une clé de la conf
+    // sérialisée 'ip_location', qu'on réécrirait entière depuis le trafic public au risque
+    // d'écraser un réglage admin enregistré entre-temps). Relue en base, pas dans $conf
+    // chargé en début de requête, pour voir un passage lancé par une requête concurrente.
+    $r = pwg_query('SELECT value FROM ' . CONFIG_TABLE . ' WHERE param = \'ip_location_last_classify\'');
+    $row = pwg_db_fetch_row($r);
+    if ($row && (int)$row[0] > time() - $interval_seconds) {
+        return false;
+    }
+    // Horodaté AVANT le calcul, qui peut durer plusieurs secondes sur un gros journal :
+    // les requêtes qui arrivent pendant ce temps ne relancent pas un second passage.
+    conf_update_param('ip_location_last_classify', time());
+    ip_location_classify_recent();
+    return true;
+}
+
+/**
  * Rejoue en lot, sur les 7 derniers jours, la détection de bots par co-visitation
  * (>= 2 IP distinctes sur la même URL dans une fenêtre de ~10 s), ainsi que le calcul
  * du score de suspicion bot (bot_score) et le blocage automatique associé (4ème
@@ -2080,9 +2374,8 @@ function ip_location_is_bot_ua($user_agent)
  * (au lieu d'une fenêtre glissante) — sans impact sur is_bot, qui reste une info de
  * stats/filtre ne pilotant aucun blocage par lui-même. Idempotent (WHERE is_bot = 0
  * pour la co-visitation ; bot_score recalculé intégralement à chaque passage).
- * Appelée depuis admin.php à chaque chargement de l'onglet, et depuis
- * ip_location_log_visit() au plus une fois par jour (trafic public) pour garantir
- * que le blocage auto fonctionne même sans visite admin régulière.
+ * Calcul lourd sur toute la fenêtre glissante : ne pas appeler directement, passer par
+ * ip_location_classify_if_due().
  */
 function ip_location_classify_recent()
 {

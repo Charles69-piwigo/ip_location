@@ -164,6 +164,20 @@ SELECT ' . $bucket_expr . ' AS bucket, COUNT(*) AS cnt
         $counts[$row['bucket']] = (int)$row['cnt'];
     }
 
+    // Accès de robots vérifiés comptés mais non journalisés (v2.7a.5) : ajoutés aux
+    // séries Tous / Bots, pour qu'une submersion par un moteur reste visible sur les
+    // courbes. Pas aux séries filtrées par mot-clé d'URL : le compteur ne garde pas l'URL.
+    if (in_array($s['type'], ['all', 'bot'], true) && empty($s['keywords'])) {
+        $result = pwg_query('
+SELECT ' . str_replace('visit_date', 'day', $bucket_expr) . ' AS bucket, SUM(counted) AS cnt
+  FROM ' . $prefixeTable . 'ip_location_robot_count
+  WHERE ' . ip_location_robot_counted_where($s['countries'], '', $s['ips'], $date_from->format('Y-m-d'), $date_to->format('Y-m-d')) . '
+  GROUP BY bucket');
+        while ($row = pwg_db_fetch_assoc($result)) {
+            $counts[$row['bucket']] = ($counts[$row['bucket']] ?? 0) + (int)$row['cnt'];
+        }
+    }
+
     $data = [];
     foreach ($bucket_starts as $b) {
         $data[] = $counts[$b] ?? 0;

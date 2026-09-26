@@ -150,6 +150,30 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
 
         // Migration v2.6.1 → v2.6.2 : cache de vérification DNS des robots d'indexation
         pwg_query(ip_location_maintain::robot_check_table_sql($prefixeTable));
+
+        // Migration v2.7a → v2.7a.5 : compteurs des accès de robots vérifiés non journalisés
+        pwg_query(ip_location_maintain::robot_count_table_sql($prefixeTable));
+    }
+
+    /**
+     * CREATE TABLE des compteurs de robots (v2.7a.5) : au-delà de
+     * $conf['ip_location_robot_log_limit'] accès par robot vérifié et par jour, les accès ne
+     * sont plus journalisés mais comptés ici (logged = accès journalisés, counted = accès
+     * seulement comptés). Partagé avec le filet de sécurité d'admin.php.
+     */
+    static function robot_count_table_sql($prefixeTable)
+    {
+        return '
+CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_count (
+  day           DATE         NOT NULL,
+  robot         VARCHAR(64)  NOT NULL,
+  ip            VARCHAR(45)  NOT NULL,
+  country_code  CHAR(2)      DEFAULT NULL,
+  country       VARCHAR(64)  DEFAULT NULL,
+  logged        INT UNSIGNED NOT NULL DEFAULT 0,
+  counted       INT UNSIGNED NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, robot, ip)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;';
     }
 
     /**
@@ -180,7 +204,8 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_cache');
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_blocklist');
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_robot_check');
-        pwg_query("DELETE FROM " . CONFIG_TABLE . " WHERE param = 'ip_location'");
+        pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_robot_count');
+        pwg_query("DELETE FROM " . CONFIG_TABLE . " WHERE param IN ('ip_location', 'ip_location_last_classify')");
     }
 
     /**
