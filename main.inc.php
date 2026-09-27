@@ -10,6 +10,49 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.7c - 27/09/2026
+        Regroupement de v2.7b.1 à v2.7b3
+        pour publication sur PEM
+
+    version 2.7b.3 - 27/09/2026
+        Détection (pistes du point global) :
+        - scanner de failles non détecté (UA "cve-…-poc/1.0", score 0) : mots-clés UA
+          cve-, exploit, nuclei, scanner ; nouveaux signaux « UA non navigateur » (ne
+          commence pas par Mozilla/, +30) et « page d'un autre logiciel » (WordPress,
+          .env… demandés à un Piwigo, +50 sur toutes les lignes de l'IP) ;
+        - « navigateur impossible » (ip_location_is_forged_ua, +30 et marquage bot) :
+          Chrome ≥ 113 à build complet, macOS autre que 10_15_7 — robot à UA tournant
+          (score 0) qui gonflait le widget Visites ;
+        - co-visitation : les robots déclarés ou autorisés (Google-Read-Aloud, aperçus
+          de partage) ne comptent plus comme seconde IP ; poids 40 → 30 (le téléphone de
+          l'administrateur avait été auto-bloqué sur ce seul signal, seuil 40) ; note
+          sous le curseur quand le seuil est < 50.
+        Réglages :
+        - robots.txt : adresse vérifiée affichée ; avertissement « mal placé » nuancé
+          pour une galerie servie sous plusieurs noms de domaine ;
+        - blocage par mot-clé : avertissement quand un mot-clé toucherait une page
+          de navigation essentielle (pagination, photo, tags, recherche, photos au
+          hasard…) — ex. « start » bloquait la page 2 des albums et le bouton Miniatures ;
+          calendrier et diaporama natif, souvent bloqués exprès, ne sont pas signalés.
+        Rectification 2.7b.2 : les doublons de page venaient de http/https, pas d'URL
+        sans "/" initial (commentaires corrigés).
+
+    version 2.7b.2 - 27/09/2026
+        Widget Visites : règle de qualification adaptée aux URL réelles (journal d'un
+        testeur). Pages photo reconnues sans ".php" (URL réécrites) ; albums, tags et
+        recherches par nom ou par numéro (category/nom, /categories, tags/…, search/psk-…),
+        plus most_downloaded, created-…, posted-… ; "?/" encodé "%2F" (plugin BYB) accepté.
+        « Autre page à ± 30 min » comparée sur une clé normalisée (ip_location_page_key_sql) :
+        la même page en http puis https ou avec d'autres paramètres ne suffit plus à
+        qualifier un robot.
+
+    version 2.7b.1 - 26/09/2026
+        Journal : score grisé, avec infobulle « Score figé », pour les accès plus anciens
+        que la fenêtre de classification (7 jours par défaut) : leur score n'est plus
+        recalculé et ne compte plus pour le blocage automatique (activité des dernières
+        24 h seulement). Évite la question « score 70 au-dessus du seuil, mais pas
+        bloqué ? » pour une IP qui n'est pas revenue. Explication ajoutée dans l'Aide.
+
     version 2.7b - 26/09/2026
         regroupement de v2.7a.1 à v2.7a.7 
         pour publication sur PEM
@@ -570,7 +613,10 @@ global $conf;
 $ip_location_score_defaults = [
     'ip_location_score_ua_empty'      => 10,
     'ip_location_score_ua_keyword'    => 15,
-    'ip_location_score_covisit'       => 40,
+    'ip_location_score_covisit'       => 30, // 40 avant v2.7b.3 : seul, franchissait un seuil de 40
+    'ip_location_score_non_browser_ua' => 30, // UA ne commençant pas par "Mozilla/" (v2.7b.3)
+    'ip_location_score_forged_ua'     => 30, // UA de navigateur impossible, cf. ip_location_is_forged_ua() (v2.7b.3)
+    'ip_location_score_foreign_url'   => 50, // URL d'un autre CMS (WordPress…), cf. ip_location_foreign_url_patterns() (v2.7b.3)
     'ip_location_score_burst'         => 50,
     'ip_location_score_multi_url_burst' => 50,
     'ip_location_multi_url_threshold' => 20, // URL distinctes par IP en ~30 s (10 avant v2.5.5)
@@ -730,10 +776,15 @@ function ip_location_currently_blocked_sql($prefixeTable, $ip_col = 'ip', $ua_co
 /**
  * Fragment SQL définissant une "visite qualifiée" du widget public Visiteurs : accès
  * présumé humain (non-bot, non-bloqué, IP absente de la blocklist .htaccess) à une page
- * photo ou une section d'album (hors accueil), précédé ou suivi d'une autre URL de la
+ * photo ou une section d'album (hors accueil), précédé ou suivi d'une autre page de la
  * même IP dans les ±30 min. Utilisée par ajax_visitors.php (agrégat par pays) et
  * admin.php (détail ligne par ligne) — source unique pour que les deux calculs ne
  * divergent jamais (même piège que ip_location_bot_ua_keywords()).
+ *
+ * Pages reconnues avec ou sans ".php" (URL réécrites), albums/tags/recherches par nom
+ * ou par numéro, "?/" éventuellement encodé en "%2F" (réécriture du plugin BYB).
+ * "Autre page" = clé ip_location_page_key_sql() différente : la même page en http puis
+ * https ou avec d'autres paramètres ne compte pas (v2.7b.2).
  *
  * @param string $prefixeTable
  * @param string $alias  Alias de ip_location_log dans la requête appelante.
@@ -743,26 +794,48 @@ function ip_location_qualifying_visit_where($prefixeTable, $alias = 'l1')
 {
     $in_blocklist_sql = ip_location_currently_blocked_sql($prefixeTable, "{$alias}.ip", "{$alias}.user_agent");
 
+    // Classes [?] / [.] plutôt que des antislashs : évite le double échappement PHP → SQL → regex.
+    $page_regexp = 'picture([.]php)?[?/]'
+        . '|([?]|index([.]php)?)/(categor(y|ies)|list|tags|search|recent_pics|recent_cats'
+        . '|most_visited|most_downloaded|best_rated|favorites|created-|posted-)';
+
     return "
    {$alias}.is_bot        = 0
    AND {$alias}.is_blocked    = 0
    AND ({$alias}.log_type IS NULL OR {$alias}.log_type != 'prefetch')
    AND NOT ({$in_blocklist_sql})
    AND {$alias}.country_code != ''
-   AND (
-         {$alias}.url LIKE '%/picture.php%'
-      OR {$alias}.url REGEXP '/category/[0-9]+|/list/[0-9]|/recent_pics|/most_visited|/best_rated|/tag/[0-9]|/search/[0-9]|/favorites'
-   )
+   AND REPLACE(REPLACE({$alias}.url, '%2F', '/'), '%2f', '/') REGEXP '{$page_regexp}'
    AND EXISTS (
          SELECT 1
            FROM {$prefixeTable}ip_location_log l2
           WHERE l2.ip  = {$alias}.ip
-            AND l2.url != {$alias}.url
+            AND " . ip_location_page_key_sql('l2.url') . " != " . ip_location_page_key_sql("{$alias}.url") . "
             AND (l2.log_type IS NULL OR l2.log_type != 'prefetch')
             AND l2.visit_date BETWEEN
                 DATE_SUB({$alias}.visit_date, INTERVAL 30 MINUTE)
                 AND DATE_ADD({$alias}.visit_date, INTERVAL 30 MINUTE)
        )";
+}
+
+/**
+ * Expression SQL donnant une clé "page" comparable pour une colonne URL du journal :
+ * sans schéma ni hôte (certains robots demandent chaque page en http puis en https),
+ * "%2F" décodé, paramètres ignorés (tout ce qui suit le premier "&" ou "=" : tri, lang,
+ * byb_try...). Ex. "https://h/index?%2Fcategory%2Fx=&byb_try=1" et
+ * "http://h/index?/category/x&lang=fr" → "?/category/x". Sans "?" : dernier segment
+ * ("", "index", "search.php"). Compatible MySQL 5 (pas de REGEXP_REPLACE).
+ *
+ * @param string $col Colonne URL qualifiée (ex. "l2.url").
+ * @return string
+ */
+function ip_location_page_key_sql($col)
+{
+    return "IF(LOCATE('?', {$col}) = 0,
+        SUBSTRING_INDEX({$col}, '/', -1),
+        CONCAT('?', SUBSTRING_INDEX(SUBSTRING_INDEX(
+            REPLACE(LOWER(SUBSTRING({$col}, LOCATE('?', {$col}) + 1)), '%2f', '/'),
+        '&', 1), '=', 1)))";
 }
 
 // Hooks de visite
@@ -1519,6 +1592,10 @@ function ip_location_robots_txt_info($robots)
         'state'   => $txt === false ? 'absent' : (empty($missing) ? 'ok' : 'partial'),
         'missing' => $missing,
         'subdir'  => $subdir,
+        // Adresse réellement vérifiée : celle du domaine utilisé pour ouvrir l'admin. Un site
+        // servi sous plusieurs noms (racine d'un domaine + sous-dossier d'un autre) a un
+        // robots.txt par nom, le plugin ne voit que celui-ci (v2.7b.3).
+        'url'     => preg_replace('#^(https?://[^/]+).*$#', '$1', get_absolute_root_url()) . '/robots.txt',
         'file'    => $file,
     ];
 }
@@ -2272,7 +2349,76 @@ function ip_location_bot_ua_keywords()
     return ['bot', 'crawler', 'spider', 'scraper', 'slurp', 'curl', 'wget',
             'python', 'go-http', 'java/', 'libwww', 'scrapy', 'zgrab', 'masscan',
             'censys', 'palo alto', 'leakix', 'cms-checker', 'rootevidence',
-            'netcraft', 'tlm-audit-scanner', 'internetmeasurement', 'okhttp'];
+            'netcraft', 'scanner', 'internetmeasurement', 'okhttp',
+            // v2.7b.3 : outils d'exploitation (ex. "cve-2026-87902-poc/1.0" vu en prod).
+            // Pas "poc" seul : les téléphones Xiaomi POCO l'ont dans leur UA.
+            'cve-', 'exploit', 'nuclei'];
+}
+
+/**
+ * Fragments d'URL qu'un Piwigo ne sert jamais (WordPress, fichiers sensibles…) : une IP
+ * qui les demande sonde des failles d'un autre logiciel (v2.7b.3). Signal de score, pas
+ * mot-clé de blocage : aucun risque de refuser une page légitime.
+ */
+function ip_location_foreign_url_patterns()
+{
+    return ['rest_route', 'wp-json', 'wp-admin', 'wp-login', 'wp-content', 'xmlrpc',
+            'page_id=', 'author=', '.env', 'phpmyadmin'];
+}
+
+/**
+ * Mots-clés de blocage d'URL qui refuseraient une page ordinaire de la galerie (v2.7b.3) —
+ * cas réel : un mot-clé bloquait le bouton « Miniatures » (…/categories/flat/start-1560)
+ * d'un visiteur. Même comparaison que le blocage (sous-chaîne, sans casse, URL complète
+ * hôte compris), sur des URL Piwigo types, avec et sans ".php" (URL réécrites).
+ * Pages de navigation essentielles seulement : calendrier et diaporama natif exclus, un
+ * site pouvant les bloquer volontairement comme pièges à robots (ex. weekly, monthly,
+ * slideshow) — les signaler noierait les vrais problèmes (start, list).
+ * Retourne [mot-clé => première URL touchée].
+ */
+function ip_location_keyword_collisions(array $keywords)
+{
+    $root = get_absolute_root_url();
+    $paths = ['', 'index.php?/category/12-album', 'index.php?/category/12-album/start-15',
+              'index.php?/categories/flat/start-15', 'picture.php?/34/category/12-album',
+              'index.php?/tags/5-tag', 'index.php?/search/psk-20260927-abc',
+              'index.php?/most_visited', 'index.php?/recent_pics', 'index.php?/favorites',
+              'index.php?/list/12,34,56',
+              'action.php?id=34&part=e&download', 'i.php?/upload/2026/09/27/photo-th.jpg'];
+    $urls = [];
+    foreach ($paths as $path) {
+        $urls[] = $root . $path;
+        $urls[] = $root . str_replace('.php?', '?', $path);
+    }
+    $collisions = [];
+    foreach ($keywords as $kw) {
+        $kw_l = strtolower(trim($kw));
+        if ($kw_l === '') continue;
+        foreach ($urls as $url) {
+            if (strpos(strtolower($url), $kw_l) !== false) {
+                $collisions[$kw] = $url;
+                break;
+            }
+        }
+    }
+    return $collisions;
+}
+
+/**
+ * Détecte un User-Agent de navigateur impossible (v2.7b.3). Depuis 2023 (réduction de
+ * l'UA), Chrome ≥ 113 envoie toujours "Chrome/NNN.0.0.0" et, sur Mac, Chrome comme Safari
+ * figent "Mac OS X 10_15_7". Un "Chrome/150.0.9003.276" ou un "Mac OS X 15_4_0" est donc
+ * fabriqué — cas réel : un robot tirant un numéro de build au hasard à chaque requête
+ * (6 IP, score 0). Épargnés : WebView Android ("; wv)") et applications Electron, qui
+ * gardent la version complète.
+ */
+function ip_location_is_forged_ua($user_agent)
+{
+    if (preg_match('/Chrome\/(\d+)\.0\.[1-9]/', $user_agent, $m) && (int)$m[1] >= 113
+        && strpos($user_agent, '; wv)') === false && stripos($user_agent, 'Electron') === false) {
+        return true;
+    }
+    return (bool)preg_match('/Mac OS X 1[1-9]_/', $user_agent);
 }
 
 /**
@@ -2336,7 +2482,8 @@ function ip_location_is_bot_ua($user_agent)
     }
 
     return ip_location_ua_declares_crawler($user_agent)
-        || ip_location_is_outdated_browser($user_agent);
+        || ip_location_is_outdated_browser($user_agent)
+        || ip_location_is_forged_ua($user_agent);
 }
 
 /**
@@ -2392,13 +2539,34 @@ function ip_location_classify_recent()
     // (log_type='prefetch', cf. ip_location_is_prefetch_request()) : elles doublent le
     // nombre d'URL d'une navigation humaine et ne traduisent aucune action du visiteur.
 
+    // Robots déclarés : mot-clé bot dans le User-Agent (même liste que ip_location_is_bot_ua())
+    // ou UA qui annonce lui-même un crawler (même détection que ip_location_ua_declares_crawler()).
+    $ua_keyword_where = [];
+    foreach (ip_location_bot_ua_keywords() as $kw) {
+        $ua_keyword_where[] = "user_agent LIKE '%" . pwg_db_real_escape_string($kw) . "%'";
+    }
+    $ua_keyword_where[] = "user_agent LIKE '%://%'";
+    $ua_keyword_where[] = "user_agent LIKE '%@%'";
+    $ua_keyword_where[] = "(user_agent LIKE '%compatible;%' AND user_agent NOT LIKE '%msie%' AND user_agent NOT LIKE '%trident%')";
+
+    // Co-visitation (v2.7b.3) : un robot déclaré ou autorisé qui charge la page juste après
+    // un humain (Google-Read-Aloud, aperçu de partage WhatsApp/Facebook…) ne compte pas
+    // comme seconde IP — incident réel : le téléphone de l'administrateur auto-bloqué parce
+    // que Google-Read-Aloud relisait chaque photo quelques secondes après lui.
+    // COALESCE : un UA NULL rendrait le NOT indéterminé et écarterait la ligne.
+    $covisit_exclude_sql = ' AND NOT COALESCE((' . implode(' OR ', $ua_keyword_where) . '), 0)';
+    $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
+    if ($allowed_robot_sql !== '0') {
+        $covisit_exclude_sql .= ' AND NOT COALESCE(' . $allowed_robot_sql . ', 0)';
+    }
+
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log t
 JOIN (
     SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')
+       AND (log_type IS NULL OR log_type != \'prefetch\')' . $covisit_exclude_sql . '
      GROUP BY url, bucket
     HAVING COUNT(DISTINCT ip) >= 2
 ) g
@@ -2468,15 +2636,7 @@ UPDATE ' . $prefixeTable . 'ip_location_log
  WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
    AND (user_agent IS NULL OR user_agent = \'\')');
 
-    // Mot-clé bot dans le User-Agent (même liste que ip_location_is_bot_ua()), ou UA qui
-    // annonce lui-même un crawler (même détection que ip_location_ua_declares_crawler())
-    $ua_keyword_where = [];
-    foreach (ip_location_bot_ua_keywords() as $kw) {
-        $ua_keyword_where[] = "user_agent LIKE '%" . pwg_db_real_escape_string($kw) . "%'";
-    }
-    $ua_keyword_where[] = "user_agent LIKE '%://%'";
-    $ua_keyword_where[] = "user_agent LIKE '%@%'";
-    $ua_keyword_where[] = "(user_agent LIKE '%compatible;%' AND user_agent NOT LIKE '%msie%' AND user_agent NOT LIKE '%trident%')";
+    // Robot déclaré ($ua_keyword_where, construit plus haut)
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log
    SET bot_score = bot_score + ' . (int)$conf['ip_location_score_ua_keyword'] . '
@@ -2491,22 +2651,41 @@ SELECT DISTINCT user_agent
   FROM ' . $prefixeTable . 'ip_location_log
  WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
    AND user_agent IS NOT NULL AND user_agent != \'\'');
-    $outdated_uas = [];
+    // Même passage pour le navigateur impossible (ip_location_is_forged_ua(), v2.7b.3), qui
+    // marque aussi is_bot : les lignes enregistrées avant la v2.7b.3 sortent ainsi du widget
+    // Visites sans attendre (is_bot n'est sinon calculé qu'à l'enregistrement de l'accès).
+    $ua_signals = [
+        'ip_location_score_outdated_browser' => ['ip_location_is_outdated_browser', [], ''],
+        'ip_location_score_forged_ua'        => ['ip_location_is_forged_ua', [], 'is_bot = 1, '],
+    ];
     while ($row = pwg_db_fetch_row($result)) {
-        if (ip_location_is_outdated_browser($row[0])) {
-            $outdated_uas[] = $row[0];
+        foreach ($ua_signals as $conf_key => $signal) {
+            if ($signal[0]($row[0])) {
+                $ua_signals[$conf_key][1][] = $row[0];
+            }
         }
     }
-    if (!empty($outdated_uas)) {
-        $outdated_where = implode(',', array_map(function ($ua) {
+    foreach ($ua_signals as $conf_key => $signal) {
+        if (empty($signal[1])) continue;
+        $ua_in = implode(',', array_map(function ($ua) {
             return '\'' . pwg_db_real_escape_string($ua) . '\'';
-        }, $outdated_uas));
+        }, $signal[1]));
         pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log
-   SET bot_score = bot_score + ' . (int)$conf['ip_location_score_outdated_browser'] . '
+   SET ' . $signal[2] . 'bot_score = bot_score + ' . (int)$conf[$conf_key] . '
  WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-   AND user_agent IN (' . $outdated_where . ')');
+   AND user_agent IN (' . $ua_in . ')');
     }
+
+    // UA non navigateur (v2.7b.3) : tous les navigateurs commencent par "Mozilla/" ;
+    // outils (curl, python…), scanners ("cve-…-poc/1.0") et applications non. Les robots
+    // autorisés (WhatsApp/…, facebookexternalhit/…) sont remis à 0 en fin de calcul.
+    pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_log
+   SET bot_score = bot_score + ' . (int)$conf['ip_location_score_non_browser_ua'] . '
+ WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+   AND user_agent IS NOT NULL AND user_agent != \'\'
+   AND user_agent NOT LIKE \'Mozilla/%\'');
 
     // Co-visitation (même détection que la mise à jour is_bot ci-dessus)
     pwg_query('
@@ -2515,7 +2694,7 @@ JOIN (
     SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')
+       AND (log_type IS NULL OR log_type != \'prefetch\')' . $covisit_exclude_sql . '
      GROUP BY url, bucket
     HAVING COUNT(DISTINCT ip) >= 2
 ) g
@@ -2601,6 +2780,23 @@ JOIN (
 SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_no_js'] . '
 WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
     }
+
+    // URL d'un autre CMS (v2.7b.3) : une IP qui demande une page WordPress (rest_route,
+    // wp-login…) à un Piwigo sonde des failles — toutes ses lignes prennent le signal.
+    $foreign_where = [];
+    foreach (ip_location_foreign_url_patterns() as $pat) {
+        $foreign_where[] = "url LIKE '%" . pwg_db_real_escape_string($pat) . "%'";
+    }
+    pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_log t
+JOIN (
+    SELECT DISTINCT ip
+      FROM ' . $prefixeTable . 'ip_location_log
+     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (' . implode(' OR ', $foreign_where) . ')
+) g ON t.ip = g.ip
+SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_foreign_url'] . '
+WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
 
     // Faux robots (v2.6.2) : UA d'un moteur vérifiable, mais IP démasquée par la
     // vérification DNS (ip_location_robot_check.verified = 0) — usurpation délibérée,
@@ -2856,7 +3052,8 @@ function ip_location_is_bot($user_agent, $url, $ip, $prefixeTable)
         }
     }
 
-    if (ip_location_ua_declares_crawler($user_agent) || ip_location_is_outdated_browser($user_agent)) {
+    if (ip_location_ua_declares_crawler($user_agent) || ip_location_is_outdated_browser($user_agent)
+        || ip_location_is_forged_ua($user_agent)) {
         return true;
     }
 

@@ -13,6 +13,7 @@ Thumbs.db
 # Doc interne (local uniquement)
 STRUCTURE.md
 CLAUDE.md
+ROBOTS.md
 
 # Dumps SQL
 *.sql
@@ -25,3 +26,6 @@ generate-release-zip.ps1
 
 # Session navigateur
 .playwright-mcp
+
+# Exports du Journal (IP de visiteurs, jamais commités)
+*.csv

@@ -221,6 +221,7 @@
                   <p class="hint">{'Aucun robot bloqué : rien à ajouter au robots.txt.'|@translate}</p>
                 {else}
                   <p class="hint">{'Un robot bloqué par le plugin reçoit un refus (403) mais revient souvent essayer. Le fichier robots.txt, lu par les robots « polis » avant d\'explorer, leur interdit le site : ils ne demandent alors plus aucune page. Suggestion d\'après les statuts enregistrés :'|@translate}</p>
+                  <p class="hint">{'Fichier vérifié : %s'|@translate|@sprintf:$ROBOTS_TXT_URL|escape}</p>
                   {if $ROBOTS_TXT_STATE eq 'ok'}
                     <p class="hint">{'Votre robots.txt interdit déjà le site à tous les robots bloqués.'|@translate}</p>
                   {elseif $ROBOTS_TXT_STATE eq 'absent'}
@@ -231,7 +232,7 @@
                   {if $ROBOTS_TXT_SUBDIR neq ''}
                     <p class="hint">{'Piwigo est installé dans un sous-dossier (%s) : le robots.txt se place à la racine du domaine, c\'est-à-dire dans le dossier qui contient celui de Piwigo, et vaut pour tous les sites servis par ce domaine.'|@translate|@sprintf:"/`$ROBOTS_TXT_SUBDIR`/"|escape}</p>
                     {if $ROBOTS_TXT_MISPLACED}
-                      <p class="hint" style="color:var(--c-warn);font-weight:600;">{'Un robots.txt se trouve dans le dossier de Piwigo (à côté du .htaccess) : les robots ne le lisent pas à cet endroit. Déplacez-le à la racine du domaine, dans le dossier qui contient celui de Piwigo.'|@translate}</p>
+                      <p class="hint" style="color:var(--c-warn);font-weight:600;">{'Un robots.txt se trouve dans le dossier de Piwigo (à côté du .htaccess) : à l\'adresse utilisée pour ouvrir cette page, les robots ne le lisent pas. Si la galerie n\'a pas d\'autre adresse, déplacez-le à la racine du domaine, dans le dossier qui contient celui de Piwigo. Si elle est aussi servie à la racine d\'un autre nom de domaine, il y est lu normalement : laissez-le.'|@translate}</p>
                     {/if}
                   {/if}
                   <div class="iplc-robotstxt"><pre>{$ROBOTS_TXT_SUGGEST|escape}</pre>{if $ROBOTS_TXT_STATE neq 'ok'}<a class="iplc-btn ghost sm" href="{$BASE_URL|escape}&amp;robots_txt=download">{'Télécharger robots.txt'|@translate}</a>{/if}</div>
@@ -350,6 +351,10 @@
               <button type="button" class="iplc-btn ghost sm" data-chip-add="iplc-kw-value">{'Ajouter'|@translate}</button>
             </div>
             <p class="hint">{'Chiffre à droite de chaque mot : accès refusés sur 7 jours.'|@translate}</p>
+            {if $KEYWORD_COLLISIONS}
+              <p class="warn">&#9888; {'Ces mots-clés bloquent aussi des pages ordinaires de la galerie, donc de vrais visiteurs :'|@translate}
+                {foreach from=$KEYWORD_COLLISIONS key=kw item=url name=kwc}<b>{$kw|escape}</b> → {$url|escape}{if !$smarty.foreach.kwc.last} ; {/if}{/foreach}</p>
+            {/if}
           </div>
         </div>
       </form>
@@ -373,6 +378,7 @@
               <input type="range" id="iplc-threshold" name="bot_block_score_threshold" min="10" max="90" step="5" value="{$BOT_BLOCK_SCORE_THRESHOLD}">
               <span class="val" id="iplc-threshold-val">{$BOT_BLOCK_SCORE_THRESHOLD}</span>
             </div>
+            <p class="warn" id="iplc-threshold-low"{if $BOT_BLOCK_SCORE_THRESHOLD >= 50} hidden{/if}>&#9888; {'Seuil bas : un seul signal suspect peut suffire à bloquer une IP, y compris un vrai visiteur. 50 ou plus est conseillé.'|@translate}</p>
             <div class="iplc-tiles">
               <div class="iplc-tile"><span class="n">{$BLOCKLIST_AUTO|@count}</span><span class="l">{'IP bloquées en ce moment'|@translate}</span></div>
               <div class="iplc-tile"><span class="n" id="iplc-would">—</span><span class="l">{'IP des dernières'|@translate} {$RECENT_HOURS} h {'au-dessus du seuil'|@translate}</span></div>
@@ -612,6 +618,7 @@
     if (!th) return;
     var t = +th.value;
     document.getElementById('iplc-threshold-val').textContent = t;
+    document.getElementById('iplc-threshold-low').hidden = t >= 50;
     document.getElementById('iplc-would').textContent = recent.filter(function(s){ return s >= t; }).length;
   }
   if (th) { th.addEventListener('input', refreshThreshold); refreshThreshold(); }

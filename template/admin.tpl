@@ -227,6 +227,7 @@
   table.iplj-table td.req .url a:hover{ color:var(--c-accent); }
   table.iplj-table td.req .ua{ display:block; font-size:11.3px; color:var(--c-muted); margin-top:1px; }
   table.iplj-table td.actions{ overflow:visible; text-align:right; }
+  table.iplj-table td.frozen{ color:var(--c-muted); opacity:.55; cursor:help; }
   table.iplj-table tr.cat-bot td{ background:#f7f3ea; }
   table.iplj-table tr.cat-blocked td{ background:#fbece8; }
   .iplj-badge{ display:inline-block; font-size:10.3px; font-weight:600; letter-spacing:.02em; padding:1px 6px; border-radius:4px; margin:3px 4px 0 0; }
@@ -392,7 +393,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <td class="ip">{$log.ip|escape}</td>
             <td>{$log.country|escape}</td>
             <td class="muted">{$log.city|escape}</td>
-            <td class="num mono">{$log.bot_score}</td>
+            <td class="num mono{if $log.score_frozen} frozen{/if}"{if $log.score_frozen} title="{'Score figé : accès de plus de %d jours, ni recalculé ni pris en compte par le blocage automatique.'|@translate|@sprintf:$CLASSIFY_WINDOW_DAYS|escape}"{/if}>{$log.bot_score}</td>
             <td class="req"><span class="url"><a href="{$log.url|escape}" target="_blank" rel="noopener">{$log.url|escape}</a></span><span class="ua">{$log.user_agent|escape}</span></td>
             <td class="num actions">
               <details class="iplj-menu">

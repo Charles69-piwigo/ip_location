@@ -30,7 +30,7 @@ if (!empty($oldest_row['oldest'])) {
     }
 }
 
-// Visites humaines : toute page photo (picture.php) ou page index avec section (?/...)
+// Visites humaines : toute page photo (avec ou sans .php) ou page index avec section (?/...)
 // précédée ou suivie d'une page d'entrée (accueil sans ?/, ou entrée directe ?/section)
 // dans les 30 min avant ou après. Critères exacts dans ip_location_qualifying_visit_where()
 // (main.inc.php), partagée avec la section d'audit "Détail des visites comptabilisées"

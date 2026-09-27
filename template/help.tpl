@@ -23,7 +23,10 @@
   <p>{'Chaque accès peut être marqué « bot » et reçoit un score de suspicion (colonne Score du journal), à partir de ces signaux :'|@translate}</p>
   <ul>
     <li><strong>{'User-Agent vide ou suspect'|@translate}</strong> {'→ mots-clés (bot, crawler, spider, curl, python…), URL ou adresse de contact dans le User-Agent, navigateur manifestement obsolète (Chrome 109, dernière version pour Windows 7/8, est épargné).'|@translate}</li>
-    <li><strong>{'Co-visitation'|@translate}</strong> {'→ la même URL visitée par 2 IP différentes dans les 10 secondes.'|@translate}</li>
+    <li><strong>{'Co-visitation'|@translate}</strong> {'→ la même URL visitée par 2 IP différentes dans les 10 secondes, sans compter les robots déclarés ou autorisés (lecture à voix haute, aperçus de partage…).'|@translate}</li>
+    <li><strong>{'Navigateur impossible'|@translate}</strong> {'→ numéro de version qu\'aucun vrai navigateur n\'envoie plus (Chrome complet « 150.0.9003.276 » au lieu de « 150.0.0.0 », macOS autre que 10_15_7) : signature d\'un robot qui fabrique son User-Agent.'|@translate}</li>
+    <li><strong>{'Outil non navigateur'|@translate}</strong> {'→ User-Agent qui ne commence pas par « Mozilla/ », comme le font tous les navigateurs : curl, scripts, scanners de failles.'|@translate}</li>
+    <li><strong>{'Page d\'un autre logiciel'|@translate}</strong> {'→ l\'IP demande une page WordPress (wp-login, rest_route, xmlrpc…) ou un fichier sensible (.env) qu\'un Piwigo ne sert jamais : elle cherche des failles. Toutes ses visites prennent le signal.'|@translate}</li>
     <li><strong>{'Rafale mono-IP'|@translate}</strong> {'→ la même IP demande au moins 3 fois la même URL en 10 secondes.'|@translate}</li>
     <li><strong>{'Rafale multi-URL'|@translate}</strong> {'→ la même IP parcourt au moins 20 URL différentes en 30 secondes (un visiteur qui clique « suivant » en voit rarement plus de 12).'|@translate}</li>
     <li><strong>{'User-Agent figé partagé'|@translate}</strong> {'→ un même User-Agent vu au moins 20 fois avec 90 % d\'IP différentes : signature d\'un réseau de proxies. Ce signal n\'augmente que le score, sans marquer « bot », car l\'UA recyclé peut être celui du navigateur le plus répandu.'|@translate}</li>
@@ -53,6 +56,7 @@
   </ul>
 
   <p>{'Robots vérifiés (Googlebot, Bingbot, Applebot, Yandex, Baidu) : au-delà de %d accès dans la journée, les suivants sont seulement comptés, par robot, IP et pays, au lieu d\'être enregistrés dans le journal. Les compteurs en haut et les courbes les incluent, le tableau non : un site très exploré garde ainsi un journal lisible et léger. Réglable par $conf[\'ip_location_robot_log_limit\'] (0 = tout enregistrer).'|@translate|@sprintf:$ROBOT_LOG_LIMIT}</p>
+  <p>{'Score grisé : l\'accès date de plus de 7 jours. Son score n\'est plus recalculé et ne compte plus pour le blocage automatique, qui ne retient que l\'activité suspecte des dernières 24 heures. Une IP au score élevé peut donc figurer dans « Bots non bloqués » si elle n\'est pas revenue depuis.'|@translate}</p>
   <p>{'Filtres : pays, période, début d\'IP, motif de blocage et tranche de score (0, > 0, ≥ 30, ≥ 50, ≥ seuil du blocage auto). Chaque liste indique entre parenthèses le nombre d\'accès correspondants.'|@translate}</p>
   <p>{'Le bouton Exporter, à droite de Filtrer, télécharge tous les accès correspondant aux filtres appliqués (toutes les pages, catégorie comprise), avec toutes les colonnes de la table : CSV (séparateur point-virgule, lisible directement par Excel), SQL (instructions INSERT) ou JSON.'|@translate}</p>
   <p>{'Chaque ligne a un menu Actions : filtrer sur cette IP, bloquer l\'IP ou sa plage /16, débloquer. L\'URL s\'ouvre dans un nouvel onglet ; étant connecté, vous voyez la page même si l\'accès d\'origine avait été refusé.'|@translate}</p>

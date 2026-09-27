@@ -809,7 +809,12 @@ if (!empty($logs)) {
     }
 }
 $robots_enabled_now = ip_location_get_conf()['robots_enabled'] === '1';
+// Score figé (v2.7b.1) : au-delà de la fenêtre glissante de la classification, le score
+// n'est plus recalculé et l'accès ne compte plus pour le blocage automatique.
+$classify_window_days = max(1, (int)$conf['ip_location_classify_window_days']);
+$score_frozen_before  = time() - $classify_window_days * 86400;
 foreach ($logs as &$log) {
+    $log['score_frozen'] = (int)$log['bot_score'] > 0 && strtotime($log['visit_date']) < $score_frozen_before;
     $log['block_reason_label'] = $block_reason_labels[$log['block_reason'] ?? ''] ?? '';
     // Badge "Googlebot ✓" : robot autorisé de la liste, IP non démasquée
     $log['robot_name'] = '';
@@ -897,14 +902,16 @@ if ($tab === 'config' && $sub === 'settings') {
         $manual_rows[] = $b;
     }
 
-    // Mots-clés : refus par mot
+    // Mots-clés : refus par mot, et ceux qui toucheraient une page ordinaire (v2.7b.3)
     $keyword_rows = [];
-    foreach (array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords']))) as $kw) {
+    $keyword_list = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
+    foreach ($keyword_list as $kw) {
         $keyword_rows[] = [
             'word'     => $kw,
             'refusals' => $refusals_7d('keyword', ' AND url LIKE \'%' . pwg_db_real_escape_string($kw) . '%\''),
         ];
     }
+    $keyword_collisions = ip_location_keyword_collisions($keyword_list);
 
     // Pays bloqués : refus par pays
     $country_rows = [];
@@ -1011,6 +1018,7 @@ if ($tab === 'config' && $sub === 'settings') {
         'LEVERS_ON'          => $levers_on,
         'MANUAL_ROWS'        => $manual_rows,
         'KEYWORD_ROWS'       => $keyword_rows,
+        'KEYWORD_COLLISIONS' => $keyword_collisions,
         'COUNTRY_ROWS'       => $country_rows,
         'COUNTRY_OPTIONS'    => ip_location_country_options(),
         'DOWNLOAD_ROWS'      => $country_chips($plugin_conf['download_allowed_countries']),
@@ -1027,6 +1035,7 @@ if ($tab === 'config' && $sub === 'settings') {
         'ROBOTS_TXT_MISSING_N' => count($robots_txt['missing']),
         'ROBOTS_TXT_SUBDIR'  => $robots_txt['subdir'],
         'ROBOTS_TXT_MISPLACED' => $robots_txt['misplaced'],
+        'ROBOTS_TXT_URL'     => $robots_txt['url'],
         'RECENT_SCORES_JSON' => json_encode($recent_scores),
         'RECENT_HOURS'       => $recent_hours,
         'EXEMPT_COUNT'       => count($exempt_ips),
@@ -1183,6 +1192,7 @@ $template->assign([
     'SUB'           => $sub,
     'JOURNAL_COUNTS'=> $journal_counts,
     'JOURNAL_COUNTED'=> $journal_counted,
+    'CLASSIFY_WINDOW_DAYS'=> $classify_window_days,
     'ROBOT_LOG_LIMIT'=> max(0, (int)$conf['ip_location_robot_log_limit']),
     'REASON_FILTER' => $reason_filter,
     'REASON_COUNTS' => $reason_counts,
