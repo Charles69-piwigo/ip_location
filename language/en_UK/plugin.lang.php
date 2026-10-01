@@ -108,6 +108,7 @@ $lang['Cache de géolocalisation']       = 'Geolocation cache';
 $lang['Vider le cache']                 = 'Clear cache';
 $lang['Forcer la résolution géographique de toutes les IPs lors de leur prochaine visite.'] = 'Force geographic resolution of all IPs on their next visit.';
 $lang['IP %s est dans la liste blanche.'] = 'IP %s is in the whitelist.';
+$lang['Adresse invalide : %s (IP ou plage CIDR attendue).'] = 'Invalid address: %s (IP or CIDR range expected).';
 $lang['Ces IPs ne seront jamais bloquées par le blocage pays.'] = 'These IPs will never be blocked by the country filter.';
 $lang['Il est également impossible de les ajouter à la blocklist .htaccess : un message d\'erreur s\'affiche si vous tentez de le faire.'] = 'They also cannot be added to the .htaccess blocklist: an error message will appear if you try.';
 $lang['Utile pour protéger votre propre IP afin de ne pas vous bloquer accidentellement.'] = 'Useful to protect your own IP so you don\'t accidentally block yourself.';

@@ -10,6 +10,20 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.7e - 01/10/2026
+        Blocage .htaccess inopérant à côté d'un autre plugin (signalé par un utilisateur,
+        avec la section du plugin BYB) : Apache combine en OU les blocs <RequireAll>
+        « Require all granted » d'un même fichier, chacun laissait donc passer les IP de
+        l'autre et plus rien n'était bloqué. La section ip_location est désormais un bloc
+        <If "-R 'ip' || -R 'plage'"> Require all denied </If> : une IP de la liste est
+        refusée quoi que contienne le fichier (y compris un sous-dossier avec son propre
+        « Require all granted »), et la section de l'autre plugin redevient efficace.
+        Vérifié sur Apache 2.4 (NAS) : ancien format → IP servie, nouveau format → 403.
+        Migration : une section à l'ancien format est réécrite à l'ouverture de l'admin.
+        Entrées validées (IP ou plage CIDR) avant écriture — une entrée mal formée dans
+        l'expression <If> mettrait tout le site en erreur 500 — et refusées dès l'ajout
+        manuel (« Adresse invalide »).
+
     version 2.7d - 01/10/2026
         regroupement de v2.7c.1 et v2.7c.2
         pour publication sur PEM
@@ -2321,6 +2335,36 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     }
 }
 
+/**
+ * Entrée de blocage écrivable dans le .htaccess (v2.7e) : IP exacte (IPv4 / IPv6) ou plage
+ * CIDR. Garde-fou indispensable : une seule entrée mal formée dans l'expression <If> ferait
+ * répondre Apache en erreur 500 sur tout le site.
+ */
+function ip_location_valid_block_entry($ip)
+{
+    $parts = explode('/', (string)$ip);
+    if (count($parts) > 2 || !filter_var($parts[0], FILTER_VALIDATE_IP)) {
+        return false;
+    }
+    if (count($parts) === 1) {
+        return true;
+    }
+    $max = filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? 32 : 128;
+    return ctype_digit($parts[1]) && (int)$parts[1] <= $max;
+}
+
+/**
+ * Réécrit la section # BEGIN ip_location du .htaccess avec les blocages manuels.
+ *
+ * Format <If> + "Require all denied" depuis la v2.7e. L'ancien bloc <RequireAll>
+ * "Require all granted" + "Require not ip" était combiné en OU avec tout autre Require du
+ * même fichier (Apache les place dans un <RequireAny> implicite) : à côté du bloc
+ * <RequireAll> du plugin BYB, chacun laissait passer les IP de l'autre et plus rien n'était
+ * bloqué (signalé par un utilisateur). Les Require d'un <If> remplacent au contraire ceux
+ * du reste du fichier pour les requêtes concernées (sections <If> fusionnées en dernier) :
+ * une IP de la liste est refusée quoi que contienne le fichier, et la section d'un autre
+ * plugin redevient seule à décider pour les autres IP.
+ */
 function ip_location_write_htaccess($htaccess_enabled = null)
 {
     global $prefixeTable;
@@ -2352,15 +2396,17 @@ function ip_location_write_htaccess($htaccess_enabled = null)
   ORDER BY blocked_at ASC');
         $ips = [];
         while ($row = pwg_db_fetch_row($result)) {
-            $ips[] = $row[0];
+            if (ip_location_valid_block_entry($row[0])) {
+                $ips[] = $row[0];
+            }
         }
         if (!empty($ips)) {
-            $section = "\n\n# BEGIN ip_location\n<RequireAll>\n    Require all granted\n";
-            foreach ($ips as $ip) {
-                $section .= '    Require not ip ' . $ip . "\n";
-            }
-            $section .= "</RequireAll>\n# END ip_location";
-            $content .= $section;
+            // Une condition -R par ligne (continuation « \ »), lisible même avec beaucoup d'IP
+            $conds = array_map(function ($ip) { return "-R '" . $ip . "'"; }, $ips);
+            $content .= "\n\n# BEGIN ip_location\n"
+                . '<If "' . implode(" \\\n    || ", $conds) . "\">\n"
+                . "    Require all denied\n"
+                . "</If>\n# END ip_location";
         }
     }
 

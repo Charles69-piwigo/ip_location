@@ -225,7 +225,10 @@ if (isset($_POST['action'])) {
         if ($ip) {
             $whitelist_raw = ip_location_get_conf()['whitelist'] ?? '';
             $whitelist = array_filter(array_map('trim', explode("\n", $whitelist_raw)));
-            if (in_array($ip, $whitelist)) {
+            if (!ip_location_valid_block_entry($ip)) {
+                // Jamais en base : une entrée mal formée ne doit pas atteindre le .htaccess (v2.7e)
+                $page['errors'][] = sprintf(l10n('Adresse invalide : %s (IP ou plage CIDR attendue).'), htmlspecialchars(stripslashes($ip)));
+            } elseif (in_array($ip, $whitelist)) {
                 $page['errors'][] = sprintf(l10n('IP %s est dans la liste blanche.'), $ip);
             } else {
                 // ON DUPLICATE KEY : promeut aussi une éventuelle entrée auto existante en
@@ -345,6 +348,17 @@ if (empty($ipl_conf_migr['htaccess_manual_only'])) {
         $ipl_conf_changed = true;
     }
 }
+
+// 1b. Section au format <RequireAll> (jusqu'à la v2.7d) : réécrite au format <If> (v2.7e),
+//     le seul qui bloque vraiment quand un autre plugin (BYB…) a son propre bloc Require
+//     (cf. ip_location_write_htaccess()). Détecté sur le fichier lui-même, pas par un drapeau
+//     de configuration : un ancien .htaccess remis en place est corrigé lui aussi.
+$ipl_ht = @file_get_contents(PHPWG_ROOT_PATH . '.htaccess');
+if ($ipl_ht !== false && preg_match('/# BEGIN ip_location\b(.*?)# END ip_location/s', $ipl_ht, $ipl_m)
+    && strpos($ipl_m[1], '<RequireAll>') !== false) {
+    ip_location_write_htaccess();
+}
+unset($ipl_ht, $ipl_m);
 
 // 2. Suppression du mode de blocage auto "is_bot direct" : le blocage auto se fait
 //    toujours sur le score, avec le seuil déjà enregistré (le curseur était enregistré
@@ -717,12 +731,13 @@ if ($show_settings && $htaccess_enabled && !$server_is_nginx) {
     $ht_content = @file_get_contents(PHPWG_ROOT_PATH . '.htaccess');
     if ($ht_content !== false
         && preg_match('/# BEGIN ip_location\b(.*?)# END ip_location/s', $ht_content, $m)
-        && preg_match_all('/^\s*Require not ip (\S+)/m', $m[1], $mm)) {
+        && preg_match_all("/-R '([^']+)'/", $m[1], $mm)) {
         $ht_ips = array_flip($mm[1]);
     }
     $r = pwg_query('SELECT ip FROM ' . $prefixeTable . 'ip_location_blocklist WHERE origin = \'manuel\'');
     while ($row = pwg_db_fetch_row($r)) {
-        if (!isset($ht_ips[$row[0]])) $htaccess_missing++;
+        // Entrée mal formée : volontairement jamais écrite (cf. ip_location_valid_block_entry())
+        if (!isset($ht_ips[$row[0]]) && ip_location_valid_block_entry($row[0])) $htaccess_missing++;
     }
     // Repère "section complète depuis" : seuls les refus postérieurs prouvent un .htaccess
     // franchi (sinon un fichier renommé puis remis, comme lors d'un test, laisserait des
