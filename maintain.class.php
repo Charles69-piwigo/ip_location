@@ -117,6 +117,15 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
   ADD INDEX idx_bot_blocked_date (is_bot, is_blocked, visit_date)');
         }
 
+        // Migration v2.7c → v2.7c.2 : index par IP. Sans lui, la sous-requête EXISTS des
+        // visites qualifiées (même IP à ± 30 min, cf. ip_location_qualifying_visit_where())
+        // relisait toutes les lignes de l'heure pour chaque accès de la période : jusqu'à
+        // une minute d'attente à chaque affichage de l'admin sur un journal bien rempli.
+        if (!isset($idx['idx_ip_date'])) {
+            pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log
+  ADD INDEX idx_ip_date (ip, visit_date)');
+        }
+
         // Migration v2.4 → v2.5 : score de suspicion bot (4ème levier de blocage)
         $cols = [];
         $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . 'ip_location_log');

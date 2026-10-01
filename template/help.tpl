@@ -14,7 +14,7 @@
 
   <h4>{'Observation'|@translate}</h4>
   <ul>
-    <li><strong>{'Widget « Visiteurs »'|@translate}</strong> {'→ bouton public qui affiche les visites par pays sur la période choisie. Une visite compte si c\'est un accès humain, non bloqué, à un album ou une photo, avec un passage sur l\'accueil à ± 30 minutes. Le détail des visites comptées est consultable dans le bloc.'|@translate}</li>
+    <li><strong>{'Widget « Visiteurs »'|@translate}</strong> {'→ bouton public qui affiche les visites par pays sur la période choisie. Une visite compte si c\'est un accès humain, non bloqué, à un album ou une photo, avec une autre page vue par la même IP dans la demi-heure qui précède ou qui suit. Le détail des visites comptées est consultable dans le bloc.'|@translate}</li>
     <li><strong>{'Conservation du journal'|@translate}</strong> {'→ au-delà du nombre maximal d\'accès, les plus anciens sont supprimés automatiquement (0 = sans limite). Le même bloc permet de supprimer les accès antérieurs à une date et de vider le cache de géolocalisation.'|@translate}</li>
     <li><strong>{'IP jamais bloquées'|@translate}</strong> {'→ liste blanche prioritaire sur tous les leviers : ces IP ne sont jamais bloquées ni enregistrées. Utile pour votre propre IP. Les IP du réseau local ne sont jamais bloquées automatiquement, mais elles sont enregistrées : si vous consultez la galerie depuis chez vous par son nom de domaine, vos visites apparaissent souvent sous l\'adresse de votre box (ex. 192.168.1.1) ; ajoutez-la ici pour ne plus les voir dans le journal.'|@translate}</li>
   </ul>

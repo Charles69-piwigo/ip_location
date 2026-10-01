@@ -67,6 +67,16 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_count (
   PRIMARY KEY (day, robot, ip)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
+// e. Index par IP du journal (v2.7c.2) — même définition que maintain.class.php::activate().
+//    Sans lui, la requête des visites qualifiées pouvait prendre une minute.
+$ipl_idx = [];
+$ipl_r = pwg_query('SHOW INDEX FROM ' . $prefixeTable . 'ip_location_log');
+while ($ipl_row = pwg_db_fetch_assoc($ipl_r)) $ipl_idx[$ipl_row['Key_name']] = true;
+if (!isset($ipl_idx['idx_ip_date'])) {
+    pwg_query('ALTER TABLE ' . $prefixeTable . 'ip_location_log ADD INDEX idx_ip_date (ip, visit_date)');
+}
+unset($ipl_idx, $ipl_r, $ipl_row);
+
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
@@ -354,69 +364,89 @@ if ($ipl_conf_changed) {
 }
 unset($ipl_conf_migr, $ipl_conf_changed, $ipl_was_is_bot);
 
-// ── Compteurs globaux ─────────────────────────────────────────────────────────
+// ── Onglet / sous-onglet affiché ──────────────────────────────────────────────
+// Déterminés avant les requêtes (v2.7c.2) : chaque bloc ci-dessous ne calcule que ce que
+// l'onglet affiché utilise. Avant, tout était recalculé à chaque chargement (Journal,
+// Statistiques, Aide compris), dont la requête des visites qualifiées, la plus lourde.
 
-$r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
-list($total_all) = pwg_db_fetch_row($r);
+$tab     = in_array($_GET['tab'] ?? '', ['help', 'stats'], true) ? $_GET['tab'] : 'config';
+$tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
+// Sous-onglets de Configuration (v2.6.6) : Réglages (blocs) / Journal des accès. Tout
+// paramètre de filtre du Journal ouvre directement le Journal.
+$sub = 'settings';
+if ($tab === 'config' && (($_GET['sub'] ?? '') === 'journal'
+    || isset($_GET['filter']) || isset($_GET['country']) || isset($_GET['date_from'])
+    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['reason']) || isset($_GET['score']) || isset($_GET['pnum']))) {
+    $sub = 'journal';
+}
+$show_settings = $tab === 'config' && $sub === 'settings';
+$show_journal  = ($tab === 'config' && $sub === 'journal') || isset($_GET['export']);
 
-$r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_bot = 1');
-list($total_bots) = pwg_db_fetch_row($r);
+// ── Compteur global (Réglages, bloc Conservation) ─────────────────────────────
 
-$r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_blocked = 1');
-list($total_blocked) = pwg_db_fetch_row($r);
-
-$r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log WHERE is_bot = 0 AND is_blocked = 0');
-list($total_normal) = pwg_db_fetch_row($r);
+$total_all = 0;
+if ($show_settings) {
+    $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log');
+    list($total_all) = pwg_db_fetch_row($r);
+}
 
 // ── Détail des visites comptabilisées (audit du widget public "Visiteurs") ────
 // Rejoue exactement la requête d'agrégat de ajax_visitors.php (même helper partagé,
 // même période configurée) mais renvoie le détail ligne par ligne, pour pouvoir
-// vérifier concrètement ce qui compose le chiffre affiché par le widget.
-
-// $plugin_conf n'est assigné que plus loin dans ce fichier (config Blocklist/bot) :
-// on relit ici via ip_location_get_conf() directement (cache statique, coût nul) pour
-// ne pas dépendre de l'ordre des blocs et refléter la période réellement enregistrée.
-$visitor_conf        = ip_location_get_conf();
-$visitor_periods     = ip_location_visitors_periods();
-$visitor_period_key  = isset($visitor_conf['visitors_period']) && array_key_exists($visitor_conf['visitors_period'], $visitor_periods)
-    ? $visitor_conf['visitors_period'] : 'week';
-$visitor_interval    = $visitor_periods[$visitor_period_key]['interval'];
+// vérifier concrètement ce qui compose le chiffre affiché par le widget. Réglages
+// seulement : c'est la requête la plus coûteuse de la page.
 
 $visitor_detail_rows = [];
-$result = pwg_query('
+if ($show_settings) {
+    // $plugin_conf n'est assigné que plus loin dans ce fichier (config Blocklist/bot) :
+    // on relit ici via ip_location_get_conf() directement (cache statique, coût nul) pour
+    // ne pas dépendre de l'ordre des blocs et refléter la période réellement enregistrée.
+    $visitor_conf        = ip_location_get_conf();
+    $visitor_periods     = ip_location_visitors_periods();
+    $visitor_period_key  = isset($visitor_conf['visitors_period']) && array_key_exists($visitor_conf['visitors_period'], $visitor_periods)
+        ? $visitor_conf['visitors_period'] : 'week';
+    $visitor_interval    = $visitor_periods[$visitor_period_key]['interval'];
+
+    $result = pwg_query('
 SELECT l1.visit_date, l1.ip, l1.country, l1.country_code, l1.url
   FROM ' . $prefixeTable . 'ip_location_log l1
  WHERE l1.visit_date >= NOW() - INTERVAL ' . $visitor_interval . '
    AND ' . ip_location_qualifying_visit_where($prefixeTable, 'l1') . '
  ORDER BY l1.country ASC, l1.visit_date DESC');
-while ($row = pwg_db_fetch_assoc($result)) {
-    $visitor_detail_rows[] = $row;
+    // Lien cliquable (v2.7c.1) : l'hôte journalisé vient de l'en-tête Host envoyé par le
+    // visiteur (un robot peut y mettre n'importe quel domaine) — on ne garde que le chemin,
+    // rattaché à l'adresse de la galerie, pour que le lien ne mène jamais ailleurs.
+    $visitor_origin = preg_replace('#^(https?://[^/]+).*$#', '$1', get_absolute_root_url());
+    while ($row = pwg_db_fetch_assoc($result)) {
+        $row['href'] = preg_match('#^https?://[^/]*(/.*)?$#', $row['url'], $m)
+            ? $visitor_origin . (isset($m[1]) && $m[1] !== '' ? $m[1] : '/')
+            : '';
+        $visitor_detail_rows[] = $row;
+    }
 }
 
-// ── Statistiques par pays ─────────────────────────────────────────────────────
+// ── Statistiques par pays (Journal) et liste des pays pour filtre (Journal, Statistiques)
 
 $stats = [];
-$result = pwg_query('
+$countries = [];
+if ($show_journal || $tab === 'stats') {
+    $result = pwg_query('
 SELECT country, country_code, COUNT(*) AS visits,
        SUM(is_bot) AS bots
   FROM ' . $prefixeTable . 'ip_location_log
   GROUP BY country, country_code
   ORDER BY visits DESC');
-while ($row = pwg_db_fetch_assoc($result)) {
-    $stats[] = $row;
-}
-
-// ── Liste des pays pour filtre ────────────────────────────────────────────────
-
-$countries = [];
-$result = pwg_query('
-SELECT country, country_code, COUNT(*) AS visits
-  FROM ' . $prefixeTable . 'ip_location_log
-  WHERE country_code IS NOT NULL AND country_code != \'\'
-  GROUP BY country, country_code
-  ORDER BY country ASC');
-while ($row = pwg_db_fetch_assoc($result)) {
-    $countries[] = $row;
+    while ($row = pwg_db_fetch_assoc($result)) {
+        $stats[] = $row;
+    }
+    // Liste des pays : même agrégat (v2.7c.2, une seule lecture de la table au lieu de
+    // deux), sans pays inconnu, triée par nom.
+    $countries = array_values(array_filter($stats, function ($c) {
+        return (string)$c['country_code'] !== '';
+    }));
+    usort($countries, function ($a, $b) {
+        return strcasecmp((string)$a['country'], (string)$b['country']);
+    });
 }
 
 // ── Journal des visites (pagination 50) ───────────────────────────────────────
@@ -471,10 +501,14 @@ $reason_cols = [];
 foreach ($reason_sql as $rk => $sql) {
     $reason_cols[] = 'SUM(' . $sql . ') AS r_' . $rk;
 }
-$r = pwg_query('SELECT ' . implode(', ', $reason_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
-    . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
+// Effectifs, compteurs et lignes du Journal : lus seulement quand il est affiché (v2.7c.2)
+$row = [];
+if ($show_journal) {
+    $r = pwg_query('SELECT ' . implode(', ', $reason_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
+        . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
+    $row = pwg_db_fetch_assoc($r) ?: [];
+}
 $reason_counts = [];
-$row = pwg_db_fetch_assoc($r) ?: [];
 foreach ($reason_keys as $rk) {
     $reason_counts[$rk] = (int)($row['r_' . $rk] ?? 0);
 }
@@ -494,10 +528,13 @@ foreach ($score_sql as $sk => $sql) {
 }
 $score_base = $base_parts;
 if ($reason_filter !== '') $score_base[] = '(' . $reason_sql[$reason_filter] . ')';
-$r = pwg_query('SELECT ' . implode(', ', $score_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
-    . (empty($score_base) ? '' : ' WHERE ' . implode(' AND ', $score_base)));
+$row = [];
+if ($show_journal) {
+    $r = pwg_query('SELECT ' . implode(', ', $score_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
+        . (empty($score_base) ? '' : ' WHERE ' . implode(' AND ', $score_base)));
+    $row = pwg_db_fetch_assoc($r) ?: [];
+}
 $score_counts = [];
-$row = pwg_db_fetch_assoc($r) ?: [];
 foreach ($score_keys as $sk) {
     $score_counts[$sk] = (int)($row['s_' . $sk] ?? 0);
 }
@@ -575,9 +612,9 @@ $count_cols = [];
 foreach ($category_sql as $cat => $sql) {
     $count_cols[] = 'SUM(' . $sql . ') AS c_' . $cat;
 }
-$r = pwg_query('SELECT ' . implode(', ', $count_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
-    . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
-if ($row = pwg_db_fetch_assoc($r)) {
+if ($show_journal
+    && ($row = pwg_db_fetch_assoc(pwg_query('SELECT ' . implode(', ', $count_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
+        . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)))))) {
     foreach ($journal_counts as $cat => $v) {
         $journal_counts[$cat] = (int)$row['c_' . $cat];
     }
@@ -590,7 +627,7 @@ $total_pages  = max(1, ceil($total_visits / $per_page));
 // IP. Jamais refusés et de score 0 : exclus dès qu'un filtre de motif ou de score > 0 est
 // actif. Le tableau et sa pagination restent sur les seules lignes journalisées.
 $journal_counted = 0;
-if ($reason_filter === '' && in_array($score_filter, ['', 'zero'], true)) {
+if ($show_journal && $reason_filter === '' && in_array($score_filter, ['', 'zero'], true)) {
     $r = pwg_query('SELECT SUM(counted) FROM ' . $prefixeTable . 'ip_location_robot_count WHERE '
         . ip_location_robot_counted_where($country_filter !== '' ? [$country_filter] : [], $ip_filter, [], $date_from, $date_to));
     list($journal_counted) = pwg_db_fetch_row($r);
@@ -598,28 +635,19 @@ if ($reason_filter === '' && in_array($score_filter, ['', 'zero'], true)) {
 }
 
 $logs = [];
-$result = pwg_query('
+if ($show_journal) {
+    $result = pwg_query('
 SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked, bot_score, block_reason
   FROM ' . $prefixeTable . 'ip_location_log
   ' . $filter_where . '
   ORDER BY visit_date DESC
   LIMIT ' . $per_page . ' OFFSET ' . $offset);
-while ($row = pwg_db_fetch_assoc($result)) {
-    $logs[] = $row;
+    while ($row = pwg_db_fetch_assoc($result)) {
+        $logs[] = $row;
+    }
 }
 
 // ── Rendu via template Piwigo ─────────────────────────────────────────────────
-
-$tab     = in_array($_GET['tab'] ?? '', ['help', 'stats'], true) ? $_GET['tab'] : 'config';
-$tab_tpl = IP_LOCATION_PATH . 'template/' . $tab . '.tpl';
-// Sous-onglets de Configuration (v2.6.6) : Réglages (blocs) / Journal des accès. Tout
-// paramètre de filtre du Journal ouvre directement le Journal.
-$sub = 'settings';
-if ($tab === 'config' && (($_GET['sub'] ?? '') === 'journal'
-    || isset($_GET['filter']) || isset($_GET['country']) || isset($_GET['date_from'])
-    || isset($_GET['date_to']) || isset($_GET['ip_filter']) || isset($_GET['reason']) || isset($_GET['score']) || isset($_GET['pnum']))) {
-    $sub = 'journal';
-}
 
 // Liens du Journal : filtres hors catégorie (pays, dates, IP) à propager, vue complète
 // courante (retour après Bloquer / Débloquer) et pagination fenêtrée (la prod dépasse
@@ -684,7 +712,7 @@ $server_is_nginx       = stripos($_SERVER['SERVER_SOFTWARE'] ?? '', 'nginx') !==
 // concernées ne sont plus appliquées que par le plugin.
 $htaccess_bypass  = null;
 $htaccess_missing = 0;
-if ($htaccess_enabled && !$server_is_nginx) {
+if ($show_settings && $htaccess_enabled && !$server_is_nginx) {
     $ht_ips = [];
     $ht_content = @file_get_contents(PHPWG_ROOT_PATH . '.htaccess');
     if ($ht_content !== false
@@ -862,7 +890,7 @@ unset($log);
 // statistiques des robots, impact du seuil du blocage automatique.
 
 $cfg_blocks = [];
-if ($tab === 'config' && $sub === 'settings') {
+if ($show_settings) {
     // Noms de pays connus (journal) pour afficher "United States (US)" dans les pastilles
     $country_names = [];
     $r = pwg_query('SELECT country_code, MIN(country) FROM ' . $prefixeTable . 'ip_location_log
@@ -1203,9 +1231,6 @@ $template->assign([
     'RETURN_QS'     => $return_qs,
     'PAGER'         => $pager,
     'TOTAL_ALL'     => $total_all,
-    'TOTAL_BOTS'    => $total_bots,
-    'TOTAL_BLOCKED' => $total_blocked,
-    'TOTAL_NORMAL'  => $total_normal,
 ]);
 
 if (!empty($cfg_blocks)) {

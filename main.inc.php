@@ -10,8 +10,41 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.7d - 01/10/2026
+        regroupement de v2.7c.1 et v2.7c.2
+        pour publication sur PEM
+
+    version 2.7c.2 - 01/10/2026
+        Admin du plugin lente (jusqu'à une minute à l'ouverture, après chaque
+        enregistrement et à chaque changement de page, signalé par un utilisateur) :
+        - nouvel index idx_ip_date (ip, visit_date) sur le journal (migration + filet de
+          sécurité d'admin.php). La sous-requête des visites qualifiées (autre page de la
+          même IP à ± 30 min) relisait toutes les lignes de l'heure pour chaque accès de
+          la période ; elle profite aussi au widget public Visiteurs ;
+        - admin.php ne calcule plus que ce qu'affiche l'onglet ouvert : visites
+          qualifiées, total et alertes .htaccess pour Réglages ; répartition par pays,
+          effectifs, compteurs et lignes pour le Journal ; liste des pays pour le Journal
+          et les Statistiques (tirée du même agrégat que la répartition, une lecture au
+          lieu de deux). Trois compteurs globaux qui n'étaient plus affichés supprimés.
+
+    version 2.7c.1 - 28/09/2026
+        Traductions : clés génériques renommées (Enregistrer → ipl_save, Actif → ipl_on,
+        Image → ipl_image). Piwigo partage un seul dictionnaire entre tous les plugins :
+        face_tag remplaçait nos boutons « Enregistrer » par « Enregistrer la configuration »,
+        private_derivative_protection notre « On » par « Active », et notre « Image »
+        remplaçait « L'image » du cœur de Piwigo. Clé inutilisée « Enregistrer la
+        configuration » supprimée.
+        Détail des visites comptabilisées : largeurs de colonnes fixes (une seule IPv6
+        élargissait la colonne IP et écrasait l'URL) ; URL cliquable, ouverte dans un
+        nouvel onglet, toujours rattachée à l'adresse de la galerie (l'hôte journalisé
+        vient de l'en-tête Host du visiteur et peut être falsifié).
+        Configuration, bloc Observation : widget Visites élargi aux 2/3 de la largeur,
+        conservation du journal réduite au 1/3 (une seule colonne sous 900 px).
+        Texte de la règle du widget corrigé (indication, Aide, README) : une visite compte
+        avec n'importe quelle autre page de la même IP à ± 30 min, pas seulement l'accueil.
+
     version 2.7c - 27/09/2026
-        Regroupement de v2.7b.1 à v2.7b3
+        Regroupement de v2.7b.1 à v2.7b.3
         pour publication sur PEM
 
     version 2.7b.3 - 27/09/2026

@@ -207,7 +207,7 @@
         <button type="button" id="iplExportBtn" class="buttonLike" style="font-size:0.85em;">{'Exporter'|@translate} &#9662;</button>
         <div class="ipl-stats-export-dd" id="iplExportDropdown" hidden>
           <button type="button" data-format="csv">CSV <span style="color:#999;font-size:0.85em;">.csv</span></button>
-          <button type="button" data-format="png">{'Image'|@translate} <span style="color:#999;font-size:0.85em;">.png</span></button>
+          <button type="button" data-format="png">{'ipl_image'|@translate} <span style="color:#999;font-size:0.85em;">.png</span></button>
           <button type="button" data-format="json">{'Données'|@translate} <span style="color:#999;font-size:0.85em;">.json</span></button>
         </div>
       </div>

@@ -80,7 +80,9 @@
   .iplc-group p{ margin:0; font-size:12.5px; color:var(--c-muted); }
   .iplc-grid{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; align-items:start; }
   .iplc-grid .wide{ grid-column:1 / -1; }
-  @media (max-width:900px){ .iplc-grid{ grid-template-columns:minmax(0,1fr); } }
+  /* Bloc Observation (v2.7c.1) : widget Visites (tableau de détail) aux 2/3, conservation du journal au 1/3 */
+  .iplc-grid.iplc-grid-2-1{ grid-template-columns:minmax(0,2fr) minmax(0,1fr); }
+  @media (max-width:900px){ .iplc-grid, .iplc-grid.iplc-grid-2-1{ grid-template-columns:minmax(0,1fr); } }
 
   .iplc-card{ background:var(--c-surface); border:1px solid var(--c-border); border-radius:12px; display:flex; flex-direction:column; min-width:0; scroll-margin-top:60px; }
   .iplc-card form{ margin:0; }
@@ -145,6 +147,14 @@
   table.iplc-t tr:last-child td{ border-bottom:none; }
   table.iplc-t td.num, table.iplc-t th.num{ text-align:right; }
   table.iplc-t .ip{ font-family:"IBM Plex Mono", Consolas, monospace; }
+  /* Détail des visites (v2.7c.1) : largeurs fixes, sinon une seule IPv6 élargit la colonne IP et écrase l'URL */
+  table.iplc-t-visits{ table-layout:fixed; }
+  table.iplc-t-visits col.c-date{ width:100px; }
+  table.iplc-t-visits col.c-ip{ width:135px; }
+  table.iplc-t-visits col.c-country{ width:110px; }
+  table.iplc-t-visits td.ip, table.iplc-t-visits td.url{ word-break:break-all; }
+  table.iplc-t-visits td.url a{ color:var(--c-accent); text-decoration:none; }
+  table.iplc-t-visits td.url a:hover{ text-decoration:underline; }
   table.iplc-t .muted{ color:var(--c-muted); }
   table.iplc-t tr.fam td{ background:var(--c-surface-2); font-size:10.8px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--c-muted); }
   table.iplc-t tr.removed td{ opacity:.4; text-decoration:line-through; }

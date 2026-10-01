@@ -30,7 +30,7 @@
 
   {* ═════════════════ Observation ═════════════════ *}
   <div class="iplc-group"><h3>{'Observation'|@translate}</h3><p>{'toujours actif : le journal enregistre chaque accès invité'|@translate}</p></div>
-  <div class="iplc-grid">
+  <div class="iplc-grid iplc-grid-2-1">
 
     {* Widget Visiteurs *}
     <section class="iplc-card{if !$VISITORS_ENABLED} is-off{/if}" id="ipl-card-visitors">
@@ -56,7 +56,7 @@
               <div class="iplc-tile"><span class="n">{$VISITOR_DETAIL_ROWS|@count}</span><span class="l">{'visites comptées'|@translate}</span></div>
               <div class="iplc-tile"><span class="n">{$VISITOR_COUNTRIES}</span><span class="l">{'pays'|@translate}</span></div>
             </div>
-            <p class="hint">{'Ne compte que les visites d\'album ou de photo précédées d\'un passage sur la page d\'accueil (±30 min).'|@translate}</p>
+            <p class="hint">{'Ne compte que les visites d\'album ou de photo accompagnées d\'une autre page de la même IP, avant ou après, à ±30 min.'|@translate}</p>
           </div>
         </div>
       </form>
@@ -68,9 +68,10 @@
               <p class="hint">{'Aucune visite comptabilisée sur la période configurée.'|@translate}</p>
             {else}
               <div class="iplc-list"><div class="iplc-scroll">
-                <table class="iplc-t"><thead><tr><th>{'Date'|@translate}</th><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'URL'|@translate}</th></tr></thead><tbody>
+                <table class="iplc-t iplc-t-visits"><colgroup><col class="c-date"><col class="c-ip"><col class="c-country"><col></colgroup>
+                <thead><tr><th>{'Date'|@translate}</th><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'URL'|@translate}</th></tr></thead><tbody>
                 {foreach from=$VISITOR_DETAIL_ROWS item=v}
-                  <tr><td class="mono">{$v.visit_date|escape}</td><td class="ip">{$v.ip|escape}</td><td>{$v.country|escape}</td><td style="word-break:break-all;">{$v.url|escape}</td></tr>
+                  <tr><td class="mono">{$v.visit_date|escape}</td><td class="ip">{$v.ip|escape}</td><td>{$v.country|escape}</td><td class="url">{if $v.href}<a href="{$v.href|escape}" target="_blank" rel="noopener noreferrer">{$v.url|escape}</a>{else}{$v.url|escape}{/if}</td></tr>
                 {/foreach}
                 </tbody></table>
               </div></div>
@@ -78,7 +79,7 @@
           </div>
         </details>
       </div>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-visitors" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-visitors" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Conservation du journal *}
@@ -113,7 +114,7 @@
           </div>
         </details>
       </div>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-retention" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-retention" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Liste blanche *}
@@ -133,7 +134,7 @@
           <p class="hint">{'Les IP du réseau local (192.168.x, 10.x…) ne sont jamais bloquées automatiquement, mais elles sont enregistrées. Depuis chez vous, vos visites par le nom de domaine apparaissent souvent sous l\'adresse de votre box (ex. 192.168.1.1) : ajoutez-la ici pour ne plus les voir dans le journal.'|@translate}</p>
         </div>
       </form>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-whitelist" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-whitelist" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
   </div>
 
@@ -147,7 +148,7 @@
         <input type="hidden" name="action" value="save_robots">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Robots d\'indexation'|@translate}</h4><span class="sub">{'Un robot autorisé passe tous les leviers ci-dessous (pays, mot-clé, IP, score). Un robot bloqué reçoit un refus dès qu\'il se présente.'|@translate}</span></div>
-          <span class="iplc-pill {if $ROBOTS_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}" data-off="{'Inactif'|@translate}">{if $ROBOTS_ENABLED}{'Actif'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $ROBOTS_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}" data-off="{'Inactif'|@translate}">{if $ROBOTS_ENABLED}{'ipl_on'|@translate} · {if $ROBOTS_BLOCKED > 0}{$ROBOTS_BLOCKED} {'bloqué(s)'|@translate}{else}{'aucun blocage'|@translate}{/if}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Appliquer la liste des robots (autorisations et blocages)'|@translate}"><input type="checkbox" name="robots_enabled" value="1" data-card-switch{if $ROBOTS_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -244,7 +245,7 @@
           </div>
         </div>
       </form>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-robots" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-robots" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Blocage par IP (manuel) *}
@@ -261,7 +262,7 @@
           {if !$SERVER_IS_NGINX and $HTACCESS_MISSING > 0}
             <span class="iplc-pill danger" title="{'Le .htaccess est absent ou ne contient pas'|@translate} {$HTACCESS_MISSING} {'des IP bloquées à la main ; le blocage reste assuré par le plugin. Pour réécrire le fichier : désactivez puis réactivez le blocage par IP, ou modifiez la liste.'|@translate}">&#9888; {'IP absentes du .htaccess'|@translate}</span>
           {/if}
-          <span class="iplc-pill {if $HTACCESS_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $HTACCESS_ENABLED}{'Actif'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $HTACCESS_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $HTACCESS_ENABLED}{'ipl_on'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par IP'|@translate}"><input type="checkbox" name="htaccess_enabled" value="1" data-card-switch{if $HTACCESS_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body" style="padding-bottom:0;">
@@ -291,7 +292,7 @@
         </div></div>
         <p class="hint">{'Dans le Journal, les boutons « Ajouter IP » / « Ajouter /16 » d\'une ligne ajoutent aussi une entrée ici.'|@translate}</p>
       </div>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-manual" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-manual" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Blocage par pays *}
@@ -301,7 +302,7 @@
         <input type="hidden" name="blocked_countries" id="iplc-cc-value" value="{$BLOCKED_COUNTRIES|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par pays'|@translate}</h4><span class="sub">{'Refuse les pages aux visiteurs des pays listés'|@translate}</span></div>
-          <span class="iplc-pill {if $BLOCKING_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}" data-off="{'Inactif'|@translate}">{if $BLOCKING_ENABLED}{'Actif'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $BLOCKING_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}" data-off="{'Inactif'|@translate}">{if $BLOCKING_ENABLED}{'ipl_on'|@translate} · {$COUNTRY_ROWS|@count} {'pays'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par pays'|@translate}"><input type="checkbox" name="blocking_enabled" value="1" data-card-switch{if $BLOCKING_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -327,7 +328,7 @@
           </div>
         </div>
       </form>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-country" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-country" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Blocage par mot-clé *}
@@ -337,7 +338,7 @@
         <input type="hidden" name="blocked_url_keywords" id="iplc-kw-value" value="{$BLOCKED_URL_KEYWORDS|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par mot-clé d\'URL'|@translate}</h4><span class="sub">{'Refuse toute URL qui contient l\'un de ces mots'|@translate}</span></div>
-          <span class="iplc-pill {if $KEYWORD_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $KEYWORD_BLOCK_ENABLED}{'Actif'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $KEYWORD_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $KEYWORD_BLOCK_ENABLED}{'ipl_on'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par mot-clé'|@translate}"><input type="checkbox" name="keyword_block_enabled" value="1" data-card-switch{if $KEYWORD_BLOCK_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -358,7 +359,7 @@
           </div>
         </div>
       </form>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-keyword" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-keyword" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Blocage automatique *}
@@ -367,7 +368,7 @@
         <input type="hidden" name="action" value="save_bot_block_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage automatique par score'|@translate}</h4><span class="sub">{'Bloque pendant 14 jours chaque adresse jugée suspecte, une par une — jamais toute une plage d\'adresses, et jamais les appareils de votre réseau local.'|@translate}</span></div>
-          <span class="iplc-pill {if $BOT_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}" data-off="{'Inactif'|@translate}">{if $BOT_BLOCK_ENABLED}{'Actif'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $BOT_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}" data-off="{'Inactif'|@translate}">{if $BOT_BLOCK_ENABLED}{'ipl_on'|@translate} · {'seuil'|@translate} {$BOT_BLOCK_SCORE_THRESHOLD}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage automatique'|@translate}"><input type="checkbox" name="bot_block_enabled" value="1" data-card-switch{if $BOT_BLOCK_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -409,7 +410,7 @@
           </div>
         </details>
       </div>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-auto" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-auto" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
     {* Filtre des téléchargements *}
@@ -420,7 +421,7 @@
         <input type="hidden" name="download_allowed_countries" id="iplc-dl-value" value="{$DOWNLOAD_ALLOWED_COUNTRIES|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Filtre pays sur les téléchargements'|@translate}</h4><span class="sub">{'Seuls les pays listés peuvent télécharger les originaux (liste blanche)'|@translate}</span></div>
-          <span class="iplc-pill {if $DOWNLOAD_FILTER_ENABLED}on{else}off{/if}" data-pill data-on="{'Actif'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}" data-off="{'Inactif'|@translate}">{if $DOWNLOAD_FILTER_ENABLED}{'Actif'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $DOWNLOAD_FILTER_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}" data-off="{'Inactif'|@translate}">{if $DOWNLOAD_FILTER_ENABLED}{'ipl_on'|@translate} · {$DOWNLOAD_ROWS|@count} {'pays autorisés'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le filtre pays sur les téléchargements'|@translate}"><input type="checkbox" name="download_filter_enabled" value="1" data-card-switch{if $DOWNLOAD_FILTER_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
@@ -444,7 +445,7 @@
           </div>
         </div>
       </form>
-      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-download" data-save disabled>{'Enregistrer'|@translate}</button></div>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-download" data-save disabled>{'ipl_save'|@translate}</button></div>
       {else}
       <div class="iplc-head"><div class="iplc-title"><h4>{'Filtre pays sur les téléchargements'|@translate}</h4><span class="sub">{'Les invités n\'ont pas la permission de télécharger les originaux : filtre sans objet.'|@translate}</span></div></div>
       {/if}
