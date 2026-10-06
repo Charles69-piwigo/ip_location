@@ -111,7 +111,7 @@ moins deux pour franchir un seuil prudent.
 
 | Motif | Signification |
 |---|---|
-| robot | Robot de la liste marqué « Bloqué » (robots d'IA par défaut). |
+| robot | Robot de la liste marqué « Bloqué » (robots d'IA et outils SEO par défaut). |
 | ip | IP ou plage ajoutée à la main à la liste de blocage. |
 | auto | IP placée par le calcul du score, pour 14 jours. |
 | pays | Pays de la liste des pays bloqués. |

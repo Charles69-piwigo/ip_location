@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "revision": "2026-10-06",
+  "robots": [
+    {"name": "OpenAI",       "ua": "GPTBot",                "fam": "ai"},
+    {"name": "Anthropic",    "ua": "ClaudeBot",             "fam": "ai"},
+    {"name": "Common Crawl", "ua": "CCBot",                 "fam": "ai"},
+    {"name": "ByteDance",    "ua": "Bytespider",            "fam": "ai"},
+    {"name": "Perplexity",   "ua": "PerplexityBot",         "fam": "ai"},
+    {"name": "Amazon",       "ua": "Amazonbot",             "fam": "ai"},
+    {"name": "SE Ranking",   "ua": "SERankingBacklinksBot", "fam": "seo"},
+    {"name": "Reflection",   "ua": "Reflectionbot",         "fam": "seo"},
+    {"name": "Sofya",        "ua": "SofyaBot",              "fam": "seo"},
+    {"name": "Halo",         "ua": "HaloBot",               "fam": "seo"},
+    {"name": "Linkup",       "ua": "LinkupBot",             "fam": "seo"},
+    {"name": "Majestic",     "ua": "MJ12bot",               "fam": "seo"},
+    {"name": "Ahrefs",       "ua": "AhrefsBot",             "fam": "seo"},
+    {"name": "Semrush",      "ua": "SemrushBot",            "fam": "seo"},
+    {"name": "AIWebIndex",   "ua": "AIWebIndex",            "fam": "seo"},
+    {"name": "JSCrawler",    "ua": "jscrawler",             "fam": "seo"},
+    {"name": "Limbes",       "ua": "LimbesBot",             "fam": "seo"},
+    {"name": "OpenBase",     "ua": "OpenBaseBot",           "fam": "seo"}
+  ]
+}

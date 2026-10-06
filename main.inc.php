@@ -10,6 +10,50 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.8 - 06/10/2026
+        regroupement des 2.7e.1, 2.7e.2 et 2.7e.3
+        pour publication sur PEM
+    
+    version 2.7e.3 - 06/10/2026
+        Liste de robots en ligne (phase 1) : ajouter un robot n'exige plus de publier une
+        version. Le fichier bots.json du dépôt GitHub est téléchargé à la demande (bouton
+        « Mettre à jour maintenant ») ou automatiquement, au plus une fois par jour, à
+        l'ouverture de l'admin (case à cocher, désactivée par défaut — réglages du bloc
+        Robots). La synchronisation ne fait qu'AJOUTER des robots, toujours « Bloqué », sans
+        vérification DNS ; les entrées existantes ne sont jamais modifiées, un robot retiré
+        à la main ne revient pas (robots_remote_seen). Garde-fous : certificat HTTPS vérifié,
+        fichier limité à 256 Ko / 500 entrées, motif refusé s'il est trop court, s'il figure
+        dans un User-Agent de navigateur courant ou s'il recoupe un moteur de recherche, un
+        aperçu de partage ou un robot que l'administrateur a autorisé
+        (ip_location_remote_robot_acceptable()). Les robots importés portent la mention
+        « liste en ligne ». URL surchargeable par $conf['ip_location_robots_url'].
+        Pas encore : envoi des robots détectés par les installations (phase 2).
+
+    version 2.7e.2 - 05/10/2026
+        Analyse du journal d'un deuxième site (23 744 accès sur 30 jours) :
+        - quatre nouveaux outils SEO / scrapers bloqués par défaut : AIWebIndex (413 accès
+          depuis 10 IP), jscrawler (857 accès), LimbesBot, OpenBaseBot. Le semis des outils
+          SEO passe d'un simple indicateur à un numéro de révision : une liste de robots déjà
+          enregistrée reçoit seulement les robots apparus depuis sa dernière révision (un
+          robot retiré à la main ne revient pas) ;
+        - un User-Agent contenant sa propre adresse IP « [ip:1.2.3.4] » (un faux Android
+          Chrome, 251 accès en une journée, score 50 donc sous le seuil de blocage de 70)
+          compte comme « navigateur impossible » : +30 et marquage bot, comme
+          ip_location_is_forged_ua().
+
+    version 2.7e.1 - 05/10/2026
+        Outils SEO / scrapers de liens bloqués par défaut. Analyse d'un journal réel de 3 jours
+        (50 047 accès) : SERankingBacklinksBot seul en faisait 31 374 (63 %), Reflectionbot
+        3 012, SofyaBot 496, HaloBot 156, LinkupBot 100, plus MJ12bot et AhrefsBot — tous
+        passaient : un User-Agent de robot ne vaut que 15 points de score pour un seuil de
+        blocage auto de 70, et seule la liste « Robots » bloque par User-Agent. Nouvelle
+        famille « Outils SEO » dans cette liste (SE Ranking, Reflection, Sofya, Halo, Linkup,
+        Majestic, Ahrefs, Semrush), statut Bloqué par défaut. Pour une liste déjà enregistrée,
+        ces robots sont ajoutés une seule fois, bloqués, sans toucher aux entrées existantes
+        (un robot retiré ensuite n'est pas réinjecté).
+        Les plages entières (ex. le bloc d'un hébergeur dont chaque IP fait quelques accès)
+        restent à ajouter à la main en CIDR dans le blocage .htaccess.
+
     version 2.7e - 01/10/2026
         Blocage .htaccess inopérant à côté d'un autre plugin (signalé par un utilisateur,
         avec la section du plugin BYB) : Apache combine en OU les blocs <RequireAll>
@@ -749,6 +793,12 @@ function ip_location_get_conf()
         'keyword_block_enabled'      => '0',
         'robots_enabled'             => '1',   // bloc "Robots d'indexation" (v2.6.2)
         'robots'                     => null,  // null = liste par défaut, cf. ip_location_get_robots()
+        'robots_seo_seeded'          => '',    // v2.7e.1 : dernière révision des outils SEO par défaut reçue par la liste enregistrée
+        'robots_remote_auto'         => '0',   // v2.7e.3 : mise à jour automatique depuis la liste en ligne
+        'robots_remote_seen'         => [],    // motifs déjà reçus de la liste en ligne (un robot retiré ensuite ne revient pas)
+        'robots_remote_last_try'     => 0,     // horodatage de la dernière tentative
+        'robots_remote_last_ok'      => 0,     // horodatage de la dernière synchronisation réussie
+        'robots_remote_revision'     => '',    // révision de la liste en ligne reçue en dernier
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -1140,9 +1190,10 @@ document.addEventListener('click',function(e){
 
 /**
  * Requête HTTP GET avec cURL (préféré) ou file_get_contents en fallback.
- * Timeout 3s. Retourne le body ou false.
+ * Timeout 3s. Retourne le body ou false. $verify_ssl : vérifier le certificat (liste de
+ * robots en ligne, v2.7e.3) ; désactivé par défaut pour les API de géolocalisation.
  */
-function ip_location_http_get($url)
+function ip_location_http_get($url, $verify_ssl = false)
 {
     if (function_exists('curl_init')) {
         $ch = curl_init();
@@ -1153,8 +1204,8 @@ function ip_location_http_get($url)
             CURLOPT_CONNECTTIMEOUT => 2,
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_MAXREDIRS      => 3,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_SSL_VERIFYPEER => $verify_ssl,
+            CURLOPT_SSL_VERIFYHOST => $verify_ssl ? 2 : false,
             CURLOPT_USERAGENT      => 'ip_location-piwigo/1.0',
         ]);
         $response = curl_exec($ch);
@@ -1171,7 +1222,7 @@ function ip_location_http_get($url)
     // Fallback file_get_contents
     $context = stream_context_create([
         'http' => ['timeout' => 3],
-        'ssl'  => ['verify_peer' => false, 'verify_peer_name' => false],
+        'ssl'  => ['verify_peer' => $verify_ssl, 'verify_peer_name' => $verify_ssl],
     ]);
     return @file_get_contents($url, false, $context);
 }
@@ -1412,17 +1463,19 @@ function ip_location_is_prefetch_request()
 
 /**
  * Liste par défaut du bloc "Robots d'indexation" (v2.6.2). Chaque robot : nom, motif
- * cherché dans le User-Agent (insensible à la casse), famille (search / social / ai),
+ * cherché dans le User-Agent (insensible à la casse), famille (search / social / ai / seo),
  * domaines de vérification DNS (vide = le robot ne publie pas de méthode : confiance au
  * User-Agent) et statut (allow / block). Moteurs de recherche et aperçus de partage
  * autorisés ; robots d'IA bloqués par défaut (décision v2.6.5 : GPTBot observé à ~50
- * requêtes/minute pendant des heures sur un site réel, sans bénéfice pour le site).
+ * requêtes/minute pendant des heures sur un site réel, sans bénéfice pour le site) ; outils
+ * SEO / scrapers de liens bloqués aussi (v2.7e.1 : SERankingBacklinksBot seul faisait 63 %
+ * des accès d'un journal réel de 3 jours).
  */
 function ip_location_default_robots()
 {
     $r = function ($name, $ua, $fam, $verify = '') {
         return ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => $verify,
-                'status' => $fam === 'ai' ? 'block' : 'allow'];
+                'status' => ($fam === 'ai' || $fam === 'seo') ? 'block' : 'allow'];
     };
     return [
         $r('Googlebot',    'Googlebot',           'search', 'googlebot.com google.com'),
@@ -1445,7 +1498,32 @@ function ip_location_default_robots()
         $r('ByteDance',    'Bytespider',          'ai'),
         $r('Perplexity',   'PerplexityBot',       'ai'),
         $r('Amazon',       'Amazonbot',           'ai'),
+        $r('SE Ranking',   'SERankingBacklinksBot', 'seo'),
+        $r('Reflection',   'Reflectionbot',       'seo'),
+        $r('Sofya',        'SofyaBot',            'seo'),
+        $r('Halo',         'HaloBot',             'seo'),
+        $r('Linkup',       'LinkupBot',           'seo'),
+        $r('Majestic',     'MJ12bot',             'seo'),
+        $r('Ahrefs',       'AhrefsBot',           'seo'),
+        $r('Semrush',      'SemrushBot',          'seo'),
+        $r('AIWebIndex',   'AIWebIndex',          'seo'),
+        $r('JSCrawler',    'jscrawler',           'seo'),
+        $r('Limbes',       'LimbesBot',           'seo'),
+        $r('OpenBase',     'OpenBaseBot',         'seo'),
     ];
+}
+
+/**
+ * Révision courante de la liste des outils SEO par défaut (v2.7e.2). Une liste de robots
+ * déjà enregistrée reçoit seulement les outils ajoutés depuis la révision qu'elle a déjà
+ * vue ('robots_seo_seeded') : un robot retiré par l'administrateur ne revient pas.
+ * Révision 1 : v2.7e.1 ; révision 2 : AIWebIndex, jscrawler, LimbesBot, OpenBaseBot.
+ */
+define('IP_LOCATION_SEO_ROBOTS_REV', 2);
+
+function ip_location_seo_robot_rev($ua)
+{
+    return in_array(strtolower($ua), ['aiwebindex', 'jscrawler', 'limbesbot', 'openbasebot'], true) ? 2 : 1;
 }
 
 /**
@@ -1463,6 +1541,25 @@ function ip_location_get_robots()
 
     $plugin_conf = ip_location_get_conf();
     if (is_array($plugin_conf['robots'])) {
+        // v2.7e.1/2 : liste enregistrée avant l'ajout d'outils SEO par défaut — on y ajoute,
+        // bloqués, ceux apparus depuis la révision qu'elle a déjà reçue, sans toucher aux
+        // entrées existantes ; un robot retiré ensuite par l'administrateur ne revient pas.
+        $seeded_rev = (int)$plugin_conf['robots_seo_seeded'];
+        if ($seeded_rev < IP_LOCATION_SEO_ROBOTS_REV) {
+            $listed = array_map('strtolower', array_column($plugin_conf['robots'], 'ua'));
+            $list = $plugin_conf['robots'];
+            foreach (ip_location_default_robots() as $d) {
+                if ($d['fam'] === 'seo' && ip_location_seo_robot_rev($d['ua']) > $seeded_rev
+                    && !in_array(strtolower($d['ua']), $listed, true)) {
+                    $list[] = $d;
+                }
+            }
+            conf_update_param('ip_location', serialize(array_merge($plugin_conf, [
+                'robots'            => $list,
+                'robots_seo_seeded' => (string)IP_LOCATION_SEO_ROBOTS_REV,
+            ])));
+            return $cache = $list;
+        }
         return $cache = $plugin_conf['robots'];
     }
 
@@ -1486,14 +1583,126 @@ function ip_location_get_robots()
         }
         $list[] = $known ?: ['name' => $pattern, 'ua' => $pattern, 'fam' => 'search', 'verify' => '', 'status' => 'allow'];
     }
-    // Robots d'IA par défaut (bloqués) absents de l'ancienne liste
+    // Robots d'IA et outils SEO par défaut (bloqués) absents de l'ancienne liste
     $listed = array_map('strtolower', array_column($list, 'ua'));
     foreach ($defaults as $d) {
-        if ($d['fam'] === 'ai' && !in_array(strtolower($d['ua']), $listed, true)) {
+        if (($d['fam'] === 'ai' || $d['fam'] === 'seo') && !in_array(strtolower($d['ua']), $listed, true)) {
             $list[] = $d;
         }
     }
     return $cache = $list;
+}
+
+/**
+ * Liste de robots en ligne (v2.7e.3) : fichier JSON versionné dans le dépôt du plugin
+ * {"schema":1,"revision":"AAAA-MM-JJ","robots":[{"name":…,"ua":…,"fam":"ai|seo"}]}.
+ * Surchargeable par $conf['ip_location_robots_url'] (miroir, test).
+ */
+define('IP_LOCATION_REMOTE_ROBOTS_URL', 'https://raw.githubusercontent.com/Charles69-piwigo/ip_location/main/bots.json');
+
+/**
+ * Un motif reçu de la liste en ligne est-il acceptable ? La liste pilote le blocage du
+ * site : elle ne doit jamais pouvoir bloquer un navigateur, un moteur de recherche ou un
+ * robot que l'administrateur a autorisé. Refus si le motif est mal formé ou trop court,
+ * s'il figure dans un User-Agent de navigateur courant, ou s'il en contient/est contenu
+ * dans le motif d'un robot autorisé (liste locale) ou d'un moteur / aperçu de partage par
+ * défaut.
+ */
+function ip_location_remote_robot_acceptable($ua, array $local)
+{
+    if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._\/-]{4,63}$/', $ua)) {
+        return false;
+    }
+    $browsers = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0 OPR/105.0.0.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/120.0 FxiOS/120.0 Mobile/15E148 Safari/604.1',
+        'Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36 SamsungBrowser/23.0',
+    ];
+    foreach ($browsers as $b) {
+        if (stripos($b, $ua) !== false) return false;
+    }
+    $protected = [];
+    foreach (ip_location_default_robots() as $d) {
+        if ($d['fam'] === 'search' || $d['fam'] === 'social') $protected[] = $d['ua'];
+    }
+    foreach ($local as $rb) {
+        if (($rb['status'] ?? 'allow') === 'allow') $protected[] = $rb['ua'];
+    }
+    foreach ($protected as $p) {
+        if ($p !== '' && (stripos($p, $ua) !== false || stripos($ua, $p) !== false)) return false;
+    }
+    return true;
+}
+
+/**
+ * Synchronise la liste des robots avec la liste en ligne. Ne fait qu'AJOUTER des robots,
+ * toujours en statut « Bloqué », sans vérification DNS : les entrées existantes ne sont
+ * pas touchées, et un robot déjà reçu puis retiré par l'administrateur ne revient pas
+ * (robots_remote_seen). Retourne ['ok' => bool, 'added' => n, 'error' => code].
+ */
+function ip_location_sync_remote_robots()
+{
+    global $conf;
+
+    $plugin_conf = ip_location_get_conf();
+    $url  = !empty($conf['ip_location_robots_url']) ? $conf['ip_location_robots_url'] : IP_LOCATION_REMOTE_ROBOTS_URL;
+    $body = ip_location_http_get($url, true);
+    $store = function ($extra) use ($plugin_conf) {
+        conf_update_param('ip_location', serialize(array_merge($plugin_conf, $extra)));
+    };
+    if ($body === false || $body === '' || strlen($body) > 262144) {
+        $store(['robots_remote_last_try' => time()]);
+        return ['ok' => false, 'added' => 0, 'error' => 'fetch'];
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data) || (int)($data['schema'] ?? 0) !== 1 || !is_array($data['robots'] ?? null)) {
+        $store(['robots_remote_last_try' => time()]);
+        return ['ok' => false, 'added' => 0, 'error' => 'format'];
+    }
+
+    $list   = ip_location_get_robots();
+    $listed = array_map('strtolower', array_column($list, 'ua'));
+    $seen   = array_map('strtolower', (array)$plugin_conf['robots_remote_seen']);
+    $added  = 0;
+    foreach (array_slice($data['robots'], 0, 500) as $e) {
+        if (!is_array($e)) continue;
+        $ua   = is_string($e['ua'] ?? null) ? trim($e['ua']) : '';
+        $name = is_string($e['name'] ?? null) ? mb_substr(trim(strip_tags($e['name'])), 0, 64) : '';
+        $fam  = in_array($e['fam'] ?? '', ['ai', 'seo'], true) ? $e['fam'] : 'seo';
+        if ($name === '' || !ip_location_remote_robot_acceptable($ua, $list)) continue;
+        $key = strtolower($ua);
+        if (in_array($key, $seen, true)) continue;
+        $seen[] = $key;
+        if (in_array($key, $listed, true)) continue;
+        $list[]   = ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => '', 'status' => 'block', 'src' => 'remote'];
+        $listed[] = $key;
+        $added++;
+    }
+    $store([
+        'robots'                 => $list,
+        'robots_seo_seeded'      => (string)IP_LOCATION_SEO_ROBOTS_REV,
+        'robots_remote_seen'     => array_values(array_unique($seen)),
+        'robots_remote_last_try' => time(),
+        'robots_remote_last_ok'  => time(),
+        'robots_remote_revision' => is_string($data['revision'] ?? null) ? mb_substr($data['revision'], 0, 32) : '',
+    ]);
+    return ['ok' => true, 'added' => $added, 'error' => ''];
+}
+
+/**
+ * Synchronisation automatique, appelée à l'ouverture de l'admin : au plus une fois par
+ * 24 h (6 h après un échec, pour ne pas retarder l'admin à chaque page sur un site sans
+ * accès sortant). Retourne le résultat de la synchronisation, ou null si rien n'était dû.
+ */
+function ip_location_sync_remote_robots_if_due()
+{
+    $c = ip_location_get_conf();
+    if ($c['robots_remote_auto'] !== '1') return null;
+    $wait = ((int)$c['robots_remote_last_ok'] >= (int)$c['robots_remote_last_try']) ? 86400 : 21600;
+    if (time() - (int)$c['robots_remote_last_try'] < $wait) return null;
+    return ip_location_sync_remote_robots();
 }
 
 /**
@@ -2489,10 +2698,15 @@ function ip_location_keyword_collisions(array $keywords)
  * figent "Mac OS X 10_15_7". Un "Chrome/150.0.9003.276" ou un "Mac OS X 15_4_0" est donc
  * fabriqué — cas réel : un robot tirant un numéro de build au hasard à chaque requête
  * (6 IP, score 0). Épargnés : WebView Android ("; wv)") et applications Electron, qui
- * gardent la version complète.
+ * gardent la version complète. Depuis la v2.7e.2, un UA qui contient sa propre adresse IP
+ * entre crochets ("… Mobile Safari/537.36 [ip:93.41.125.186]", robot réel vu sur un
+ * journal) est aussi tenu pour fabriqué : aucun navigateur n'écrit cela.
  */
 function ip_location_is_forged_ua($user_agent)
 {
+    if (preg_match('/\[ip:[0-9a-f.:]+\]/i', $user_agent)) {
+        return true;
+    }
     if (preg_match('/Chrome\/(\d+)\.0\.[1-9]/', $user_agent, $m) && (int)$m[1] >= 113
         && strpos($user_agent, '; wv)') === false && stripos($user_agent, 'Electron') === false) {
         return true;

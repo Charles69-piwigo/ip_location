@@ -168,6 +168,7 @@
                   <button type="button" data-fam="search">{'Moteurs de recherche'|@translate}</button>
                   <button type="button" data-fam="social">{'Aperçus de partage'|@translate}</button>
                   <button type="button" data-fam="ai">{'Robots d\'IA'|@translate}</button>
+                  <button type="button" data-fam="seo">{'Outils SEO'|@translate}</button>
                 </div>
                 <div class="iplc-list"><div class="iplc-scroll" style="max-height:340px;">
                   <table class="iplc-t"><thead><tr><th>{'Robot'|@translate}</th><th>{'Reconnu par'|@translate}</th><th>{'Vérification'|@translate}</th><th class="num">{'Vu 7 j'|@translate}</th><th>{'Dernier passage'|@translate}</th><th>{'Statut'|@translate}</th><th></th></tr></thead>
@@ -178,7 +179,8 @@
                         <input type="hidden" name="robots[{$i}][name]" value="{$rb.name|escape}">
                         <input type="hidden" name="robots[{$i}][ua]" value="{$rb.ua|escape}">
                         <input type="hidden" name="robots[{$i}][fam]" value="{$rb.fam|escape}">
-                        <input type="hidden" name="robots[{$i}][verify]" value="{$rb.verify|escape}"></td>
+                        <input type="hidden" name="robots[{$i}][verify]" value="{$rb.verify|escape}">
+                        {if $rb.src|default:'' eq 'remote'}<input type="hidden" name="robots[{$i}][src]" value="remote"> <span class="iplc-verif na" title="{'Ajouté depuis la liste en ligne'|@translate}">{'liste en ligne'|@translate}</span>{/if}</td>
                       <td class="mono" style="font-size:11.5px;color:var(--c-text-2);">{$rb.ua|escape}</td>
                       <td>{if $rb.verifiable}<span class="iplc-verif ok" title="DNS → *.{$rb.verify|escape}">✓ {'vérifié DNS'|@translate}</span>{else}<span class="iplc-verif na" title="{'Le robot ne publie pas de méthode de vérification : confiance au User-Agent'|@translate}">{'non vérifiable'|@translate}</span>{/if}</td>
                       <td class="num mono">{$rb.seen}</td>
@@ -202,6 +204,7 @@
                         <option value="search">{'Moteur de recherche'|@translate}</option>
                         <option value="social">{'Aperçu de partage'|@translate}</option>
                         <option value="ai">{'Robot d\'IA'|@translate}</option>
+                        <option value="seo">{'Outil SEO'|@translate}</option>
                       </select>
                     </div>
                     <p class="hint">{'Le robot est ajouté (autorisé) à l\'enregistrement. Un robot absent de cette liste reste traité par le score de suspicion.'|@translate}</p>
@@ -244,6 +247,18 @@
             <p class="hint">{'« Vérifié DNS » : l\'IP est contrôlée auprès du moteur (DNS inverse puis direct, résultat gardé 30 jours). Un faux Googlebot est traité comme un visiteur ordinaire, et l\'usurpation augmente son score.'|@translate}</p>
           </div>
         </div>
+      </form>
+      {* Liste de robots en ligne (v2.7e.3) : formulaire distinct (pas d'imbrication) *}
+      <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+        <input type="hidden" name="action" value="save_robots_remote">
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="robots_remote_auto" value="1"{if $ROBOTS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des robots depuis la liste en ligne (1 fois par jour)'|@translate}</label>
+        <button type="submit" class="iplc-btn ghost sm">{'ipl_save'|@translate}</button>
+        <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_robots_remote">{'Mettre à jour maintenant'|@translate}</button>
+        <span class="hint" style="flex-basis:100%;margin:0;">
+          {'La liste en ligne ne fait qu\'ajouter des robots, toujours « Bloqué » : vos réglages et les robots que vous avez retirés ne sont jamais modifiés.'|@translate}
+          {if $ROBOTS_REMOTE_LAST} {'Dernière mise à jour :'|@translate} {$ROBOTS_REMOTE_LAST|escape}{if $ROBOTS_REMOTE_REV} ({$ROBOTS_REMOTE_REV|escape}){/if}.{/if}
+          {if $ROBOTS_REMOTE_FAILED} <b style="color:var(--c-warn);">{'Dernière tentative en échec.'|@translate}</b>{/if}
+        </span>
       </form>
       <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-robots" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>

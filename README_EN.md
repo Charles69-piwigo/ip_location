@@ -111,7 +111,7 @@ needed to reach a cautious threshold.
 
 | Reason | Meaning |
 |---|---|
-| robot | Robot from the list set to "Blocked" (AI robots by default). |
+| robot | Robot from the list set to "Blocked" (AI robots and SEO tools by default). |
 | ip | IP or range added by hand to the block list. |
 | auto | IP added by the score calculation, for 14 days. |
 | country | Country on the blocked countries list. |

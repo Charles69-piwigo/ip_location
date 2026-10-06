@@ -130,7 +130,7 @@ if (isset($_POST['action'])) {
     } elseif ($_POST['action'] === 'save_robots') {
         // Bloc "Robots d'indexation" (v2.6.2/2.6.3). Tableaux POST robots[i][…] :
         // Piwigo applique addslashes() à tout $_POST (récursivement), d'où stripslashes().
-        $allowed_fams = ['search', 'social', 'ai'];
+        $allowed_fams = ['search', 'social', 'ai', 'seo'];
         $robots = [];
         foreach ((array)($_POST['robots'] ?? []) as $row) {
             if (!is_array($row) || !empty($row['remove'])) {
@@ -147,7 +147,7 @@ if (isset($_POST['action'])) {
                 'fam'    => in_array($row['fam'] ?? '', $allowed_fams, true) ? $row['fam'] : 'search',
                 'verify' => preg_replace('/[^a-z0-9. -]/i', '', stripslashes($row['verify'] ?? '')),
                 'status' => ($row['status'] ?? '') === 'block' ? 'block' : 'allow',
-            ];
+            ] + (($row['src'] ?? '') === 'remote' ? ['src' => 'remote'] : []);
         }
         $new_name = mb_substr(trim(stripslashes($_POST['new_robot_name'] ?? '')), 0, 64);
         $new_ua   = mb_substr(trim(stripslashes($_POST['new_robot_ua'] ?? '')), 0, 64);
@@ -164,8 +164,20 @@ if (isset($_POST['action'])) {
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'robots_enabled' => isset($_POST['robots_enabled']) ? '1' : '0',
             'robots'         => $robots,
+            // la liste enregistrée fait foi : ne pas réinjecter un outil SEO que l'admin a retiré
+            'robots_seo_seeded' => (string)IP_LOCATION_SEO_ROBOTS_REV,
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-robots');
+    } elseif ($_POST['action'] === 'save_robots_remote') {
+        // Liste de robots en ligne (v2.7e.3) : interrupteur de la mise à jour automatique
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'robots_remote_auto' => isset($_POST['robots_remote_auto']) ? '1' : '0',
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-robots');
+    } elseif ($_POST['action'] === 'sync_robots_remote') {
+        $res = ip_location_sync_remote_robots();
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . ($res['ok'] ? 'robots_synced&n=' . (int)$res['added'] : 'robots_sync_' . $res['error']) . '#ipl-card-robots');
     } elseif ($_POST['action'] === 'save_url_config') {
         $keywords = trim(stripslashes($_POST['blocked_url_keywords'] ?? ''));
         $conf_cur = ip_location_get_conf();
@@ -324,6 +336,14 @@ if (($_GET['robots_txt'] ?? '') === 'download') {
     header('Content-Disposition: attachment; filename="robots.txt"');
     echo $robots_txt['file'];
     exit;
+}
+
+// Liste de robots en ligne (v2.7e.3) : mise à jour automatique, si activée, au plus une
+// fois par 24 h. Redirige seulement si des robots ont été ajoutés (la liste déjà lue en
+// mémoire serait périmée) ; sans nouveauté, la page s'affiche normalement.
+$ipl_sync = ip_location_sync_remote_robots_if_due();
+if ($ipl_sync && $ipl_sync['ok'] && $ipl_sync['added'] > 0) {
+    redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=robots_synced&n=' . (int)$ipl_sync['added'] . '#ipl-card-robots');
 }
 
 // Classification différée des bots (scan lourd de toute la fenêtre glissante). Placée
@@ -701,6 +721,9 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'preset_saved')    $page['infos'][] = l10n('Préréglage enregistré.');
     if ($_GET['msg'] === 'preset_deleted')  $page['infos'][] = l10n('Préréglage supprimé.');
     if ($_GET['msg'] === 'preset_invalid')  $page['errors'][] = l10n('Préréglage invalide.');
+    if ($_GET['msg'] === 'robots_synced')   $page['infos'][] = sprintf(l10n('Liste de robots mise à jour : %d robot(s) ajouté(s).'), (int)($_GET['n'] ?? 0));
+    if ($_GET['msg'] === 'robots_sync_fetch')  $page['errors'][] = l10n('Liste de robots en ligne inaccessible (vérifiez que le serveur peut joindre GitHub en HTTPS).');
+    if ($_GET['msg'] === 'robots_sync_format') $page['errors'][] = l10n('Liste de robots en ligne illisible : mise à jour ignorée.');
 }
 
 $plugin_conf           = ip_location_get_conf();
@@ -1067,6 +1090,10 @@ if ($show_settings) {
         'DOWNLOAD_ROWS'      => $country_chips($plugin_conf['download_allowed_countries']),
         'ROBOT_ROWS'         => $robot_rows,
         'ROBOTS_ENABLED'     => $plugin_conf['robots_enabled'] === '1',
+        'ROBOTS_REMOTE_AUTO' => $plugin_conf['robots_remote_auto'] === '1',
+        'ROBOTS_REMOTE_LAST' => $plugin_conf['robots_remote_last_ok'] ? date('Y-m-d H:i', (int)$plugin_conf['robots_remote_last_ok']) : '',
+        'ROBOTS_REMOTE_REV'  => $plugin_conf['robots_remote_revision'],
+        'ROBOTS_REMOTE_FAILED' => (int)$plugin_conf['robots_remote_last_try'] > (int)$plugin_conf['robots_remote_last_ok'],
         'ROBOTS_BLOCKED'     => $robots_blocked,
         'ROBOTS_ALLOWED'     => count($robots) - $robots_blocked,
         'ROBOTS_SEEN_7D'     => (int)$robots_seen_7d,
