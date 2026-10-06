@@ -2,6 +2,7 @@
   "schema": 1,
   "revision": "2026-10-06",
   "robots": [
+    {"name": "Charles",       "ua": "CharlesBot",           "fam": "ai"},
     {"name": "OpenAI",       "ua": "GPTBot",                "fam": "ai"},
     {"name": "Anthropic",    "ua": "ClaudeBot",             "fam": "ai"},
     {"name": "Common Crawl", "ua": "CCBot",                 "fam": "ai"},
