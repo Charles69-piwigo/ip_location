@@ -350,29 +350,58 @@
     <section class="iplc-card{if !$KEYWORD_BLOCK_ENABLED} is-off{/if}" id="ipl-card-keyword">
       <form method="post" action="" data-card-form id="iplc-f-keyword">
         <input type="hidden" name="action" value="save_url_config">
-        <input type="hidden" name="blocked_url_keywords" id="iplc-kw-value" value="{$BLOCKED_URL_KEYWORDS|escape}">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par mot-clé d\'URL'|@translate}</h4><span class="sub">{'Refuse toute URL qui contient l\'un de ces mots'|@translate}</span></div>
-          <span class="iplc-pill {if $KEYWORD_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $KEYWORD_BLOCK_ENABLED}{'ipl_on'|@translate} · {$KEYWORD_ROWS|@count} {'mot(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <span class="iplc-pill {if $KEYWORD_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$KEYWORDS_ACTIVE_N} {'mot(s) actif(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $KEYWORD_BLOCK_ENABLED}{'ipl_on'|@translate} · {$KEYWORDS_ACTIVE_N} {'mot(s) actif(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par mot-clé'|@translate}"><input type="checkbox" name="keyword_block_enabled" value="1" data-card-switch{if $KEYWORD_BLOCK_ENABLED} checked{/if}><span class="track"></span></label>
         </div>
         <div class="iplc-body">
           <div class="iplc-offnote">{'Désactivé : les mots sont conservés, aucune URL n\'est bloquée.'|@translate}</div>
           <div class="dimmable" style="display:flex;flex-direction:column;gap:12px;">
-            <div class="iplc-chips" data-chips="iplc-kw-value" data-sep="newline">
-              {foreach from=$KEYWORD_ROWS item=k}<span class="iplc-chip" data-value="{$k.word|escape}">{$k.word|escape} <span class="meta">{$k.refusals}</span><button type="button" aria-label="{'Retirer'|@translate}">✕</button></span>{/foreach}
-            </div>
+            {if $KEYWORD_ROWS}
+            <details class="iplc-fold">
+              <summary>{'Liste des mots-clés'|@translate} ({$KEYWORD_ROWS|@count} · {$KEYWORDS_ACTIVE_N} {'mot(s) actif(s)'|@translate})</summary>
+              <div class="fold-body">
+            <div class="iplc-list"><div class="iplc-scroll" style="max-height:300px;">
+              <table class="iplc-t"><thead><tr><th>{'Mot-clé'|@translate}</th><th class="num">{'Refus 7 j'|@translate}</th><th>{'Actif'|@translate}</th><th></th></tr></thead>
+              <tbody>
+              {foreach from=$KEYWORD_ROWS item=k key=i}
+                <tr>
+                  <td class="mono"><b>{$k.word|escape}</b>
+                    <input type="hidden" name="keywords[{$i}][word]" value="{$k.word|escape}">
+                    {if $k.remote}<input type="hidden" name="keywords[{$i}][src]" value="remote"> <span class="iplc-verif na" title="{'Ajouté depuis la liste en ligne'|@translate}">{'liste en ligne'|@translate}</span>{/if}</td>
+                  <td class="num mono">{$k.refusals}</td>
+                  <td><label class="iplc-switch" title="{'Actif : bloque les URL qui contiennent ce mot. Inactif : le mot reste dans la liste mais ne bloque rien.'|@translate}"><input type="checkbox" name="keywords[{$i}][on]" value="1"{if $k.on} checked{/if}><span class="track"></span></label></td>
+                  <td class="num"><label class="iplc-remove" title="{'Retirer ce mot de la liste'|@translate}"><input type="checkbox" name="keywords[{$i}][remove]" value="1" data-remove>✕</label></td>
+                </tr>
+              {/foreach}
+              </tbody></table>
+            </div></div>
+              </div>
+            </details>
+            {/if}
             <div class="iplc-addrow">
-              <input type="text" data-chip-input="iplc-kw-value" placeholder="{'Mot-clé (ex. wp-login)'|@translate}">
-              <button type="button" class="iplc-btn ghost sm" data-chip-add="iplc-kw-value">{'Ajouter'|@translate}</button>
+              <input type="text" name="new_keyword" placeholder="{'Mot-clé (ex. wp-login)'|@translate}">
             </div>
-            <p class="hint">{'Chiffre à droite de chaque mot : accès refusés sur 7 jours.'|@translate}</p>
+            <p class="hint">{'Le mot saisi est ajouté (actif) à l\'enregistrement. « Refus 7 j » : accès refusés sur 7 jours grâce à ce mot.'|@translate}</p>
             {if $KEYWORD_COLLISIONS}
               <p class="warn">&#9888; {'Ces mots-clés bloquent aussi des pages ordinaires de la galerie, donc de vrais visiteurs :'|@translate}
                 {foreach from=$KEYWORD_COLLISIONS key=kw item=url name=kwc}<b>{$kw|escape}</b> → {$url|escape}{if !$smarty.foreach.kwc.last} ; {/if}{/foreach}</p>
             {/if}
           </div>
         </div>
+      </form>
+      {* Liste de mots-clés en ligne (v2.8) : formulaire distinct (pas d'imbrication) *}
+      <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+        <input type="hidden" name="action" value="save_keywords_remote">
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="keywords_remote_auto" value="1"{if $KEYWORDS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'|@translate}</label>
+        <button type="submit" class="iplc-btn ghost sm">{'ipl_save'|@translate}</button>
+        <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_keywords_remote">{'Mettre à jour maintenant'|@translate}</button>
+        <span class="hint" style="flex-basis:100%;margin:0;">
+          {'La liste en ligne ne fait qu\'ajouter des mots, toujours INACTIFS : activez vous-même ceux qui vous conviennent. Vos réglages et les mots que vous avez retirés ne sont jamais modifiés.'|@translate}
+          {if $KEYWORDS_REMOTE_LAST} {'Dernière mise à jour :'|@translate} {$KEYWORDS_REMOTE_LAST|escape}{if $KEYWORDS_REMOTE_REV} ({$KEYWORDS_REMOTE_REV|escape}){/if}.{/if}
+          {if $KEYWORDS_REMOTE_FAILED} <b style="color:var(--c-warn);">{'Dernière tentative en échec.'|@translate}</b>{/if}
+        </span>
       </form>
       <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-keyword" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
@@ -626,6 +655,12 @@
       cb.addEventListener('change', function(){ cb.closest('tr').classList.toggle('removed', cb.checked); });
     });
   }
+
+  // Mots-clés d'URL : ligne barrée quand « retirer » est coché
+  var kwCard = document.getElementById('ipl-card-keyword');
+  if (kwCard) kwCard.querySelectorAll('[data-remove]').forEach(function(cb){
+    cb.addEventListener('change', function(){ cb.closest('tr').classList.toggle('removed', cb.checked); });
+  });
 
   // Blocage auto : valeur du curseur et IP récentes au-dessus du seuil, en direct
   var recent = {$RECENT_SCORES_JSON};

@@ -11,9 +11,32 @@ Has Settings: webmaster
 // Versions
 /*
     version 2.8 - 06/10/2026
-        regroupement des 2.7e.1, 2.7e.2 et 2.7e.3
+        regroupement des 2.7e.1 à 2.7e.5
         pour publication sur PEM
     
+    version 2.7e.5 - 06/10/2026
+        Mots-clés d'URL : interrupteur Actif / Inactif par mot, et liste en ligne.
+        - le bloc « Blocage par mot-clé d'URL » passe des pastilles à un tableau (mot, refus
+          sur 7 jours, interrupteur, retrait). Un mot inactif reste dans la liste mais ne
+          bloque plus (ip_location_active_url_keywords()) ; blocked_url_keywords reste la
+          liste complète, le nouveau disabled_url_keywords liste les inactifs : stats et
+          journal inchangés, mots déjà configurés tous actifs au passage de version ;
+        - liste en ligne motscles.json, même principe que les robots (à la demande ou
+          automatique, 1 fois par jour, désactivé par défaut) mais les mots reçus arrivent
+          INACTIFS ; un mot qui bloquerait une page ordinaire de la galerie
+          (ip_location_keyword_collisions()) ou mal formé est refusé ; mention « liste en
+          ligne ». URL surchargeable par $conf['ip_location_keywords_url'] ;
+        - l'avertissement de collision ne porte plus que sur les mots actifs ;
+        - ip_location_conf_fresh() / ip_location_conf_merge() : les synchronisations relisent
+          la configuration en base (ip_location_get_conf() est mémorisée, deux écritures dans
+          la même requête s'écrasaient).
+
+    version 2.7e.4 - 06/10/2026
+        Message de la mise à jour des listes détaillé : « N ajouté(s), N déjà présent(s),
+        N refusé(s) par les garde-fous, N retiré(s) par vous (non réajoutés) » au lieu d'un
+        « 0 ajouté » muet (cache de GitHub raw ~5 min, robot déjà présent ou déjà reçu puis
+        retiré : les trois cas se confondaient). Le même message sert aux deux listes.
+
     version 2.7e.3 - 06/10/2026
         Liste de robots en ligne (phase 1) : ajouter un robot n'exige plus de publier une
         version. Le fichier bots.json du dépôt GitHub est téléchargé à la demande (bouton
@@ -799,6 +822,13 @@ function ip_location_get_conf()
         'robots_remote_last_try'     => 0,     // horodatage de la dernière tentative
         'robots_remote_last_ok'      => 0,     // horodatage de la dernière synchronisation réussie
         'robots_remote_revision'     => '',    // révision de la liste en ligne reçue en dernier
+        'disabled_url_keywords'      => '',    // v2.8 : mots de blocked_url_keywords désactivés (un par ligne)
+        'keywords_remote_auto'       => '0',   // v2.8 : mise à jour automatique des mots-clés depuis la liste en ligne
+        'keywords_remote_seen'       => [],
+        'keywords_remote_words'      => [],    // mots reçus de la liste en ligne (mention dans l'admin)
+        'keywords_remote_last_try'   => 0,
+        'keywords_remote_last_ok'    => 0,
+        'keywords_remote_revision'   => '',
     ];
 
     if (!empty($conf['ip_location'])) {
@@ -1646,63 +1676,184 @@ function ip_location_sync_remote_robots()
 {
     global $conf;
 
-    $plugin_conf = ip_location_get_conf();
-    $url  = !empty($conf['ip_location_robots_url']) ? $conf['ip_location_robots_url'] : IP_LOCATION_REMOTE_ROBOTS_URL;
-    $body = ip_location_http_get($url, true);
-    $store = function ($extra) use ($plugin_conf) {
-        conf_update_param('ip_location', serialize(array_merge($plugin_conf, $extra)));
-    };
-    if ($body === false || $body === '' || strlen($body) > 262144) {
-        $store(['robots_remote_last_try' => time()]);
-        return ['ok' => false, 'added' => 0, 'error' => 'fetch'];
+    $url = !empty($conf['ip_location_robots_url']) ? $conf['ip_location_robots_url'] : IP_LOCATION_REMOTE_ROBOTS_URL;
+    $res = ip_location_remote_fetch($url, 'robots');
+    if (isset($res['error'])) {
+        ip_location_conf_merge(['robots_remote_last_try' => time()]);
+        return ['ok' => false, 'added' => 0, 'present' => 0, 'refused' => 0, 'removed' => 0, 'error' => $res['error']];
     }
-    $data = json_decode($body, true);
-    if (!is_array($data) || (int)($data['schema'] ?? 0) !== 1 || !is_array($data['robots'] ?? null)) {
-        $store(['robots_remote_last_try' => time()]);
-        return ['ok' => false, 'added' => 0, 'error' => 'format'];
-    }
+    $data        = $res['data'];
+    $plugin_conf = ip_location_conf_fresh();
 
     $list   = ip_location_get_robots();
     $listed = array_map('strtolower', array_column($list, 'ua'));
     $seen   = array_map('strtolower', (array)$plugin_conf['robots_remote_seen']);
-    $added  = 0;
+    $n = ['added' => 0, 'present' => 0, 'refused' => 0, 'removed' => 0];
     foreach (array_slice($data['robots'], 0, 500) as $e) {
         if (!is_array($e)) continue;
         $ua   = is_string($e['ua'] ?? null) ? trim($e['ua']) : '';
         $name = is_string($e['name'] ?? null) ? mb_substr(trim(strip_tags($e['name'])), 0, 64) : '';
         $fam  = in_array($e['fam'] ?? '', ['ai', 'seo'], true) ? $e['fam'] : 'seo';
-        if ($name === '' || !ip_location_remote_robot_acceptable($ua, $list)) continue;
-        $key = strtolower($ua);
-        if (in_array($key, $seen, true)) continue;
-        $seen[] = $key;
-        if (in_array($key, $listed, true)) continue;
-        $list[]   = ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => '', 'status' => 'block', 'src' => 'remote'];
-        $listed[] = $key;
-        $added++;
+        $key  = strtolower($ua);
+        if (in_array($key, $listed, true)) {
+            $seen[] = $key;
+            $n['present']++;
+        } elseif (in_array($key, $seen, true)) {
+            $n['removed']++;   // reçu autrefois, retiré depuis par l'administrateur
+        } elseif ($name === '' || !ip_location_remote_robot_acceptable($ua, $list)) {
+            $n['refused']++;
+        } else {
+            $seen[]   = $key;
+            $list[]   = ['name' => $name, 'ua' => $ua, 'fam' => $fam, 'verify' => '', 'status' => 'block', 'src' => 'remote'];
+            $listed[] = $key;
+            $n['added']++;
+        }
     }
-    $store([
+    ip_location_conf_merge([
         'robots'                 => $list,
         'robots_seo_seeded'      => (string)IP_LOCATION_SEO_ROBOTS_REV,
         'robots_remote_seen'     => array_values(array_unique($seen)),
         'robots_remote_last_try' => time(),
         'robots_remote_last_ok'  => time(),
-        'robots_remote_revision' => is_string($data['revision'] ?? null) ? mb_substr($data['revision'], 0, 32) : '',
+        'robots_remote_revision' => $res['revision'],
     ]);
-    return ['ok' => true, 'added' => $added, 'error' => ''];
+    return ['ok' => true, 'error' => ''] + $n;
 }
 
 /**
- * Synchronisation automatique, appelée à l'ouverture de l'admin : au plus une fois par
- * 24 h (6 h après un échec, pour ne pas retarder l'admin à chaque page sur un site sans
- * accès sortant). Retourne le résultat de la synchronisation, ou null si rien n'était dû.
+ * Configuration enregistrée relue en base (ip_location_get_conf() est mémorisée pour la
+ * requête : après une écriture elle serait périmée, et deux synchronisations dans la même
+ * requête s'écraseraient l'une l'autre).
  */
-function ip_location_sync_remote_robots_if_due()
+function ip_location_conf_fresh()
 {
-    $c = ip_location_get_conf();
-    if ($c['robots_remote_auto'] !== '1') return null;
-    $wait = ((int)$c['robots_remote_last_ok'] >= (int)$c['robots_remote_last_try']) ? 86400 : 21600;
-    if (time() - (int)$c['robots_remote_last_try'] < $wait) return null;
-    return ip_location_sync_remote_robots();
+    $r = pwg_query('SELECT value FROM ' . CONFIG_TABLE . ' WHERE param = \'ip_location\'');
+    $row = pwg_db_fetch_row($r);
+    $stored = $row ? @unserialize($row[0]) : null;
+    return array_merge(ip_location_get_conf(), is_array($stored) ? $stored : []);
+}
+
+function ip_location_conf_merge(array $extra)
+{
+    conf_update_param('ip_location', serialize(array_merge(ip_location_conf_fresh(), $extra)));
+}
+
+/**
+ * Télécharge et valide un fichier JSON de liste en ligne (schema 1, tableau $key).
+ * Retourne ['data' => tableau, 'revision' => texte] ou ['error' => 'fetch'|'format'].
+ */
+function ip_location_remote_fetch($url, $key)
+{
+    $body = ip_location_http_get($url, true);
+    if ($body === false || $body === '' || strlen($body) > 262144) {
+        return ['error' => 'fetch'];
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data) || (int)($data['schema'] ?? 0) !== 1 || !is_array($data[$key] ?? null)) {
+        return ['error' => 'format'];
+    }
+    return ['data' => $data, 'revision' => is_string($data['revision'] ?? null) ? mb_substr($data['revision'], 0, 32) : ''];
+}
+
+/**
+ * Mots-clés d'URL (v2.8) : liste en ligne motscles.json
+ * {"schema":1,"revision":"…","keywords":[{"word":"wp-login"}]}. Mêmes principes que les
+ * robots : ajout seulement, jamais de modification ni de retour d'un mot retiré, mais les
+ * mots reçus arrivent INACTIFS — un mot-clé d'URL bloque toute adresse qui le contient,
+ * c'est l'administrateur qui l'allume. Surchargeable par $conf['ip_location_keywords_url'].
+ */
+define('IP_LOCATION_REMOTE_KEYWORDS_URL', 'https://raw.githubusercontent.com/Charles69-piwigo/ip_location/main/motscles.json');
+
+function ip_location_remote_keyword_acceptable($word)
+{
+    if (!preg_match('/^[A-Za-z0-9._][A-Za-z0-9._\/-]{3,63}$/', $word)) {
+        return false;
+    }
+    // même contrôle que l'avertissement de l'admin : refus si une page ordinaire est touchée
+    return !ip_location_keyword_collisions([$word]);
+}
+
+function ip_location_sync_remote_keywords()
+{
+    global $conf;
+
+    $url = !empty($conf['ip_location_keywords_url']) ? $conf['ip_location_keywords_url'] : IP_LOCATION_REMOTE_KEYWORDS_URL;
+    $res = ip_location_remote_fetch($url, 'keywords');
+    if (isset($res['error'])) {
+        ip_location_conf_merge(['keywords_remote_last_try' => time()]);
+        return ['ok' => false, 'added' => 0, 'present' => 0, 'refused' => 0, 'removed' => 0, 'error' => $res['error']];
+    }
+    $c        = ip_location_conf_fresh();
+    $words    = array_values(array_filter(array_map('trim', explode("\n", $c['blocked_url_keywords']))));
+    $disabled = array_values(array_filter(array_map('trim', explode("\n", $c['disabled_url_keywords']))));
+    $remote   = (array)$c['keywords_remote_words'];
+    $listed   = array_map('strtolower', $words);
+    $seen     = array_map('strtolower', (array)$c['keywords_remote_seen']);
+    $n = ['added' => 0, 'present' => 0, 'refused' => 0, 'removed' => 0];
+    foreach (array_slice($res['data']['keywords'], 0, 500) as $e) {
+        $word = is_array($e) && is_string($e['word'] ?? null) ? trim($e['word']) : '';
+        $key  = strtolower($word);
+        if ($word === '') continue;
+        if (in_array($key, $listed, true)) {
+            $seen[] = $key;
+            $n['present']++;
+        } elseif (in_array($key, $seen, true)) {
+            $n['removed']++;
+        } elseif (!ip_location_remote_keyword_acceptable($word)) {
+            $n['refused']++;
+        } else {
+            $seen[]     = $key;
+            $listed[]   = $key;
+            $words[]    = $word;
+            $disabled[] = $word;
+            $remote[]   = $word;
+            $n['added']++;
+        }
+    }
+    ip_location_conf_merge([
+        'blocked_url_keywords'     => implode("\n", $words),
+        'disabled_url_keywords'    => implode("\n", $disabled),
+        'keywords_remote_words'    => array_values(array_unique($remote)),
+        'keywords_remote_seen'     => array_values(array_unique($seen)),
+        'keywords_remote_last_try' => time(),
+        'keywords_remote_last_ok'  => time(),
+        'keywords_remote_revision' => $res['revision'],
+    ]);
+    return ['ok' => true, 'error' => ''] + $n;
+}
+
+/**
+ * Mots-clés d'URL actifs : la liste enregistrée moins les mots désactivés (comparaison
+ * sans casse, comme le blocage).
+ */
+function ip_location_active_url_keywords(array $c)
+{
+    $off = array_map('strtolower', array_filter(array_map('trim', explode("\n", $c['disabled_url_keywords'] ?? ''))));
+    $out = [];
+    foreach (array_filter(array_map('trim', explode("\n", $c['blocked_url_keywords'] ?? ''))) as $kw) {
+        if (!in_array(strtolower($kw), $off, true)) $out[] = $kw;
+    }
+    return $out;
+}
+
+/**
+ * Synchronisations automatiques (robots, mots-clés), appelées à l'ouverture de l'admin :
+ * chacune au plus une fois par 24 h (6 h après un échec, pour ne pas retarder l'admin à
+ * chaque page sur un site sans accès sortant). Retourne le nombre total d'éléments ajoutés
+ * (0 si rien n'était dû ou rien de nouveau).
+ */
+function ip_location_sync_remote_if_due()
+{
+    $added = 0;
+    foreach (['robots' => 'ip_location_sync_remote_robots', 'keywords' => 'ip_location_sync_remote_keywords'] as $k => $fn) {
+        $c = ip_location_conf_fresh();
+        if ($c[$k . '_remote_auto'] !== '1') continue;
+        $wait = ((int)$c[$k . '_remote_last_ok'] >= (int)$c[$k . '_remote_last_try']) ? 86400 : 21600;
+        if (time() - (int)$c[$k . '_remote_last_try'] < $wait) continue;
+        $res = $fn();
+        if ($res['ok']) $added += $res['added'];
+    }
+    return $added;
 }
 
 /**
@@ -2492,7 +2643,7 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
 
     // Blocage par mot-clé dans l'URL — seulement si son interrupteur est allumé (v2.6.1)
     if (!$is_blocked && !$robot_allowed && $plugin_conf['keyword_block_enabled'] === '1' && !empty($plugin_conf['blocked_url_keywords'])) {
-        $url_keywords = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
+        $url_keywords = ip_location_active_url_keywords($plugin_conf);   // v2.8 : sans les mots désactivés
         $url_lower = strtolower($url);
         foreach ($url_keywords as $kw) {
             if (strpos($url_lower, strtolower($kw)) !== false) {

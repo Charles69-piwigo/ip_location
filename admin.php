@@ -175,14 +175,48 @@ if (isset($_POST['action'])) {
             'robots_remote_auto' => isset($_POST['robots_remote_auto']) ? '1' : '0',
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-robots');
-    } elseif ($_POST['action'] === 'sync_robots_remote') {
-        $res = ip_location_sync_remote_robots();
-        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . ($res['ok'] ? 'robots_synced&n=' . (int)$res['added'] : 'robots_sync_' . $res['error']) . '#ipl-card-robots');
-    } elseif ($_POST['action'] === 'save_url_config') {
-        $keywords = trim(stripslashes($_POST['blocked_url_keywords'] ?? ''));
+    } elseif ($_POST['action'] === 'sync_robots_remote' || $_POST['action'] === 'sync_keywords_remote') {
+        $is_kw = $_POST['action'] === 'sync_keywords_remote';
+        $res = $is_kw ? ip_location_sync_remote_keywords() : ip_location_sync_remote_robots();
+        $kind = $is_kw ? 'keywords' : 'robots';
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . ($res['ok']
+            ? $kind . '_synced&n=' . (int)$res['added'] . '&p=' . (int)$res['present'] . '&r=' . (int)$res['refused'] . '&s=' . (int)$res['removed']
+            : $kind . '_sync_' . $res['error']) . '#ipl-card-' . ($is_kw ? 'keyword' : 'robots'));
+    } elseif ($_POST['action'] === 'save_keywords_remote') {
+        // Liste de mots-clés en ligne (v2.8) : interrupteur de la mise à jour automatique
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
-            'blocked_url_keywords'  => $keywords,
+            'keywords_remote_auto' => isset($_POST['keywords_remote_auto']) ? '1' : '0',
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-keyword');
+    } elseif ($_POST['action'] === 'save_url_config') {
+        // Mots-clés d'URL (v2.8) : tableau POST keywords[i][word|on|remove|src] ; une case
+        // « actif » décochée désactive le mot (il reste dans la liste). Piwigo applique
+        // addslashes() à tout $_POST, d'où stripslashes().
+        $conf_cur = ip_location_get_conf();
+        $words = [];
+        $off   = [];
+        $remote_words = [];
+        $add = function ($word, $active, $is_remote) use (&$words, &$off, &$remote_words) {
+            $word = mb_substr(trim(preg_replace('/[\r\n]+/', ' ', $word)), 0, 64);
+            if ($word === '' || in_array(strtolower($word), array_map('strtolower', $words), true)) {
+                return;
+            }
+            $words[] = $word;
+            if (!$active) $off[] = $word;
+            if ($is_remote) $remote_words[] = $word;
+        };
+        foreach ((array)($_POST['keywords'] ?? []) as $row) {
+            if (!is_array($row) || !empty($row['remove'])) continue;
+            $add(stripslashes($row['word'] ?? ''), !empty($row['on']), ($row['src'] ?? '') === 'remote');
+        }
+        foreach (preg_split('/[\r\n]+/', stripslashes($_POST['new_keyword'] ?? '')) as $new) {
+            $add($new, true, false);
+        }
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'blocked_url_keywords'  => implode("\n", $words),
+            'disabled_url_keywords' => implode("\n", $off),
+            'keywords_remote_words' => $remote_words,
             'keyword_block_enabled' => isset($_POST['keyword_block_enabled']) ? '1' : '0',
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-keyword');
@@ -341,9 +375,8 @@ if (($_GET['robots_txt'] ?? '') === 'download') {
 // Liste de robots en ligne (v2.7e.3) : mise à jour automatique, si activée, au plus une
 // fois par 24 h. Redirige seulement si des robots ont été ajoutés (la liste déjà lue en
 // mémoire serait périmée) ; sans nouveauté, la page s'affiche normalement.
-$ipl_sync = ip_location_sync_remote_robots_if_due();
-if ($ipl_sync && $ipl_sync['ok'] && $ipl_sync['added'] > 0) {
-    redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=robots_synced&n=' . (int)$ipl_sync['added'] . '#ipl-card-robots');
+if (ip_location_sync_remote_if_due() > 0) {
+    redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=lists_synced#ipl-card-robots');
 }
 
 // Classification différée des bots (scan lourd de toute la fenêtre glissante). Placée
@@ -721,9 +754,16 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'preset_saved')    $page['infos'][] = l10n('Préréglage enregistré.');
     if ($_GET['msg'] === 'preset_deleted')  $page['infos'][] = l10n('Préréglage supprimé.');
     if ($_GET['msg'] === 'preset_invalid')  $page['errors'][] = l10n('Préréglage invalide.');
-    if ($_GET['msg'] === 'robots_synced')   $page['infos'][] = sprintf(l10n('Liste de robots mise à jour : %d robot(s) ajouté(s).'), (int)($_GET['n'] ?? 0));
-    if ($_GET['msg'] === 'robots_sync_fetch')  $page['errors'][] = l10n('Liste de robots en ligne inaccessible (vérifiez que le serveur peut joindre GitHub en HTTPS).');
-    if ($_GET['msg'] === 'robots_sync_format') $page['errors'][] = l10n('Liste de robots en ligne illisible : mise à jour ignorée.');
+    if ($_GET['msg'] === 'robots_synced' || $_GET['msg'] === 'keywords_synced') {
+        $what = $_GET['msg'] === 'robots_synced' ? l10n('Liste de robots') : l10n('Liste de mots-clés');
+        $page['infos'][] = sprintf(l10n('%s mise à jour : %d ajouté(s), %d déjà présent(s), %d refusé(s) par les garde-fous, %d retiré(s) par vous (non réajoutés).'),
+            $what, (int)($_GET['n'] ?? 0), (int)($_GET['p'] ?? 0), (int)($_GET['r'] ?? 0), (int)($_GET['s'] ?? 0));
+    }
+    if ($_GET['msg'] === 'lists_synced')    $page['infos'][] = l10n('Listes en ligne mises à jour : de nouveaux éléments ont été ajoutés.');
+    foreach (['robots' => 'Liste de robots', 'keywords' => 'Liste de mots-clés'] as $k => $label) {
+        if ($_GET['msg'] === $k . '_sync_fetch')  $page['errors'][] = sprintf(l10n('%s en ligne inaccessible (vérifiez que le serveur peut joindre GitHub en HTTPS).'), l10n($label));
+        if ($_GET['msg'] === $k . '_sync_format') $page['errors'][] = sprintf(l10n('%s en ligne illisible : mise à jour ignorée.'), l10n($label));
+    }
 }
 
 $plugin_conf           = ip_location_get_conf();
@@ -970,14 +1010,19 @@ if ($show_settings) {
 
     // Mots-clés : refus par mot, et ceux qui toucheraient une page ordinaire (v2.7b.3)
     $keyword_rows = [];
-    $keyword_list = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
+    $keyword_list   = array_filter(array_map('trim', explode("\n", $plugin_conf['blocked_url_keywords'])));
+    $keyword_active = ip_location_active_url_keywords($plugin_conf);
+    $keyword_remote = array_map('strtolower', (array)$plugin_conf['keywords_remote_words']);
     foreach ($keyword_list as $kw) {
         $keyword_rows[] = [
             'word'     => $kw,
+            'on'       => in_array($kw, $keyword_active, true),
+            'remote'   => in_array(strtolower($kw), $keyword_remote, true),
             'refusals' => $refusals_7d('keyword', ' AND url LIKE \'%' . pwg_db_real_escape_string($kw) . '%\''),
         ];
     }
-    $keyword_collisions = ip_location_keyword_collisions($keyword_list);
+    // Avertissement de collision : seulement les mots actifs (un mot désactivé ne bloque rien)
+    $keyword_collisions = ip_location_keyword_collisions($keyword_active);
 
     // Pays bloqués : refus par pays
     $country_rows = [];
@@ -1090,6 +1135,11 @@ if ($show_settings) {
         'DOWNLOAD_ROWS'      => $country_chips($plugin_conf['download_allowed_countries']),
         'ROBOT_ROWS'         => $robot_rows,
         'ROBOTS_ENABLED'     => $plugin_conf['robots_enabled'] === '1',
+        'KEYWORDS_ACTIVE_N'  => count($keyword_active),
+        'KEYWORDS_REMOTE_AUTO' => $plugin_conf['keywords_remote_auto'] === '1',
+        'KEYWORDS_REMOTE_LAST' => $plugin_conf['keywords_remote_last_ok'] ? date('Y-m-d H:i', (int)$plugin_conf['keywords_remote_last_ok']) : '',
+        'KEYWORDS_REMOTE_REV'  => $plugin_conf['keywords_remote_revision'],
+        'KEYWORDS_REMOTE_FAILED' => (int)$plugin_conf['keywords_remote_last_try'] > (int)$plugin_conf['keywords_remote_last_ok'],
         'ROBOTS_REMOTE_AUTO' => $plugin_conf['robots_remote_auto'] === '1',
         'ROBOTS_REMOTE_LAST' => $plugin_conf['robots_remote_last_ok'] ? date('Y-m-d H:i', (int)$plugin_conf['robots_remote_last_ok']) : '',
         'ROBOTS_REMOTE_REV'  => $plugin_conf['robots_remote_revision'],
