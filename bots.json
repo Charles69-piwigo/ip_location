@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-10-06",
+  "revision": "2026-10-08",
   "robots": [
     {"name": "OpenAI",       "ua": "GPTBot",                "fam": "ai"},
     {"name": "Anthropic",    "ua": "ClaudeBot",             "fam": "ai"},
@@ -19,6 +19,7 @@
     {"name": "AIWebIndex",   "ua": "AIWebIndex",            "fam": "seo"},
     {"name": "JSCrawler",    "ua": "jscrawler",             "fam": "seo"},
     {"name": "Limbes",       "ua": "LimbesBot",             "fam": "seo"},
-    {"name": "OpenBase",     "ua": "OpenBaseBot",           "fam": "seo"}
+    {"name": "OpenBase",     "ua": "OpenBaseBot",           "fam": "seo"},
+    {"name": "Ibou",         "ua": "IbouBot",               "fam": "seo"}
   ]
 }
