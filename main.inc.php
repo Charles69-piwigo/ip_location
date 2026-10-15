@@ -10,6 +10,26 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.8a - 15/10/2026
+    regroupement de v2.8.1 à v2.8.3
+    publication sur PEM
+    
+    version 2.8.3 - 15/10/2026
+        Blocage par IP : les pastilles d'alerte du .htaccess disent désormais explicitement que
+        le blocage reste assuré par le plugin (nginx : pastille orange « .htaccess ignoré (nginx) »,
+        les autres cas restent rouges). Avant, le message rassurant n'était que dans l'infobulle.
+        L'infobulle de la pastille nginx indique la valeur détectée de SERVER_SOFTWARE.
+
+    version 2.8.2 - 15/10/2026
+        Journal des accès : le bandeau en tête du tableau (nombre d'accès, page en cours,
+        boutons de changement de page) est répété sous le tableau.
+
+    version 2.8.1 - 07/10/2026
+        Mots-clés et robots : le petit bouton « Enregistrer » sous la liste (qui ne mémorisait
+        que la case « mise à jour automatique ») jetait en silence les interrupteurs
+        Actif/Inactif et les modifications du tableau. Il est supprimé : la case est désormais
+        enregistrée avec le bloc, par le bouton « Enregistrer » du pied de carte.
+
     version 2.8 - 06/10/2026
         regroupement des 2.7e.1 à 2.7e.5
         pour publication sur PEM

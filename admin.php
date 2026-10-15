@@ -163,6 +163,7 @@ if (isset($_POST['action'])) {
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'robots_enabled' => isset($_POST['robots_enabled']) ? '1' : '0',
+            'robots_remote_auto' => isset($_POST['robots_remote_auto']) ? '1' : '0',
             'robots'         => $robots,
             // la liste enregistrée fait foi : ne pas réinjecter un outil SEO que l'admin a retiré
             'robots_seo_seeded' => (string)IP_LOCATION_SEO_ROBOTS_REV,
@@ -218,6 +219,7 @@ if (isset($_POST['action'])) {
             'disabled_url_keywords' => implode("\n", $off),
             'keywords_remote_words' => $remote_words,
             'keyword_block_enabled' => isset($_POST['keyword_block_enabled']) ? '1' : '0',
+            'keywords_remote_auto'  => isset($_POST['keywords_remote_auto']) ? '1' : '0',
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-keyword');
     } elseif ($_POST['action'] === 'save_download_config') {
@@ -1275,6 +1277,7 @@ $template->assign([
     'BLOCKING_ENABLED'   => $blocking_enabled,
     'HTACCESS_ENABLED'   => $htaccess_enabled,
     'SERVER_IS_NGINX'    => $server_is_nginx,
+    'SERVER_SOFTWARE'    => $_SERVER['SERVER_SOFTWARE'] ?? '',
     'HTACCESS_BYPASS'    => $htaccess_bypass,
     'HTACCESS_MISSING'   => $htaccess_missing,
     'MAX_RECORDS'        => $max_records,

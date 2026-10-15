@@ -93,6 +93,7 @@
   .iplc-pill{ font-size:10.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:20px; white-space:nowrap; margin-top:2px; }
   .iplc-pill.on{ background:var(--c-on-wash); color:var(--c-on); } .iplc-pill.off{ background:var(--c-off-wash); color:var(--c-off); }
   .iplc-pill.info{ background:var(--c-accent-wash); color:var(--c-accent); }
+  .iplc-pill.warn{ background:#f6e8c8; color:var(--c-warn); text-transform:none; letter-spacing:0; cursor:help; }
   .iplc-pill.danger{ background:var(--c-danger-wash); color:var(--c-danger); text-transform:none; letter-spacing:0; cursor:help; }
 
   .iplc-switch{ position:relative; display:inline-flex; flex:none; margin-top:1px; }
@@ -107,7 +108,7 @@
   .iplc-card.is-off .dimmable{ opacity:.55; }
   .iplc-offnote{ font-size:12.3px; color:var(--c-text-2); background:var(--c-off-wash); border-radius:8px; padding:7px 10px; }
   .iplc-card:not(.is-off) .iplc-offnote{ display:none; }
-  .iplc-card.is-off .iplc-pill.danger{ display:none; }
+  .iplc-card.is-off .iplc-pill.warn, .iplc-card.is-off .iplc-pill.danger{ display:none; }
   .iplc-foot{ display:flex; align-items:center; gap:10px; justify-content:flex-end; padding:9px 16px; border-top:1px solid var(--c-border); background:var(--c-surface-2); border-radius:0 0 12px 12px; }
   .iplc-foot .dirty{ font-size:12.3px; color:var(--c-warn); font-weight:500; margin-right:auto; }
   .iplc-foot .dirty[hidden]{ display:none; }
@@ -212,6 +213,7 @@
   .iplj-country:hover, .iplj-country.active{ border-color:var(--c-accent); }
   .iplj-country .meta{ font-family:"IBM Plex Mono", Consolas, monospace; font-size:10.8px; color:var(--c-muted); }
   .iplj-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:11px 16px; border-bottom:1px solid var(--c-border); }
+  .iplj-head.iplj-foot{ border-bottom:0; border-top:1px solid var(--c-border); }
   .iplj-count{ font-size:12.3px; color:var(--c-muted); }
   .iplj-pager{ margin-left:auto; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
   .iplj-pager a{ font-family:"IBM Plex Mono", Consolas, monospace; font-size:12px; min-width:28px; text-align:center; padding:3px 7px; border-radius:6px; border:1px solid var(--c-border); background:var(--c-surface); color:var(--c-text); text-decoration:none; }
@@ -372,7 +374,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
 
   {* Tableau *}
   <section class="iplc-card">
-    <div class="iplj-head">
+    {capture name=iplj_head}
       <span class="iplj-count">{$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}{if $TOTAL_PAGES > 1} · {'page'|@translate} {$CURRENT_PAGE} / {$TOTAL_PAGES}{/if}</span>
       {if $PAGER|@count > 0}
       <div class="iplj-pager">
@@ -384,7 +386,8 @@ if (window.location.search.indexOf('msg=') !== -1) {
         {if $CURRENT_PAGE < $TOTAL_PAGES}<a href="{$BASE_URL|escape}{$JOURNAL_QS|escape}{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}&amp;pnum={$CURRENT_PAGE+1}">›</a>{/if}
       </div>
       {/if}
-    </div>
+    {/capture}
+    <div class="iplj-head">{$smarty.capture.iplj_head}</div>
     <div class="iplj-scroll">
       <table class="iplc-t iplj-table">
         <thead><tr><th>{'Date'|@translate}</th><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th class="num">{'Score'|@translate}</th><th>{'URL'|@translate} / {'Navigateur / robot'|@translate}</th><th class="actions"></th></tr></thead>
@@ -430,6 +433,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
         </tbody>
       </table>
     </div>
+    <div class="iplj-head iplj-foot">{$smarty.capture.iplj_head}</div>
   </section>
 </div>
 <script>

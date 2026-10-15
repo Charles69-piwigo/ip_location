@@ -250,9 +250,7 @@
       </form>
       {* Liste de robots en ligne (v2.7e.3) : formulaire distinct (pas d'imbrication) *}
       <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
-        <input type="hidden" name="action" value="save_robots_remote">
-        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="robots_remote_auto" value="1"{if $ROBOTS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des robots depuis la liste en ligne (1 fois par jour)'|@translate}</label>
-        <button type="submit" class="iplc-btn ghost sm">{'ipl_save'|@translate}</button>
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="robots_remote_auto" value="1" form="iplc-f-robots"{if $ROBOTS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des robots depuis la liste en ligne (1 fois par jour)'|@translate}</label>
         <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_robots_remote">{'Mettre à jour maintenant'|@translate}</button>
         <span class="hint" style="flex-basis:100%;margin:0;">
           {'La liste en ligne ne fait qu\'ajouter des robots, toujours « Bloqué » : vos réglages et les robots que vous avez retirés ne sont jamais modifiés.'|@translate}
@@ -270,12 +268,12 @@
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par IP'|@translate}</h4><span class="sub">{'IP et plages /16 bloquées à la main — appliqué par Apache (.htaccess) et par le plugin'|@translate}</span></div>
           {if $HTACCESS_ENABLED and $SERVER_IS_NGINX}
-            <span class="iplc-pill danger" title="{'Serveur nginx détecté : le fichier .htaccess est ignoré. Le blocage reste assuré par le plugin.'|@translate}">&#9888; {'.htaccess inopérant sur ce serveur'|@translate}</span>
+            <span class="iplc-pill warn" title="{'Serveur nginx détecté : le fichier .htaccess est ignoré. Le blocage reste assuré par le plugin.'|@translate} {'Serveur détecté (SERVER_SOFTWARE) :'|@translate} {$SERVER_SOFTWARE|escape}">&#9432; {'.htaccess ignoré (nginx) — blocage assuré par le plugin'|@translate}</span>
           {elseif $HTACCESS_BYPASS}
-            <span class="iplc-pill danger" title="{$HTACCESS_BYPASS.count} {'accès d\'IP bloquées à la main ont franchi le .htaccess depuis le'|@translate} {$HTACCESS_BYPASS.since} {'(7 derniers jours) ; ils ont été refusés par le plugin : le blocage reste effectif.'|@translate}">&#9888; {'.htaccess inopérant sur ce serveur'|@translate}</span>
+            <span class="iplc-pill danger" title="{$HTACCESS_BYPASS.count} {'accès d\'IP bloquées à la main ont franchi le .htaccess depuis le'|@translate} {$HTACCESS_BYPASS.since} {'(7 derniers jours) ; ils ont été refusés par le plugin : le blocage reste effectif.'|@translate}">&#9888; {'.htaccess ignoré — blocage assuré par le plugin'|@translate}</span>
           {/if}
           {if !$SERVER_IS_NGINX and $HTACCESS_MISSING > 0}
-            <span class="iplc-pill danger" title="{'Le .htaccess est absent ou ne contient pas'|@translate} {$HTACCESS_MISSING} {'des IP bloquées à la main ; le blocage reste assuré par le plugin. Pour réécrire le fichier : désactivez puis réactivez le blocage par IP, ou modifiez la liste.'|@translate}">&#9888; {'IP absentes du .htaccess'|@translate}</span>
+            <span class="iplc-pill danger" title="{'Le .htaccess est absent ou ne contient pas'|@translate} {$HTACCESS_MISSING} {'des IP bloquées à la main ; le blocage reste assuré par le plugin. Pour réécrire le fichier : désactivez puis réactivez le blocage par IP, ou modifiez la liste.'|@translate}">&#9888; {'IP absentes du .htaccess — blocage assuré par le plugin'|@translate}</span>
           {/if}
           <span class="iplc-pill {if $HTACCESS_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}" data-off="{'Inactif'|@translate}">{if $HTACCESS_ENABLED}{'ipl_on'|@translate} · {$MANUAL_ROWS|@count} {'entrée(s)'|@translate}{else}{'Inactif'|@translate}{/if}</span>
           <label class="iplc-switch" title="{'Activer le blocage par IP'|@translate}"><input type="checkbox" name="htaccess_enabled" value="1" data-card-switch{if $HTACCESS_ENABLED} checked{/if}><span class="track"></span></label>
@@ -393,9 +391,7 @@
       </form>
       {* Liste de mots-clés en ligne (v2.8) : formulaire distinct (pas d'imbrication) *}
       <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
-        <input type="hidden" name="action" value="save_keywords_remote">
-        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="keywords_remote_auto" value="1"{if $KEYWORDS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'|@translate}</label>
-        <button type="submit" class="iplc-btn ghost sm">{'ipl_save'|@translate}</button>
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="keywords_remote_auto" value="1" form="iplc-f-keyword"{if $KEYWORDS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'|@translate}</label>
         <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_keywords_remote">{'Mettre à jour maintenant'|@translate}</button>
         <span class="hint" style="flex-basis:100%;margin:0;">
           {'La liste en ligne ne fait qu\'ajouter des mots, toujours INACTIFS : activez vous-même ceux qui vous conviennent. Vos réglages et les mots que vous avez retirés ne sont jamais modifiés.'|@translate}
@@ -515,6 +511,8 @@
     function markDirty(){ save.disabled = false; if (dirty) dirty.hidden = false; }
     form.addEventListener('input', markDirty);
     form.addEventListener('change', markDirty);
+    // champs rattachés au formulaire par l'attribut form="…" mais placés hors de lui
+    root.querySelectorAll('[form="' + form.id + '"]:not([data-save])').forEach(function(el){ el.addEventListener('change', markDirty); });
     card._markDirty = markDirty;
     var sw = card.querySelector('[data-card-switch]');
     var pill = card.querySelector('[data-pill]');

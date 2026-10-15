@@ -30,3 +30,6 @@ analyse_journal.py
 
 # Exports du Journal (IP de visiteurs, jamais commités)
 *.csv
+
+# Config locale de Claude Code (launch.json, etc.)
+.claude/
