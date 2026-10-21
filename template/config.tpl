@@ -128,7 +128,7 @@
         <div class="iplc-body">
           <div class="iplc-chips" data-chips="iplc-wl-value" data-sep="newline"></div>
           <div class="iplc-addrow">
-            <input type="text" data-chip-input="iplc-wl-value" placeholder="{'Ajouter une IP (ex. 93.12.150.175)'|@translate}">
+            <input type="text" data-chip-input="iplc-wl-value" placeholder="{'Ajouter une IP ou une plage (ex. 93.12.150.175 ou 93.12.0.0/16)'|@translate}">
             <button type="button" class="iplc-btn ghost sm" data-chip-add="iplc-wl-value">{'Ajouter'|@translate}</button>
           </div>
           <p class="hint">{'Les IP du réseau local (192.168.x, 10.x…) ne sont jamais bloquées automatiquement, mais elles sont enregistrées. Depuis chez vous, vos visites par le nom de domaine apparaissent souvent sous l\'adresse de votre box (ex. 192.168.1.1) : ajoutez-la ici pour ne plus les voir dans le journal.'|@translate}</p>

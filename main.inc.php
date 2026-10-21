@@ -10,6 +10,19 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.8b - 21/10/2026
+    regroupement de v2.8a.1
+    publication sur PEM
+
+    version 2.8a.1 - 21/10/2026
+        Liste blanche d'IPs : accepte aussi les plages CIDR IPv4 (ex. 12.34.0.0/16, et « 12.34 »
+        saisi seul est converti en 12.34.0.0/16 à l'enregistrement). Avant, la
+        comparaison était une égalité de chaîne : une plage saisie était enregistrée mais sans
+        effet. Nouveaux ip_location_ip_in_whitelist() / ip_location_cidr4_bounds(), utilisés par
+        le garde de blocage, le journal, le garde des téléchargements, l'ajout manuel au
+        blocage et l'exclusion du blocage auto (INET_ATON, IPv6 conservées).
+        Aide et texte d'exemple du champ mis à jour (FR/EN).
+
     version 2.8a - 15/10/2026
     regroupement de v2.8.1 à v2.8.3
     publication sur PEM
@@ -2198,8 +2211,7 @@ function ip_location_blocklist_guard()
     $ip_raw = ip_location_visitor_ip();
 
     // Liste blanche d'IPs — toujours autorisées
-    $whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
-    if (in_array($ip_raw, $whitelist)) {
+    if (ip_location_ip_in_whitelist($ip_raw, $plugin_conf['whitelist'])) {
         return;
     }
 
@@ -2496,8 +2508,7 @@ function ip_location_download_guard()
     $ip_raw = ip_location_client_ip();
 
     // 6. Whitelist — toujours autorisée
-    $whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
-    if (in_array($ip_raw, $whitelist)) {
+    if (ip_location_ip_in_whitelist($ip_raw, $plugin_conf['whitelist'])) {
         return;
     }
 
@@ -2613,9 +2624,7 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
 
     // Liste blanche d'IPs — toujours autorisées
     $plugin_conf  = ip_location_get_conf();
-    $whitelist_raw = $plugin_conf['whitelist'];
-    $whitelist = array_filter(array_map('trim', explode("\n", $whitelist_raw)));
-    if (in_array($ip_raw, $whitelist)) {
+    if (ip_location_ip_in_whitelist($ip_raw, $plugin_conf['whitelist'])) {
         return;
     }
 
@@ -2731,6 +2740,40 @@ function ip_location_valid_block_entry($ip)
     }
     $max = filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? 32 : 128;
     return ctype_digit($parts[1]) && (int)$parts[1] <= $max;
+}
+
+/**
+ * Plage CIDR IPv4 "A.B.C.D/n" → [début, fin] en entiers, ou null si l'entrée n'en est pas une.
+ */
+function ip_location_cidr4_bounds($entry)
+{
+    $parts = explode('/', (string)$entry);
+    if (count($parts) !== 2 || !ctype_digit($parts[1]) || (int)$parts[1] > 32
+        || !filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        return null;
+    }
+    $mask  = (int)$parts[1] === 0 ? 0 : (0xFFFFFFFF << (32 - (int)$parts[1])) & 0xFFFFFFFF;
+    $start = ip2long($parts[0]) & $mask;
+    return [$start, $start | (~$mask & 0xFFFFFFFF)];
+}
+
+/**
+ * Liste blanche (une entrée par ligne, v2.8.4) : l'IP est-elle couverte, par égalité exacte
+ * ou par une plage CIDR IPv4 ? Une IPv6 ne peut être couverte que par égalité exacte.
+ */
+function ip_location_ip_in_whitelist($ip, $whitelist_raw)
+{
+    $long = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) ? ip2long($ip) : false;
+    foreach (array_filter(array_map('trim', explode("\n", (string)$whitelist_raw))) as $entry) {
+        if ($entry === $ip) {
+            return true;
+        }
+        if ($long !== false && ($b = ip_location_cidr4_bounds($entry)) !== null
+            && $long >= $b[0] && $long <= $b[1]) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -3356,7 +3399,12 @@ function ip_location_get_bot_candidates($plugin_conf, $recent_only = false)
     // suspectes.
     $ip_whitelist = array_filter(array_map('trim', explode("\n", $plugin_conf['whitelist'])));
     foreach ($ip_whitelist as $wip) {
-        $where[] = "t.ip != '" . pwg_db_real_escape_string($wip) . "'";
+        if (($b = ip_location_cidr4_bounds($wip)) !== null) {
+            // INET_ATON vaut NULL pour une IPv6 : à garder, une plage IPv4 ne la couvre pas
+            $where[] = '(INET_ATON(t.ip) IS NULL OR INET_ATON(t.ip) NOT BETWEEN ' . $b[0] . ' AND ' . $b[1] . ')';
+        } else {
+            $where[] = "t.ip != '" . pwg_db_real_escape_string($wip) . "'";
+        }
     }
 
     // Plages manuelles existantes ("A.B.0.0/16", seul format de plage généré par ce

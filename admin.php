@@ -114,7 +114,12 @@ if (isset($_POST['action'])) {
         $msg = ($htaccess_result === true) ? 'config_saved' : ($htaccess_result === 'missing' ? 'htaccess_missing' : 'htaccess_error');
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=' . $msg . '#ipl-card-manual');
     } elseif ($_POST['action'] === 'save_whitelist') {
-        $whitelist = trim(stripslashes($_POST['whitelist_ips'] ?? ''));
+        // "45.45" → "45.45.0.0/16", comme à la saisie du blocage par IP (v2.8a.1)
+        $whitelist = implode("\n", array_map(function ($line) {
+            $line = trim($line);
+            return preg_match('/^\d+\.\d+$/', $line) ? $line . '.0.0/16' : $line;
+        }, explode("\n", stripslashes($_POST['whitelist_ips'] ?? ''))));
+        $whitelist = trim($whitelist);
         $conf_cur = ip_location_get_conf();
         conf_update_param('ip_location', serialize(array_merge($conf_cur, [
             'whitelist' => $whitelist,
@@ -271,12 +276,10 @@ if (isset($_POST['action'])) {
         $country = trim($_POST['country'] ?? '');
         $city    = trim($_POST['city'] ?? '');
         if ($ip) {
-            $whitelist_raw = ip_location_get_conf()['whitelist'] ?? '';
-            $whitelist = array_filter(array_map('trim', explode("\n", $whitelist_raw)));
             if (!ip_location_valid_block_entry($ip)) {
                 // Jamais en base : une entrée mal formée ne doit pas atteindre le .htaccess (v2.7e)
                 $page['errors'][] = sprintf(l10n('Adresse invalide : %s (IP ou plage CIDR attendue).'), htmlspecialchars(stripslashes($ip)));
-            } elseif (in_array($ip, $whitelist)) {
+            } elseif (ip_location_ip_in_whitelist($ip, ip_location_get_conf()['whitelist'] ?? '')) {
                 $page['errors'][] = sprintf(l10n('IP %s est dans la liste blanche.'), $ip);
             } else {
                 // ON DUPLICATE KEY : promeut aussi une éventuelle entrée auto existante en
