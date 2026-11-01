@@ -350,9 +350,8 @@ if (window.location.search.indexOf('msg=') !== -1) {
         <details class="iplj-menu">
           <summary class="iplc-btn ghost sm" title="{'Exporte tous les accès correspondant aux filtres appliqués (toutes les pages)'|@translate}">{'Exporter'|@translate} ▾</summary>
           <div class="pop">
-            <a href="{$export_url|escape}&amp;export=csv">CSV · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
-            <a href="{$export_url|escape}&amp;export=sql">SQL · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
-            <a href="{$export_url|escape}&amp;export=json">JSON · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
+            <a href="{$export_url|escape}&amp;export=csv">{'CSV anonymisé'|@translate} · {$JOURNAL_COUNTS[$FILTER]} {'accès'|@translate}</a>
+            <a href="{$export_url|escape}&amp;export=config" title="{'À joindre à un export du Journal pour permettre son analyse (sans IP ni liste blanche en clair)'|@translate}">{'Configuration du plugin'|@translate} · JSON</a>
           </div>
         </details>
         {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq '' or $SCORE_FILTER neq ''}

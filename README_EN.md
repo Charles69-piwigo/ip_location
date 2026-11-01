@@ -124,3 +124,15 @@ It counts, per country, the Log accesses that look like a real visit: neither bo
 blocked, on an album or photo page, and together with another page from the same IP
 (any page, home page included) in the half hour before or after. A single isolated page does not count: that is typical of a robot
 passing by.
+
+## Exporting the Log for analysis
+
+In the **Log** tab, the **Export** menu offers two files, meant to be sent together:
+
+- **Anonymised CSV**: every access matching the applied filters (all pages). The site name
+  is replaced by `site.anonyme` in the `url` column; paths, parameters and visitor IP
+  addresses are left as they are.
+- **Plugin configuration · JSON**: the settings actually in effect (blocking, score
+  threshold, robots, online lists, Piwigo, PHP and plugin versions). Without it, you can see
+  that an access is labelled bot but not why it was not blocked. No IPs: the whitelist only
+  appears as a number of entries.

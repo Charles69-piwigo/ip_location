@@ -124,3 +124,15 @@ Il compte, par pays, les accès du Journal qui ressemblent à une vraie visite :
 bloqué, sur une page d'album ou de photo, et accompagnés d'une autre page de la même IP
 (n'importe laquelle, accueil compris) dans la demi-heure qui précède ou qui suit. Une seule page isolée ne compte pas : c'est le comportement typique
 d'un robot qui passe.
+
+## Exporter le Journal pour le faire analyser
+
+Dans l'onglet **Journal**, le menu **Exporter** propose deux fichiers, à joindre ensemble :
+
+- **CSV anonymisé** : tous les accès correspondant aux filtres appliqués (toutes les pages).
+  Le nom du site est remplacé par `site.anonyme` dans la colonne `url` ; les chemins, les
+  paramètres et les adresses IP des visiteurs restent en clair.
+- **Configuration du plugin · JSON** : les réglages réellement actifs (blocage, seuil de
+  score, robots, listes en ligne, versions de Piwigo, PHP et du plugin). Sans lui, on voit
+  qu'un accès est étiqueté bot mais pas pourquoi il n'a pas été bloqué. Aucune IP : la liste
+  blanche n'apparaît que par son nombre d'entrées.

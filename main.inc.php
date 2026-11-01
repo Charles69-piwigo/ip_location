@@ -10,6 +10,23 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.8c - 01/11/2026
+    regroupement de v2.8b.1 et v2.8b.2
+    publication sur PEM
+
+    version 2.8b.2 - 01/11/2026
+        Export du Journal : le nom du site dans la colonne url est remplacé par « site.anonyme »
+        (export fait pour être transmis ; chemins et paramètres de l'URL inchangés). Exports
+        SQL et JSON du Journal supprimés (aucun import dans le plugin, mêmes données que le CSV,
+        et le SQL laissait le nom du site) ; l'entrée CSV du menu devient « CSV anonymisé ».
+        Aide du Journal mise à jour (FR/EN).
+
+    version 2.8b.1 - 01/11/2026
+        Journal des accès, menu Exporter : nouvelle entrée « Configuration du plugin · JSON »
+        (blocage, seuils de score, robots, listes en ligne, versions Piwigo/PHP/plugin). À joindre
+        à un export du Journal pour que son analyse tienne compte des réglages réellement actifs.
+        Aucune IP ni liste blanche en clair (nombre d'entrées seulement).
+
     version 2.8b - 21/10/2026
     regroupement de v2.8a.1
     publication sur PEM

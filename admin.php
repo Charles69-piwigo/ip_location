@@ -629,51 +629,90 @@ $where_parts = $base_parts;
 if ($filter !== 'all') $where_parts[] = $category_sql[$filter];
 $filter_where = empty($where_parts) ? '' : 'WHERE ' . implode(' AND ', $where_parts);
 
+// Export de la configuration (v2.8b.1) : à joindre à un export du Journal pour que
+// l'analyse puisse tenir compte des réglages réellement actifs (blocage auto, seuils, listes).
+// Ni IP ni liste blanche en clair (comptage seulement) : le fichier est destiné à être transmis.
+if (($_GET['export'] ?? '') === 'config') {
+    global $pwg_loaded_plugins;
+    $c = ip_location_get_conf();
+    $lines = function ($s) { return array_values(array_filter(array_map('trim', explode("\n", (string)$s)), 'strlen')); };
+    $tuning = [];
+    foreach ($conf as $k => $v) {
+        if (strpos($k, 'ip_location_') === 0 && is_scalar($v)) $tuning[$k] = $v;
+    }
+    ksort($tuning);
+    $blocklist = [];
+    $r = pwg_query('SELECT origin, COUNT(*), SUM(expires_at IS NULL OR expires_at > NOW()) FROM ' . $prefixeTable . 'ip_location_blocklist GROUP BY origin');
+    while ($b = pwg_db_fetch_row($r)) $blocklist[$b[0]] = ['total' => (int)$b[1], 'actives' => (int)$b[2]];
+    $wl = $lines($c['whitelist']);
+    $snapshot = [
+        'exported_at'    => date('c'),
+        'plugin_version' => $pwg_loaded_plugins['ip_location']['version'] ?? '?',
+        'piwigo_version' => PHPWG_VERSION,
+        'php_version'    => PHP_VERSION,
+        'server'         => $_SERVER['SERVER_SOFTWARE'] ?? '',
+        'blocking' => [
+            'ip_blocking_enabled'      => $c['blocking_enabled'] === '1',
+            'country_blacklist'        => $lines(str_replace(',', "\n", $c['blocked_countries'])),
+            'keyword_block_enabled'    => $c['keyword_block_enabled'] === '1',
+            'url_keywords'             => $lines($c['blocked_url_keywords']),
+            'disabled_url_keywords'    => $lines($c['disabled_url_keywords']),
+            'htaccess_enabled'         => $c['htaccess_enabled'] === '1',
+            'bot_block_enabled'        => $c['bot_block_enabled'] === '1',
+            'bot_block_enabled_at'     => $c['bot_block_enabled_at'],
+            'bot_block_score_threshold' => (int)$c['bot_block_score_threshold'],
+            'robots_enabled'           => $c['robots_enabled'] === '1',
+            'whitelist_entries'        => count($wl),
+            'blocklist'                => $blocklist,
+        ],
+        'download_filter' => [
+            'enabled'           => $c['download_filter_enabled'] === '1',
+            'allowed_countries' => $lines(str_replace(',', "\n", $c['download_allowed_countries'])),
+            'geo_fail_mode'     => $c['download_geo_fail_mode'],
+        ],
+        'robots' => array_map(function ($e) {
+            return ['name' => $e['name'] ?? '', 'ua' => $e['ua'] ?? '', 'fam' => $e['fam'] ?? '', 'status' => $e['status'] ?? ''];
+        }, ip_location_get_robots()),
+        'online_lists' => [
+            'robots_auto'    => $c['robots_remote_auto'] === '1',
+            'keywords_auto'  => $c['keywords_remote_auto'] === '1',
+        ],
+        'max_records'    => (int)$c['max_records'],
+        'visitors'       => ['enabled' => $c['visitors_enabled'] === '1', 'period' => $c['visitors_period']],
+        'tuning'         => $tuning,
+    ];
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Disposition: attachment; filename="ip_location_config_' . date('Ymd_His') . '.json"');
+    header('Cache-Control: no-store');
+    echo json_encode($snapshot, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), "\n";
+    exit;
+}
+
 // Export du Journal (v2.6.13) : toutes les lignes correspondant aux filtres en cours
-// (catégorie comprise, sans pagination), colonnes brutes de la table, en CSV / SQL / JSON.
-if (in_array($_GET['export'] ?? '', ['csv', 'sql', 'json'], true)) {
-    $format = $_GET['export'];
+// (catégorie comprise, sans pagination), colonnes brutes de la table, en CSV anonymisé.
+if (($_GET['export'] ?? '') === 'csv') {
     @set_time_limit(0);
     while (ob_get_level()) ob_end_clean();
-    $log_table = $prefixeTable . 'ip_location_log';
-    $result = pwg_query('SELECT * FROM ' . $log_table . ' ' . $filter_where . ' ORDER BY visit_date DESC');
-    $mime = ['csv' => 'text/csv', 'sql' => 'application/sql', 'json' => 'application/json'];
-    header('Content-Type: ' . $mime[$format] . '; charset=utf-8');
-    header('Content-Disposition: attachment; filename="ip_location_journal_' . date('Ymd_His') . '.' . $format . '"');
+    $result = pwg_query('SELECT * FROM ' . $prefixeTable . 'ip_location_log ' . $filter_where . ' ORDER BY visit_date DESC');
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="ip_location_journal_' . date('Ymd_His') . '.csv"');
     header('Cache-Control: no-store');
-    $int_cols = ['id', 'is_bot', 'is_blocked', 'bot_score'];
     $out = fopen('php://output', 'w');
     $first = true;
-    if ($format === 'sql') {
-        fwrite($out, '-- ip_location : export du Journal des accès, ' . date('Y-m-d H:i:s') . "\n\n");
-    } elseif ($format === 'json') {
-        fwrite($out, "[\n");
-    } else {
-        fwrite($out, "\xEF\xBB\xBF"); // BOM : accents lus correctement par Excel
-    }
+    fwrite($out, "ï»¿"); // BOM : accents lus correctement par Excel
     while ($row = pwg_db_fetch_assoc($result)) {
-        if ($format === 'csv') {
-            // $escape explicite (PHP 8.4 : Deprecated sinon, écrit dans l'export). '' = CSV
-            // standard (guillemets doublés, pas d'échappement par \), celui que lit Excel.
-            if ($first) fputcsv($out, array_keys($row), ';', '"', '');
-            fputcsv($out, $row, ';', '"', '');
-        } elseif ($format === 'sql') {
-            $vals = [];
-            foreach ($row as $col => $v) {
-                $vals[] = $v === null ? 'NULL'
-                    : (in_array($col, $int_cols, true) ? (int)$v : "'" . pwg_db_real_escape_string($v) . "'");
-            }
-            fwrite($out, 'INSERT INTO `' . $log_table . '` (`' . implode('`, `', array_keys($row)) . '`) VALUES ('
-                . implode(', ', $vals) . ");\n");
-        } else {
-            foreach ($int_cols as $col) {
-                if (isset($row[$col])) $row[$col] = (int)$row[$col];
-            }
-            fwrite($out, ($first ? '  ' : ",\n  ") . json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE));
+        // Anonymisation (v2.8b.2) : le nom du site est remplacé dans l'URL (export fait pour
+        // être transmis).
+        if (isset($row['url'])) {
+            $row['url'] = preg_replace('~^(https?://)[^/?#]+~i', '${1}site.anonyme', $row['url']);
         }
+        // $escape explicite (PHP 8.4 : Deprecated sinon, écrit dans l'export). '' = CSV
+        // standard (guillemets doublés, pas d'échappement par \), celui que lit Excel.
+        if ($first) fputcsv($out, array_keys($row), ';', '"', '');
+        fputcsv($out, $row, ';', '"', '');
         $first = false;
     }
-    if ($format === 'json') fwrite($out, "\n]\n");
     fclose($out);
     exit;
 }

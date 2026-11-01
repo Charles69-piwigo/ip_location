@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "revision": "2026-10-08",
+  "revision": "2026-11-01",
   "robots": [
     {"name": "OpenAI",       "ua": "GPTBot",                "fam": "ai"},
     {"name": "Anthropic",    "ua": "ClaudeBot",             "fam": "ai"},
@@ -20,6 +20,12 @@
     {"name": "JSCrawler",    "ua": "jscrawler",             "fam": "seo"},
     {"name": "Limbes",       "ua": "LimbesBot",             "fam": "seo"},
     {"name": "OpenBase",     "ua": "OpenBaseBot",           "fam": "seo"},
-    {"name": "Ibou",         "ua": "IbouBot",               "fam": "seo"}
+    {"name": "Ibou",         "ua": "IbouBot",               "fam": "seo"},
+    {"name": "Aion",         "ua": "AionBot",               "fam": "seo"},
+    {"name": "BitSight",     "ua": "BitSightBot",           "fam": "seo"},
+    {"name": "LohiSoft",     "ua": "LohiSoftBot",           "fam": "seo"},
+    {"name": "Querit",       "ua": "QueritBot",             "fam": "ai"},
+    {"name": "Exa",          "ua": "ExaSearchBot",          "fam": "ai"},
+    {"name": "Petal Search", "ua": "PetalBot",              "fam": "seo"}
   ]
 }
