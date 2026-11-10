@@ -3,6 +3,7 @@
 .vscode/
 
 # Logs
+log_analyse/
 *.log
 logs/
 

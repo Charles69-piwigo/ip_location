@@ -227,6 +227,14 @@ if (isset($_POST['action'])) {
             'keywords_remote_auto'  => isset($_POST['keywords_remote_auto']) ? '1' : '0',
         ])));
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-keyword');
+    } elseif ($_POST['action'] === 'save_hosting_config') {
+        // Refus direct des IP d'hébergeur (v2.8c.2) : formulaire à part (piège des cases à
+        // cocher, cf. CLAUDE.md)
+        $conf_cur = ip_location_get_conf();
+        conf_update_param('ip_location', serialize(array_merge($conf_cur, [
+            'hosting_block_enabled' => isset($_POST['hosting_block_enabled']) ? '1' : '0',
+        ])));
+        redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=config_saved#ipl-card-hosting');
     } elseif ($_POST['action'] === 'save_download_config') {
         $download_filter_enabled    = isset($_POST['download_filter_enabled']) ? '1' : '0';
         $download_allowed_countries = strtoupper(trim($_POST['download_allowed_countries'] ?? ''));
@@ -537,7 +545,7 @@ $ip_filter = isset($_GET['ip_filter']) ? preg_replace('/[^0-9a-fA-F.:\/]/', '', 
 // Motif de blocage (v2.6.10) : un motif de refus (block_reason), "listed" (servi avant le
 // blocage de son IP / robot, classé Bloqués par l'état actuel) ou "unknown" (refus
 // antérieur à la 2.6.1, sans motif enregistré).
-$reason_keys   = ['country', 'keyword', 'ip', 'auto', 'robot', 'download', 'listed', 'unknown'];
+$reason_keys   = ['country', 'keyword', 'hosting', 'ip', 'auto', 'robot', 'download', 'listed', 'unknown'];
 $reason_filter = isset($_GET['reason']) && in_array($_GET['reason'], $reason_keys, true) ? $_GET['reason'] : '';
 // Tranche de score de suspicion (v2.6.11) ; "thr" = seuil courant du blocage automatique
 $score_keys   = ['zero', 'pos', '30', '50', 'thr'];
@@ -566,7 +574,7 @@ $reason_sql = [
     'listed'  => 'is_blocked = 0 AND ' . $currently_blocked_sql,
     'unknown' => 'is_blocked = 1 AND block_reason IS NULL',
 ];
-foreach (['country', 'keyword', 'ip', 'auto', 'robot', 'download'] as $rk) {
+foreach (['country', 'keyword', 'hosting', 'ip', 'auto', 'robot', 'download'] as $rk) {
     $reason_sql[$rk] = "is_blocked = 1 AND block_reason = '" . $rk . "'";
 }
 $reason_cols = [];
@@ -655,6 +663,7 @@ if (($_GET['export'] ?? '') === 'config') {
             'ip_blocking_enabled'      => $c['blocking_enabled'] === '1',
             'country_blacklist'        => $lines(str_replace(',', "\n", $c['blocked_countries'])),
             'keyword_block_enabled'    => $c['keyword_block_enabled'] === '1',
+            'hosting_block_enabled'    => $c['hosting_block_enabled'] === '1',
             'url_keywords'             => $lines($c['blocked_url_keywords']),
             'disabled_url_keywords'    => $lines($c['disabled_url_keywords']),
             'htaccess_enabled'         => $c['htaccess_enabled'] === '1',
@@ -943,6 +952,7 @@ $fmt_since = function ($datetime) {
 $block_reason_labels = [
     'country'  => l10n('pays'),
     'keyword'  => l10n('mot-clé'),
+    'hosting'  => l10n('hébergeur / proxy'),
     'ip'       => l10n('liste IP'),
     'auto'     => l10n('blocage auto'),
     'robot'    => l10n('robot'),
@@ -1039,6 +1049,13 @@ if ($show_settings) {
         list($n) = pwg_db_fetch_row($r);
         return (int)$n;
     };
+
+    // IP d'hébergeur vues sur 7 jours (v2.8c.2), hors robots autorisés : accès et IP
+    $r = pwg_query('SELECT COUNT(*), COUNT(DISTINCT ip) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE hosting = 1 AND visit_date >= NOW() - INTERVAL 7 DAY'
+        . (($ars = ip_location_allowed_robot_sql($prefixeTable)) !== '0' ? ' AND NOT ' . $ars : ''));
+    list($hs_hits, $hs_ips) = pwg_db_fetch_row($r);
+    $hosting_seen_7d = ['hits' => (int)$hs_hits, 'ips' => (int)$hs_ips];
 
     // Blocage par IP : refus par entrée (plage /16 : préfixe "A.B.")
     $manual_rows = [];
@@ -1144,6 +1161,7 @@ if ($show_settings) {
         ['key' => 'manual',   'label' => l10n('Par IP'),          'on' => $plugin_conf['htaccess_enabled'] === '1'],
         ['key' => 'country',  'label' => l10n('Par pays'),        'on' => $plugin_conf['blocking_enabled'] === '1'],
         ['key' => 'keyword',  'label' => l10n('Par mot-clé'),     'on' => $plugin_conf['keyword_block_enabled'] === '1'],
+        ['key' => 'hosting',  'label' => l10n('Hébergeurs'),      'on' => $plugin_conf['hosting_block_enabled'] === '1'],
         ['key' => 'auto',     'label' => l10n('Automatique'),     'on' => $plugin_conf['bot_block_enabled'] === '1'],
         ['key' => 'download', 'label' => l10n('Téléchargements'), 'on' => $plugin_conf['download_filter_enabled'] === '1'],
     ];
@@ -1176,6 +1194,10 @@ if ($show_settings) {
         'KEYWORD_COLLISIONS' => $keyword_collisions,
         'COUNTRY_ROWS'       => $country_rows,
         'COUNTRY_OPTIONS'    => ip_location_country_options(),
+        'HOSTING_BLOCK_ENABLED' => $plugin_conf['hosting_block_enabled'] === '1',
+        'HOSTING_REFUSALS_7D'   => $refusals_7d('hosting'),
+        'HOSTING_SEEN_7D'       => $hosting_seen_7d,
+        'HOSTING_SCORE'         => (int)$conf['ip_location_score_hosting'],
         'DOWNLOAD_ROWS'      => $country_chips($plugin_conf['download_allowed_countries']),
         'ROBOT_ROWS'         => $robot_rows,
         'ROBOTS_ENABLED'     => $plugin_conf['robots_enabled'] === '1',

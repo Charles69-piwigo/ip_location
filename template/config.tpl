@@ -18,7 +18,7 @@
     <div>
       <span class="eyebrow">{'Mode actuel'|@translate}</span>
       <span class="name {if $LEVERS_ON == 0}observer{else}blocking{/if}" data-mode-name>{if $LEVERS_ON == 0}{'Observateur'|@translate}{else}{'Observation + blocage'|@translate}{/if}</span>
-      <span class="desc" data-mode-desc>{if $LEVERS_ON == 0}{'Aucun accès n\'est refusé : tout est journalisé en « Normal » ou « Bots non bloqués ».'|@translate}{else}{$LEVERS_ON} / 5 {'leviers de blocage actifs'|@translate}{/if}</span>
+      <span class="desc" data-mode-desc>{if $LEVERS_ON == 0}{'Aucun accès n\'est refusé : tout est journalisé en « Normal » ou « Bots non bloqués ».'|@translate}{else}{$LEVERS_ON} / 6 {'leviers de blocage actifs'|@translate}{/if}</span>
       <span class="desc unsaved" data-mode-unsaved hidden></span>
     </div>
     <div class="iplc-levers">
@@ -402,6 +402,31 @@
       <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-keyword" data-save disabled>{'ipl_save'|@translate}</button></div>
     </section>
 
+    {* Refus des IP d'hébergeur (v2.8c.2) *}
+    <section class="iplc-card wide{if !$HOSTING_BLOCK_ENABLED} is-off{/if}" id="ipl-card-hosting">
+      <form method="post" action="" data-card-form id="iplc-f-hosting">
+        <input type="hidden" name="action" value="save_hosting_config">
+        <div class="iplc-head">
+          <div class="iplc-title"><h4>{'Blocage des IP d\'hébergeur et de proxy'|@translate}</h4><span class="sub">{'Refuse les pages aux adresses de serveurs et de centres de données (DigitalOcean, Amazon…), de proxys et de VPN, d\'où viennent beaucoup de robots qui changent d\'adresse à chaque passage'|@translate}</span></div>
+          <span class="iplc-pill {if $HOSTING_BLOCK_ENABLED}on{else}off{/if}" data-pill data-on="{'ipl_on'|@translate}" data-off="{'Inactif'|@translate}">{if $HOSTING_BLOCK_ENABLED}{'ipl_on'|@translate}{else}{'Inactif'|@translate}{/if}</span>
+          <label class="iplc-switch" title="{'Refuser les IP d\'hébergeur et de proxy'|@translate}"><input type="checkbox" name="hosting_block_enabled" value="1" data-card-switch{if $HOSTING_BLOCK_ENABLED} checked{/if}><span class="track"></span></label>
+        </div>
+        <div class="iplc-body">
+          <div class="iplc-offnote">{'Désactivé : ces adresses ne sont pas refusées d\'office, mais leur score de suspicion augmente quand même.'|@translate}</div>
+          <div class="dimmable" style="display:flex;flex-direction:column;gap:12px;">
+            <div class="iplc-tiles">
+              <div class="iplc-tile"><span class="n">{$HOSTING_SEEN_7D.ips}</span><span class="l">{'IP d\'hébergeur ou de proxy vues sur 7 jours'|@translate} ({$HOSTING_SEEN_7D.hits} {'accès'|@translate})</span></div>
+              <div class="iplc-tile"><span class="n">{$HOSTING_REFUSALS_7D}</span><span class="l">{'accès refusés sur 7 jours'|@translate}</span></div>
+            </div>
+            <p class="hint">{'L\'information vient du service de géolocalisation ip-api.com : quand un autre service a répondu, l\'adresse reste « inconnue » et n\'est jamais refusée. Les robots autorisés (bloc « Robots d\'indexation ») passent ce blocage.'|@translate}</p>
+            <p class="hint">{'Activé ou non, une IP d\'hébergeur ou de proxy prend des points de score :'|@translate} {$HOSTING_SCORE}.</p>
+            <p class="warn">&#9888; {'Certains vrais visiteurs passent par un serveur ou un proxy : VPN (dont celui intégré à Opera), réseau d\'entreprise, relais privé iCloud. Ils seront refusés eux aussi. Regardez d\'abord le Journal avant d\'activer.'|@translate}</p>
+          </div>
+        </div>
+      </form>
+      <div class="iplc-foot"><span class="dirty" hidden>{'Modifications non enregistrées'|@translate}</span><button type="submit" class="iplc-btn primary" form="iplc-f-hosting" data-save disabled>{'ipl_save'|@translate}</button></div>
+    </section>
+
     {* Blocage automatique *}
     <section class="iplc-card wide{if !$BOT_BLOCK_ENABLED} is-off{/if}" id="ipl-card-auto">
       <form method="post" action="" data-card-form id="iplc-f-auto">
@@ -539,7 +564,7 @@
   }
   // Levier qui refuse effectivement des accès : Robots seulement si au moins un robot
   // est "Bloqué" (sinon le bloc ne fait que protéger les robots autorisés) ; le filtre
-  // des téléchargements n'est pas compté parmi les 5 leviers de blocage des pages.
+  // des téléchargements n'est pas compté parmi les 6 leviers de blocage des pages.
   function leverBlocks(key){
     if (!leverOn(key) || key === 'download') return false;
     if (key === 'robots') {
@@ -567,7 +592,7 @@
     name.classList.toggle('observer', !blocking);
     name.classList.toggle('blocking', !!blocking);
     mode.querySelector('[data-mode-desc]').textContent = blocking
-      ? blocking + ' / 5 ' + mode.getAttribute('data-blocking-desc')
+      ? blocking + ' / 6 ' + mode.getAttribute('data-blocking-desc')
       : mode.getAttribute('data-observer-desc');
     var unsaved = mode.querySelector('[data-mode-unsaved]');
     unsaved.hidden = !changed;

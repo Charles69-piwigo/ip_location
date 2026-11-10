@@ -10,6 +10,43 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 2.9 - 10/11/2026
+        regroupement de v2.8c.1 à v2.8c.3
+        pour publication sur PEM
+
+    version 2.8c.3 - 10/11/2026
+        Le signal et le levier « IP d'hébergeur » prennent aussi le champ proxy d'ip-api.com
+        (proxys et VPN), réunis dans la même colonne hosting : levier renommé « Blocage des
+        IP d'hébergeur et de proxy », motif « hébergeur / proxy ». Constaté au test : le VPN
+        intégré d'Opera (Datacamp / PacketHub) sort proxy sans hosting, et passait. Sur un
+        journal réel, le pool de robots d'octobre passe de 43 % à 71 % de détection (IP de
+        particuliers revendues comme proxys), les visiteurs ayant vu au moins 3 pages de
+        3 % à 6 %.
+
+    version 2.8c.2 - 10/11/2026
+        IP d'hébergeur (serveurs, centres de données) : ip-api.com fournit désormais aussi
+        son champ hosting, gardé dans le cache de géolocalisation et dans le journal
+        (nouvelle colonne hosting : 1, 0, ou vide si un autre service a géolocalisé l'IP ;
+        les IP déjà en cache restent « inconnues » jusqu'à leur prochaine résolution, 30 jours
+        au plus). Nouveau signal de score ip_location_score_hosting (40). Nouveau levier
+        « Blocage des IP d'hébergeur », désactivé par défaut : refus immédiat (motif « hébergeur »),
+        robots autorisés épargnés. Mesure sur un journal réel : 97 % d'hébergeurs dans un
+        pool de robots qui ne repassait qu'une à trois fois par IP (le blocage auto par
+        score, IP par IP, en laissait passer la moitié), 3 % chez les visiteurs ayant vu au
+        moins 3 pages. Colonnes créées par la mise à jour, ou une fois au chargement du
+        plugin après une copie de fichiers.
+
+    version 2.8c.1 - 10/11/2026
+        Journal des vues PhotoSwipe (diaporama, vignettes ouvertes en plein écran) réparé :
+        ajax_log.php refusait toute URL ('external_url') depuis la v2.1, car il la comparait
+        à get_root_url(), qui y vaut le chemin disque de Piwigo. Le navigateur envoie
+        désormais l'URL absolue de la photo, vérifiée sur l'hôte et le dossier de Piwigo ;
+        la page déjà affichée et la répétition d'une même photo ne sont pas renvoyées.
+        Les vues PhotoSwipe (log_type 'js') sont exclues des deux règles de rafale.
+        Signal « Pas de JavaScript » (ip_location_score_no_js) : 0 par défaut au lieu de
+        20 — il n'a jamais été appliqué, et une fois le journal réparé il aurait pénalisé
+        tout visiteur qui n'ouvre pas le diaporama.
+
     version 2.8c - 01/11/2026
     regroupement de v2.8b.1 et v2.8b.2
     publication sur PEM
@@ -786,10 +823,14 @@ $ip_location_score_defaults = [
     'ip_location_multi_url_threshold' => 20, // URL distinctes par IP en ~30 s (10 avant v2.5.5)
     'ip_location_score_shared_ua'     => 30,  // < seuils usuels : doit être confirmé par un 2e signal
     'ip_location_score_outdated_browser' => 20,
-    'ip_location_score_no_js'         => 20,
+    // 0 depuis v2.8c.1 (20 avant, mais jamais appliqué : le logger PhotoSwipe ne journalisait
+    // rien). "Aucune ligne js" signifie seulement "n'a jamais ouvert le diaporama" : avec
+    // des points, un humain qui ne regarde que les pages photo serait pénalisé.
+    'ip_location_score_no_js'         => 0,
     'ip_location_auto_block_ttl_days' => 14,
     'ip_location_auto_block_recent_hours' => 24, // seules les IP actives depuis N h sont auto-bloquées
-    'ip_location_score_bot_spoof'     => 50, // UA d'un moteur connu depuis une IP qui ne lui appartient pas (v2.6.2)
+    'ip_location_score_bot_spoof'     => 50,
+    'ip_location_score_hosting'       => 40, // IP d'hébergeur selon ip-api.com (v2.8c.2) // UA d'un moteur connu depuis une IP qui ne lui appartient pas (v2.6.2)
     'ip_location_robot_check_days'    => 30, // durée de validité d'une vérification DNS de robot
     'ip_location_refusal_log_minutes' => 10, // un refus répété (même IP, même motif) n'est journalisé qu'une fois par période ; 0 = tous
     'ip_location_classify_interval_hours' => 4,
@@ -808,6 +849,14 @@ foreach ($ip_location_score_defaults as $ip_location_score_key => $ip_location_s
     }
 }
 unset($ip_location_score_defaults, $ip_location_score_key, $ip_location_score_default);
+
+// Colonnes hosting (v2.8c.2) : sans elles, tout INSERT du journal échouerait. Créées par
+// maintain.class.php lors d'une mise à jour Piwigo, mais aussi ici, une seule fois, pour une
+// copie de fichiers sans mise à jour (FTP, dev) : le drapeau en config évite tout SHOW
+// COLUMNS sur les requêtes suivantes.
+if (empty($conf['ip_location_schema_hosting'])) {
+    ip_location_ensure_hosting_columns();
+}
 
 // Debug — décommenter pour activer les logs =============================
 /*
@@ -864,6 +913,7 @@ function ip_location_get_conf()
         'bot_block_enabled_at'       => '',  // activation du blocage auto (v2.6.1), cf. ip_location_get_bot_candidates()
         'bot_block_score_threshold'  => 70,
         'keyword_block_enabled'      => '0',
+        'hosting_block_enabled'      => '0',   // refus direct des IP d'hébergeur (v2.8c.2)
         'robots_enabled'             => '1',   // bloc "Robots d'indexation" (v2.6.2)
         'robots'                     => null,  // null = liste par défaut, cf. ip_location_get_robots()
         'robots_seo_seeded'          => '',    // v2.7e.1 : dernière révision des outils SEO par défaut reçue par la liste enregistrée
@@ -1326,10 +1376,18 @@ document.addEventListener('DOMContentLoaded',function(){
   var _O=PhotoSwipe;
   window.PhotoSwipe=function(el,ui,items,opts){
     var inst=new _O(el,ui,items,opts);
+    // URL absolue résolue par le navigateur (le thème fournit un lien relatif) ; la page
+    // affichée, déjà journalisée côté PHP, et une répétition de la même photo (afterChange
+    // suit initialZoomInEnd à l'ouverture) ne sont pas renvoyées (v2.8c.1).
+    var _last=location.href.split('#')[0];
     function doLog(item){
       if(!item||!item.href) return;
+      var a=document.createElement('a'); a.href=item.href;
+      var u=a.href.split('#')[0];
+      if(u===_last) return;
+      _last=u;
       var x=new XMLHttpRequest();
-      x.open('GET',_logUrl+'?url='+encodeURIComponent(item.href),true);
+      x.open('GET',_logUrl+'?url='+encodeURIComponent(u),true);
       x.send();
     }
     // Première photo affichée
@@ -1384,7 +1442,7 @@ function ip_location_resolve_geo($ip, $prefixeTable, $use_negative_cache = true)
     // 'Unknown', uniquement si $use_negative_cache — sinon on ignore les entrées négatives
     // et on retente une résolution live)
     $query = '
-SELECT country, country_code, city
+SELECT country, country_code, city, hosting
   FROM ' . $prefixeTable . 'ip_location_cache
   WHERE ip = \'' . $ip . '\'
     AND (
@@ -1401,10 +1459,17 @@ SELECT country, country_code, city
     // Résolution géo avec fallback multi-providers
     $providers = [
         [
-            'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city',
+            // hosting (v2.8c.2) : IP d'un hébergeur / centre de données, ou (v2.8c.3) d'un
+            // proxy / VPN — champs hosting et proxy d'ip-api.com, réunis dans la colonne
+            // hosting. Le VPN d'Opera (Datacamp / PacketHub) sort proxy sans hosting, et
+            // ip-api marque proxy des IP de particuliers revendues comme proxys. Seul
+            // ip-api.com fournit ces champs (gratuitement) ; avec les autres providers,
+            // l'information reste inconnue (NULL).
+            'url'          => 'http://ip-api.com/json/' . rawurlencode($ip) . '?fields=country,countryCode,city,hosting,proxy',
             'country'      => 'country',
             'country_code' => 'countryCode',
             'city'         => 'city',
+            'hosting'      => ['hosting', 'proxy'],
         ],
         [
             'url'          => 'https://free.freeipapi.com/api/json/' . rawurlencode($ip),
@@ -1433,7 +1498,7 @@ SELECT country, country_code, city
         ],
     ];
 
-    $geo = ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown'];
+    $geo = ['country' => 'Unknown', 'country_code' => '', 'city' => 'Unknown', 'hosting' => null];
 
     foreach ($providers as $provider) {
         $response = ip_location_http_get($provider['url']);
@@ -1459,6 +1524,13 @@ SELECT country, country_code, city
             $geo['country']      = $country;
             $geo['country_code'] = $country_code;
             $geo['city']         = !empty($city) ? $city : 'Unknown';
+            if (isset($provider['hosting'])) {
+                foreach ($provider['hosting'] as $field) {
+                    if (isset($data[$field])) {
+                        $geo['hosting'] = max((int)$geo['hosting'], $data[$field] ? 1 : 0);
+                    }
+                }
+            }
             break; // Provider OK, on arrête
         }
     }
@@ -1470,18 +1542,20 @@ SELECT country, country_code, city
     // résolution réussie survient (l'ancienne valeur est écrasée par la nouvelle).
     $query = '
 INSERT INTO ' . $prefixeTable . 'ip_location_cache
-  (ip, country, country_code, city, resolved_at)
+  (ip, country, country_code, city, hosting, resolved_at)
   VALUES (
     \'' . $ip . '\',
     \'' . pwg_db_real_escape_string($geo['country']) . '\',
     \'' . pwg_db_real_escape_string($geo['country_code']) . '\',
     \'' . pwg_db_real_escape_string($geo['city']) . '\',
+    ' . ($geo['hosting'] === null ? 'NULL' : (int)$geo['hosting']) . ',
     NOW()
   )
   ON DUPLICATE KEY UPDATE
     country      = VALUES(country),
     country_code = VALUES(country_code),
     city         = VALUES(city),
+    hosting      = VALUES(hosting),
     resolved_at  = NOW();';
     pwg_query($query);
 
@@ -2132,7 +2206,7 @@ function ip_location_current_url()
 function ip_location_geo_from_cache($ip_raw, $fallback_country, $fallback_city)
 {
     global $prefixeTable;
-    $r = pwg_query('SELECT country, country_code, city FROM ' . $prefixeTable . 'ip_location_cache
+    $r = pwg_query('SELECT country, country_code, city, hosting FROM ' . $prefixeTable . 'ip_location_cache
   WHERE ip = \'' . pwg_db_real_escape_string($ip_raw) . '\' LIMIT 1');
     $row = pwg_db_fetch_assoc($r);
     if ($row && $row['country'] !== 'Unknown') {
@@ -2299,6 +2373,25 @@ function ip_location_blocklist_guard()
  * et les tentatives de téléchargement). $row : ip (brute), geo (country/country_code/city),
  * url, user_agent, is_bot, is_blocked, log_type (null|string), block_reason (null|string).
  */
+/**
+ * Ajoute la colonne hosting (IP d'hébergeur : 1, 0, NULL = inconnu) au cache de
+ * géolocalisation et au journal si elle manque, puis le note en config (v2.8c.2).
+ * Idempotent ; appelée par maintain.class.php et au chargement du plugin.
+ */
+function ip_location_ensure_hosting_columns()
+{
+    global $prefixeTable;
+    foreach (['ip_location_cache', 'ip_location_log'] as $table) {
+        $cols = [];
+        $r = pwg_query('SHOW COLUMNS FROM ' . $prefixeTable . $table);
+        while ($row = pwg_db_fetch_row($r)) $cols[] = $row[0];
+        if (!empty($cols) && !in_array('hosting', $cols, true)) {
+            pwg_query('ALTER TABLE ' . $prefixeTable . $table . ' ADD COLUMN hosting TINYINT(1) DEFAULT NULL');
+        }
+    }
+    conf_update_param('ip_location_schema_hosting', '1');
+}
+
 function ip_location_insert_log($row)
 {
     global $prefixeTable;
@@ -2307,12 +2400,13 @@ function ip_location_insert_log($row)
     };
     pwg_query('
 INSERT INTO ' . $prefixeTable . 'ip_location_log
-  (ip, country, country_code, city, url, user_agent, is_bot, is_blocked, log_type, block_reason, visit_date)
+  (ip, country, country_code, city, hosting, url, user_agent, is_bot, is_blocked, log_type, block_reason, visit_date)
   VALUES (
     ' . $str($row['ip']) . ',
     ' . $str($row['geo']['country']) . ',
     ' . $str($row['geo']['country_code']) . ',
     ' . $str($row['geo']['city']) . ',
+    ' . (isset($row['geo']['hosting']) ? (int)$row['geo']['hosting'] : 'NULL') . ',
     ' . $str($row['url']) . ',
     ' . $str($row['user_agent']) . ',
     ' . (int)$row['is_bot'] . ',
@@ -2700,6 +2794,17 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
         }
     }
 
+    // Refus direct des IP d'hébergeur (v2.8c.2), seulement si son interrupteur est allumé :
+    // serveurs et centres de données (DigitalOcean, AWS…), d'où viennent des pools de
+    // robots qui ne repassent qu'une ou deux fois par IP — le blocage auto par score, IP
+    // par IP et à la classification suivante, les laisserait presque tous passer. Robots
+    // autorisés épargnés (Googlebot vient lui aussi d'un hébergeur). hosting inconnu (NULL,
+    // provider autre qu'ip-api) : jamais refusé.
+    if (!$is_blocked && !$robot_allowed && $plugin_conf['hosting_block_enabled'] === '1' && !empty($geo['hosting'])) {
+        $is_blocked   = 1;
+        $block_reason = 'hosting';
+    }
+
     // Robot autorisé ET vérifiable par DNS (Googlebot, Bingbot…) : au-delà de
     // ip_location_robot_log_limit accès dans la journée, l'accès est seulement compté
     // (v2.7a.5). Un robot autorisé sans vérification DNS reste toujours journalisé : son
@@ -3062,6 +3167,10 @@ function ip_location_classify_recent()
     // Toutes les règles comportementales ci-dessous ignorent les requêtes de pré-lecture
     // (log_type='prefetch', cf. ip_location_is_prefetch_request()) : elles doublent le
     // nombre d'URL d'une navigation humaine et ne traduisent aucune action du visiteur.
+    // Les deux règles de rafale ignorent aussi les vues PhotoSwipe (log_type='js', v2.8c.1) :
+    // la page photo plus son ouverture en diaporama donnent déjà 2 lignes de la même URL en
+    // quelques secondes, et un diaporama en lecture automatique enchaîne les photos — alors
+    // qu'une ligne 'js' prouve justement l'exécution de JavaScript.
 
     // Robots déclarés : mot-clé bot dans le User-Agent (même liste que ip_location_is_bot_ua())
     // ou UA qui annonce lui-même un crawler (même détection que ip_location_ua_declares_crawler()).
@@ -3109,7 +3218,7 @@ JOIN (
     SELECT ip, url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')
+       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
      GROUP BY ip, url, bucket
     HAVING COUNT(*) >= 3
 ) g
@@ -3133,7 +3242,7 @@ JOIN (
     SELECT ip, FLOOR(UNIX_TIMESTAMP(visit_date)/30) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')
+       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
      GROUP BY ip, bucket
     HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
 ) g
@@ -3234,7 +3343,7 @@ JOIN (
     SELECT ip, url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')
+       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
      GROUP BY ip, url, bucket
     HAVING COUNT(*) >= 3
 ) g
@@ -3251,7 +3360,7 @@ JOIN (
     SELECT ip, FLOOR(UNIX_TIMESTAMP(visit_date)/30) AS bucket
       FROM ' . $prefixeTable . 'ip_location_log
      WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')
+       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
      GROUP BY ip, bucket
     HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
 ) g
@@ -3289,8 +3398,11 @@ WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
     // fenêtre : un scraper simple n'exécute jamais de JavaScript. Uniquement si le logger
     // fonctionne sur ce site (au moins une ligne 'js' en base) : sinon (thème sans
     // PhotoSwipe, ancienne version du plugin) tous les humains seraient pénalisés.
-    $r_js = pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_log WHERE log_type = \'js\' LIMIT 1');
-    if (pwg_db_num_rows($r_js) > 0) {
+    // Poids 0 par défaut depuis v2.8c.1 (voir $ip_location_score_defaults) : requête évitée.
+    $r_js = (int)$conf['ip_location_score_no_js'] > 0
+        ? pwg_query('SELECT 1 FROM ' . $prefixeTable . 'ip_location_log WHERE log_type = \'js\' LIMIT 1')
+        : null;
+    if ($r_js && pwg_db_num_rows($r_js) > 0) {
         pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log t
 JOIN (
@@ -3321,6 +3433,18 @@ JOIN (
 ) g ON t.ip = g.ip
 SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_foreign_url'] . '
 WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
+
+    // IP d'hébergeur (v2.8c.2) : colonne hosting, renseignée à l'enregistrement d'après
+    // ip-api.com. Un visiteur de galerie navigue rarement depuis un serveur ; VPN et réseaux
+    // d'entreprise en sortent parfois, d'où un poids < 50 (seul, il ne franchit pas le seuil
+    // par défaut de 70). Robots autorisés remis à 0 plus bas.
+    if ((int)$conf['ip_location_score_hosting'] > 0) {
+        pwg_query('
+UPDATE ' . $prefixeTable . 'ip_location_log
+   SET bot_score = bot_score + ' . (int)$conf['ip_location_score_hosting'] . '
+ WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+   AND hosting = 1');
+    }
 
     // Faux robots (v2.6.2) : UA d'un moteur vérifiable, mais IP démasquée par la
     // vérification DNS (ip_location_robot_check.verified = 0) — usurpation délibérée,

@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_log (
   log_type     VARCHAR(16)  DEFAULT NULL,
   visit_date   DATETIME     NOT NULL,
   bot_score    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-  block_reason VARCHAR(16)  DEFAULT NULL
+  block_reason VARCHAR(16)  DEFAULT NULL,
+  hosting      TINYINT(1)   DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
         pwg_query('
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_cache (
   country      VARCHAR(64),
   country_code CHAR(2),
   city         VARCHAR(64),
+  hosting      TINYINT(1)   DEFAULT NULL,
   resolved_at  DATETIME     NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;');
 
@@ -162,6 +164,13 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
 
         // Migration v2.7a → v2.7a.5 : compteurs des accès de robots vérifiés non journalisés
         pwg_query(ip_location_maintain::robot_count_table_sql($prefixeTable));
+
+        // Migration v2.8c.1 → v2.8c.2 : IP d'hébergeur (champ hosting d'ip-api.com), dans le
+        // cache de géolocalisation et dans le journal. Même code que le contrôle fait au
+        // chargement du plugin (main.inc.php), pour une copie de fichiers sans mise à jour.
+        if (function_exists('ip_location_ensure_hosting_columns')) {
+            ip_location_ensure_hosting_columns();
+        }
     }
 
     /**

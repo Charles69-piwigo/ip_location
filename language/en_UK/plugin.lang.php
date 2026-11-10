@@ -605,3 +605,15 @@ $lang['Le mot saisi est ajouté (actif) à l\'enregistrement. « Refus 7 j » : 
 $lang['Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'] = 'Automatically update the keyword list from the online list (once a day)';
 $lang['La liste en ligne ne fait qu\'ajouter des mots, toujours INACTIFS : activez vous-même ceux qui vous conviennent. Vos réglages et les mots que vous avez retirés ne sont jamais modifiés.'] = 'The online list only adds words, always INACTIVE: activate yourself the ones you want. Your settings and the words you removed are never changed.';
 $lang['Liste des mots-clés'] = 'Keyword list';
+// v2.8c.2 : IP d'hébergeur
+$lang['hébergeur / proxy'] = 'hosting / proxy';
+$lang['Hébergeurs'] = 'Hosting';
+$lang['Refusé · hébergeur / proxy'] = 'Refused · hosting / proxy';
+$lang['Blocage des IP d\'hébergeur et de proxy'] = 'Hosting and proxy IP blocking';
+$lang['Refuse les pages aux adresses de serveurs et de centres de données (DigitalOcean, Amazon…), de proxys et de VPN, d\'où viennent beaucoup de robots qui changent d\'adresse à chaque passage'] = 'Refuses pages to server and data-centre addresses (DigitalOcean, Amazon…), proxies and VPNs, where many robots that change address on every visit come from';
+$lang['Refuser les IP d\'hébergeur et de proxy'] = 'Refuse hosting and proxy IPs';
+$lang['Désactivé : ces adresses ne sont pas refusées d\'office, mais leur score de suspicion augmente quand même.'] = 'Off: these addresses are not refused outright, but their suspicion score still goes up.';
+$lang['IP d\'hébergeur ou de proxy vues sur 7 jours'] = 'hosting or proxy IPs seen in 7 days';
+$lang['L\'information vient du service de géolocalisation ip-api.com : quand un autre service a répondu, l\'adresse reste « inconnue » et n\'est jamais refusée. Les robots autorisés (bloc « Robots d\'indexation ») passent ce blocage.'] = 'The information comes from the ip-api.com geolocation service: when another service answered, the address stays "unknown" and is never refused. Allowed robots ("Search engine robots" block) get through this block.';
+$lang['Activé ou non, une IP d\'hébergeur ou de proxy prend des points de score :'] = 'On or off, a hosting or proxy IP gets score points:';
+$lang['Certains vrais visiteurs passent par un serveur ou un proxy : VPN (dont celui intégré à Opera), réseau d\'entreprise, relais privé iCloud. Ils seront refusés eux aussi. Regardez d\'abord le Journal avant d\'activer.'] = 'Some real visitors go through a server or a proxy: VPN (including the one built into Opera), company network, iCloud Private Relay. They will be refused too. Check the Log before turning this on.';

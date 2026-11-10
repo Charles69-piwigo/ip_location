@@ -37,12 +37,14 @@ flowchart TD
   G -- yes --> X3["403 · reason country"]
   G -- no --> H{"Forbidden keyword in the URL?"}
   H -- yes --> X4["403 · reason keyword"]
-  H -- no --> OK3["Page shown, access written to the Log"]
+  H -- no --> I{"Hosting or proxy IP?"}
+  I -- yes --> X5["403 · reason hosting / proxy"]
+  I -- no --> OK3["Page shown, access written to the Log"]
 
   classDef ok fill:#2f7d4f,stroke:#2f7d4f,color:#ffffff
   classDef stop fill:#b3372f,stroke:#b3372f,color:#ffffff
   class OK0,OK1,OK2,OK3 ok
-  class X1,X2,X3,X4 stop
+  class X1,X2,X3,X4,X5 stop
 ```
 
 Each diamond is a lever of the Configuration page. A lever that is switched off always
@@ -95,7 +97,8 @@ Only the score can block automatically. The threshold is set with the slider of 
 | Single-page burst | The same IP requests the same page 3 times in 10 seconds. | 50 | yes |
 | Multi-page burst | The same IP goes through 20 different pages in 30 seconds. | 50 | yes |
 | Shared User-Agent | The same User-Agent seen 20 times or more, with 90 % different IPs: proxy network. | 30 | no |
-| No JavaScript | At least 2 accesses and no trace of the PhotoSwipe slideshow (if the theme uses it). | 20 | no |
+| No JavaScript | At least 2 accesses and no trace of the PhotoSwipe slideshow (if the theme uses it). Off by default: a visitor who never opens the slideshow has no trace either. | 0 | no |
+| Hosting or proxy IP | The IP belongs to a server or data centre (DigitalOcean, Amazon…), or to a proxy or VPN, according to ip-api.com. | 40 | no |
 | Fake robot | User-Agent of Googlebot, Bingbot… from an IP that does not belong to them (DNS check). | 50 | yes |
 
 The weights can be changed in `local/config/config.inc.php` (see
@@ -115,6 +118,7 @@ needed to reach a cautious threshold.
 | ip | IP or range added by hand to the block list. |
 | auto | IP added by the score calculation, for 14 days. |
 | country | Country on the blocked countries list. |
+| hosting / proxy | IP of a server, data centre, proxy or VPN, with the "Hosting and proxy IP blocking" lever on. Only ip-api.com provides this: an IP geolocated by another service is never refused. |
 | keyword | The URL contains a forbidden word. Beware of words that are too common: `start` blocks album pagination. |
 | download | Original requested from a country that is not allowed, or not geolocated. |
 

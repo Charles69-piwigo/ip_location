@@ -30,9 +30,23 @@ if (empty($url)) {
     exit;
 }
 
-// Vérifier que l'URL est interne à cette installation
-$root = get_root_url();
-if (strpos($url, $root) !== 0) {
+// Vérifier que l'URL est interne à cette installation : URL absolue (le wrapper JS la
+// fait résoudre par le navigateur), même hôte que cette requête, chemin sous le dossier
+// de Piwigo. Avant v2.8c.1, comparaison à get_root_url(), qui vaut ici PHPWG_ROOT_PATH
+// (chemin disque, cf. define ci-dessus) : toute URL était refusée en 'external_url', et
+// le logger PhotoSwipe n'a jamais rien journalisé depuis la v2.1.
+$parts = parse_url($url);
+$host  = isset($_SERVER['HTTP_X_FORWARDED_HOST'])
+    ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_HOST'])[0])
+    : (isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '');
+// Dossier de Piwigo vu du navigateur : 3 niveaux au-dessus de /plugins/ip_location/ajax_log.php
+$base  = rtrim(str_replace('\\', '/', dirname(dirname(dirname($_SERVER['SCRIPT_NAME'])))), '/') . '/';
+$url_host = isset($parts['host']) ? $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') : '';
+if (!is_array($parts)
+    || !isset($parts['scheme']) || !in_array(strtolower($parts['scheme']), ['http', 'https'], true)
+    || $host === '' || strcasecmp($url_host, $host) !== 0
+    || !isset($parts['path']) || strpos($parts['path'], $base) !== 0
+) {
     echo json_encode(['ok' => false, 'reason' => 'external_url']);
     exit;
 }

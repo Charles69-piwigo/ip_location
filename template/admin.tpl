@@ -326,6 +326,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <option value="">{'Tous les motifs'|@translate}</option>
             <option value="country"{if $REASON_FILTER eq 'country'} selected{/if}>{'Refusé · pays'|@translate} ({$REASON_COUNTS.country})</option>
             <option value="keyword"{if $REASON_FILTER eq 'keyword'} selected{/if}>{'Refusé · mot-clé'|@translate} ({$REASON_COUNTS.keyword})</option>
+            <option value="hosting"{if $REASON_FILTER eq 'hosting'} selected{/if}>{'Refusé · hébergeur / proxy'|@translate} ({$REASON_COUNTS.hosting})</option>
             <option value="ip"{if $REASON_FILTER eq 'ip'} selected{/if}>{'Refusé · liste IP'|@translate} ({$REASON_COUNTS.ip})</option>
             <option value="auto"{if $REASON_FILTER eq 'auto'} selected{/if}>{'Refusé · blocage auto'|@translate} ({$REASON_COUNTS.auto})</option>
             <option value="robot"{if $REASON_FILTER eq 'robot'} selected{/if}>{'Refusé · robot'|@translate} ({$REASON_COUNTS.robot})</option>

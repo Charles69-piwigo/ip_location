@@ -37,12 +37,14 @@ flowchart TD
   G -- oui --> X3["403 · motif pays"]
   G -- non --> H{"Mot-clé interdit dans l'URL ?"}
   H -- oui --> X4["403 · motif mot-clé"]
-  H -- non --> OK3["Page affichée, accès inscrit au Journal"]
+  H -- non --> I{"IP d'hébergeur ou de proxy ?"}
+  I -- oui --> X5["403 · motif hébergeur / proxy"]
+  I -- non --> OK3["Page affichée, accès inscrit au Journal"]
 
   classDef ok fill:#2f7d4f,stroke:#2f7d4f,color:#ffffff
   classDef stop fill:#b3372f,stroke:#b3372f,color:#ffffff
   class OK0,OK1,OK2,OK3 ok
-  class X1,X2,X3,X4 stop
+  class X1,X2,X3,X4,X5 stop
 ```
 
 Chaque losange correspond à un levier de la page Configuration. Un levier éteint répond
@@ -95,7 +97,8 @@ Seul le score peut bloquer automatiquement. Le seuil se règle avec le curseur d
 | Rafale sur une page | La même IP demande 3 fois la même page en 10 secondes. | 50 | oui |
 | Rafale multi-pages | La même IP parcourt 20 pages différentes en 30 secondes. | 50 | oui |
 | User-Agent partagé | Un même User-Agent vu 20 fois ou plus, avec 90 % d'IP différentes : réseau de proxies. | 30 | non |
-| Pas de JavaScript | Au moins 2 accès et aucune trace du diaporama PhotoSwipe (si le thème l'utilise). | 20 | non |
+| Pas de JavaScript | Au moins 2 accès et aucune trace du diaporama PhotoSwipe (si le thème l'utilise). Désactivé par défaut : un visiteur qui n'ouvre jamais le diaporama n'a pas non plus de trace. | 0 | non |
+| IP d'hébergeur ou de proxy | L'IP appartient à un serveur ou un centre de données (DigitalOcean, Amazon…), ou à un proxy ou un VPN, selon ip-api.com. | 40 | non |
 | Faux robot | User-Agent de Googlebot, Bingbot… depuis une IP qui ne leur appartient pas (vérification DNS). | 50 | oui |
 
 Les poids sont modifiables dans `local/config/config.inc.php` (voir
@@ -115,6 +118,7 @@ moins deux pour franchir un seuil prudent.
 | ip | IP ou plage ajoutée à la main à la liste de blocage. |
 | auto | IP placée par le calcul du score, pour 14 jours. |
 | pays | Pays de la liste des pays bloqués. |
+| hébergeur / proxy | IP d'un serveur, d'un centre de données, d'un proxy ou d'un VPN, levier « Blocage des IP d'hébergeur et de proxy » activé. Seul ip-api.com fournit l'information : une IP géolocalisée par un autre service n'est jamais refusée. |
 | mot-clé | L'URL contient un mot interdit. Attention aux mots trop courants : `start` bloque la pagination des albums. |
 | téléchargement | Original demandé depuis un pays non autorisé, ou non géolocalisé. |
 

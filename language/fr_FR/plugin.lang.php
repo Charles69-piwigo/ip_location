@@ -605,3 +605,15 @@ $lang['Le mot saisi est ajouté (actif) à l\'enregistrement. « Refus 7 j » : 
 $lang['Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'] = 'Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)';
 $lang['La liste en ligne ne fait qu\'ajouter des mots, toujours INACTIFS : activez vous-même ceux qui vous conviennent. Vos réglages et les mots que vous avez retirés ne sont jamais modifiés.'] = 'La liste en ligne ne fait qu\'ajouter des mots, toujours INACTIFS : activez vous-même ceux qui vous conviennent. Vos réglages et les mots que vous avez retirés ne sont jamais modifiés.';
 $lang['Liste des mots-clés'] = 'Liste des mots-clés';
+// v2.8c.2 : IP d'hébergeur
+$lang['hébergeur / proxy'] = 'hébergeur / proxy';
+$lang['Hébergeurs'] = 'Hébergeurs';
+$lang['Refusé · hébergeur / proxy'] = 'Refusé · hébergeur / proxy';
+$lang['Blocage des IP d\'hébergeur et de proxy'] = 'Blocage des IP d\'hébergeur et de proxy';
+$lang['Refuse les pages aux adresses de serveurs et de centres de données (DigitalOcean, Amazon…), de proxys et de VPN, d\'où viennent beaucoup de robots qui changent d\'adresse à chaque passage'] = 'Refuse les pages aux adresses de serveurs et de centres de données (DigitalOcean, Amazon…), de proxys et de VPN, d\'où viennent beaucoup de robots qui changent d\'adresse à chaque passage';
+$lang['Refuser les IP d\'hébergeur et de proxy'] = 'Refuser les IP d\'hébergeur et de proxy';
+$lang['Désactivé : ces adresses ne sont pas refusées d\'office, mais leur score de suspicion augmente quand même.'] = 'Désactivé : ces adresses ne sont pas refusées d\'office, mais leur score de suspicion augmente quand même.';
+$lang['IP d\'hébergeur ou de proxy vues sur 7 jours'] = 'IP d\'hébergeur ou de proxy vues sur 7 jours';
+$lang['L\'information vient du service de géolocalisation ip-api.com : quand un autre service a répondu, l\'adresse reste « inconnue » et n\'est jamais refusée. Les robots autorisés (bloc « Robots d\'indexation ») passent ce blocage.'] = 'L\'information vient du service de géolocalisation ip-api.com : quand un autre service a répondu, l\'adresse reste « inconnue » et n\'est jamais refusée. Les robots autorisés (bloc « Robots d\'indexation ») passent ce blocage.';
+$lang['Activé ou non, une IP d\'hébergeur ou de proxy prend des points de score :'] = 'Activé ou non, une IP d\'hébergeur ou de proxy prend des points de score :';
+$lang['Certains vrais visiteurs passent par un serveur ou un proxy : VPN (dont celui intégré à Opera), réseau d\'entreprise, relais privé iCloud. Ils seront refusés eux aussi. Regardez d\'abord le Journal avant d\'activer.'] = 'Certains vrais visiteurs passent par un serveur ou un proxy : VPN (dont celui intégré à Opera), réseau d\'entreprise, relais privé iCloud. Ils seront refusés eux aussi. Regardez d\'abord le Journal avant d\'activer.';
