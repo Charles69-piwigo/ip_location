@@ -247,6 +247,7 @@
   .iplj-badge.robot{ background:var(--c-on-wash); color:var(--c-on); }
   .iplj-badge.refused{ background:var(--c-danger-wash); color:var(--c-danger); }
   .iplj-badge.listed{ background:var(--c-accent-wash); color:var(--c-accent); }
+  .iplj-badge.host{ background:var(--c-surface-3); color:var(--c-warn); }
   .iplj-badge.exempt{ background:#eee; color:#555; cursor:help; }
   details.iplj-menu{ position:relative; display:inline-block; }
   details.iplj-menu > summary{ list-style:none; display:inline-block; }
@@ -345,6 +346,14 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <option value="thr"{if $SCORE_FILTER eq 'thr'} selected{/if}>{'Score ≥ seuil du blocage auto'|@translate} {$SCORE_THRESHOLD_NOW} ({$SCORE_COUNTS.thr})</option>
           </select>
         </label>
+        <label class="field">{'Réseau'|@translate}
+          <select name="net" onchange="this.form.submit()">
+            <option value="">{'Tous les réseaux'|@translate}</option>
+            <option value="host"{if $NET_FILTER eq 'host'} selected{/if}>{'Hébergeur / proxy'|@translate} ({$NET_COUNTS.host})</option>
+            <option value="isp"{if $NET_FILTER eq 'isp'} selected{/if}>{'Fournisseur d\'accès'|@translate} ({$NET_COUNTS.isp})</option>
+            <option value="unknown"{if $NET_FILTER eq 'unknown'} selected{/if}>{'Inconnu'|@translate} ({$NET_COUNTS.unknown})</option>
+          </select>
+        </label>
         <button type="submit" class="iplc-btn ghost sm">{'Filtrer'|@translate}</button>
         {assign var=export_url value="`$BASE_URL``$JOURNAL_QS`"}
         {if $FILTER neq 'all'}{assign var=export_url value="`$export_url`&filter=`$FILTER`"}{/if}
@@ -355,7 +364,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
             <a href="{$export_url|escape}&amp;export=config" title="{'À joindre à un export du Journal pour permettre son analyse (sans IP ni liste blanche en clair)'|@translate}">{'Configuration du plugin'|@translate} · JSON</a>
           </div>
         </details>
-        {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq '' or $SCORE_FILTER neq ''}
+        {if $COUNTRY_FILTER neq '' or $DATE_FROM neq '' or $DATE_TO neq '' or $IP_FILTER neq '' or $REASON_FILTER neq '' or $SCORE_FILTER neq '' or $NET_FILTER neq ''}
           <a class="iplj-reset" href="{$BASE_URL|escape}&amp;sub=journal{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}">{'Réinitialiser'|@translate}</a>
         {/if}
       </form>
@@ -364,7 +373,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
         <div class="fold-body"><div class="iplc-chips">
           {foreach from=$STATS item=s}
             {if $s.country_code neq ''}
-            <a class="iplj-country{if $COUNTRY_FILTER eq $s.country_code} active{/if}" href="{$BASE_URL|escape}&amp;sub=journal{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{if $COUNTRY_FILTER neq $s.country_code}&amp;country={$s.country_code|escape}{/if}" title="{$s.bots} {'bots'|@translate}">{$s.country|escape} <span class="meta">{$s.visits}</span></a>
+            <a class="iplj-country{if $COUNTRY_FILTER eq $s.country_code} active{/if}" href="{$BASE_URL|escape}&amp;sub=journal{if $FILTER neq 'all'}&amp;filter={$FILTER}{/if}{if $COUNTRY_FILTER neq $s.country_code}&amp;country={$s.country_code|escape}{/if}" title="{$s.bots} {'bots'|@translate}">{$s.country|escape} ({$s.country_code|escape}) <span class="meta">{$s.visits}</span></a>
             {/if}
           {/foreach}
         </div></div>
@@ -403,7 +412,7 @@ if (window.location.search.indexOf('msg=') !== -1) {
               {elseif $log.robot_blocked}<span class="iplj-badge refused" title="{'Robot marqué « Bloqué » dans le bloc Robots d\'indexation'|@translate}">{'Robot bloqué'|@translate} · {$log.robot_blocked|escape}</span>{elseif $log.listed_since}<span class="iplj-badge listed" title="{'Accès servi normalement : il date d\'avant le blocage de cette IP'|@translate}">{'Bloquée depuis le'|@translate} {$log.listed_since|escape}</span>{/if}
               {if $log.is_exempt && ($log.is_bot || $log.bot_score > 0)}<span class="iplj-badge exempt" title="{'Retirée manuellement du blocage : le score affiché peut rester au-dessus du seuil sans que l\'IP soit rebloquée, tant qu\'aucune nouvelle activité suspecte n\'apparaît après le retrait.'|@translate}">{'Exempté'|@translate}</span>{/if}
             </td>
-            <td class="ip">{$log.ip|escape}</td>
+            <td class="ip">{$log.ip|escape}{if $log.hosting == 1 && $log.block_reason != 'hosting'}<br><span class="iplj-badge host" title="{'IP d\'un hébergeur, d\'un proxy ou d\'un VPN selon ip-api.com'|@translate}">{'hébergeur / proxy'|@translate}</span>{/if}</td>
             <td>{$log.country|escape}</td>
             <td class="muted">{$log.city|escape}</td>
             <td class="num mono{if $log.score_frozen} frozen{/if}"{if $log.score_frozen} title="{'Score figé : accès de plus de %d jours, ni recalculé ni pris en compte par le blocage automatique.'|@translate|@sprintf:$CLASSIFY_WINDOW_DAYS|escape}"{/if}>{$log.bot_score}</td>

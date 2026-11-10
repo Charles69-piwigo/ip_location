@@ -617,3 +617,10 @@ $lang['IP d\'hébergeur ou de proxy vues sur 7 jours'] = 'hosting or proxy IPs s
 $lang['L\'information vient du service de géolocalisation ip-api.com : quand un autre service a répondu, l\'adresse reste « inconnue » et n\'est jamais refusée. Les robots autorisés (bloc « Robots d\'indexation ») passent ce blocage.'] = 'The information comes from the ip-api.com geolocation service: when another service answered, the address stays "unknown" and is never refused. Allowed robots ("Search engine robots" block) get through this block.';
 $lang['Activé ou non, une IP d\'hébergeur ou de proxy prend des points de score :'] = 'On or off, a hosting or proxy IP gets score points:';
 $lang['Certains vrais visiteurs passent par un serveur ou un proxy : VPN (dont celui intégré à Opera), réseau d\'entreprise, relais privé iCloud. Ils seront refusés eux aussi. Regardez d\'abord le Journal avant d\'activer.'] = 'Some real visitors go through a server or a proxy: VPN (including the one built into Opera), company network, iCloud Private Relay. They will be refused too. Check the Log before turning this on.';
+// v2.8c.4 : filtre Réseau du Journal
+$lang['IP d\'un hébergeur, d\'un proxy ou d\'un VPN selon ip-api.com'] = 'IP of a hosting provider, proxy or VPN according to ip-api.com';
+$lang['Réseau'] = 'Network';
+$lang['Tous les réseaux'] = 'All networks';
+$lang['Hébergeur / proxy'] = 'Hosting / proxy';
+$lang['Fournisseur d\'accès'] = 'Internet provider';
+$lang['Inconnu'] = 'Unknown';

@@ -118,7 +118,7 @@ needed to reach a cautious threshold.
 | ip | IP or range added by hand to the block list. |
 | auto | IP added by the score calculation, for 14 days. |
 | country | Country on the blocked countries list. |
-| hosting / proxy | IP of a server, data centre, proxy or VPN, with the "Hosting and proxy IP blocking" lever on. Only ip-api.com provides this: an IP geolocated by another service is never refused. |
+| hosting / proxy | IP of a server, data centre, proxy or VPN, with the "Hosting and proxy IP blocking" lever on. Only ip-api.com provides this: an IP geolocated by another service is never refused. Non-refused accesses from such an IP carry the "hosting / proxy" tag under the IP; the Log's "Network" filter groups them. |
 | keyword | The URL contains a forbidden word. Beware of words that are too common: `start` blocks album pagination. |
 | download | Original requested from a country that is not allowed, or not geolocated. |
 

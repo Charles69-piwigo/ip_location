@@ -564,6 +564,20 @@ if ($country_filter !== '') $base_parts[] = "country_code = '" . pwg_db_real_esc
 if ($date_from !== '') $base_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
 if ($date_to   !== '') $base_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
 if ($ip_filter !== '')  $base_parts[] = "ip LIKE '" . pwg_db_real_escape_string($ip_filter) . "%'";
+// Filtre "Réseau" (v2.8c.4) : colonne hosting = IP d'hébergeur ou de proxy selon ip-api.com
+// (1), fournisseur d'accès (0), inconnu (NULL : autre service de géolocalisation, ou accès
+// antérieur à la v2.9). Effectifs avec les seuls filtres pays / dates / IP.
+$net_keys   = ['host', 'isp', 'unknown'];
+$net_filter = isset($_GET['net']) && in_array($_GET['net'], $net_keys, true) ? $_GET['net'] : '';
+$net_sql    = ['host' => 'hosting = 1', 'isp' => 'hosting = 0', 'unknown' => 'hosting IS NULL'];
+$net_counts = array_fill_keys($net_keys, 0);
+if ($show_journal) {
+    $r = pwg_query('SELECT SUM(hosting = 1), SUM(hosting = 0), SUM(hosting IS NULL) FROM ' . $prefixeTable . 'ip_location_log'
+        . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
+    $nr = pwg_db_fetch_row($r);
+    $net_counts = ['host' => (int)$nr[0], 'isp' => (int)$nr[1], 'unknown' => (int)$nr[2]];
+}
+if ($net_filter !== '') $base_parts[] = $net_sql[$net_filter];
 // "Bloqués" = refus réels OU IP/robot actuellement bloqué (le Journal reflète l'état
 // actuel depuis v2.6.8 ; seuls les leviers allumés comptent, cf. ip_location_currently_blocked_sql()).
 $currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable);
@@ -747,7 +761,7 @@ $total_pages  = max(1, ceil($total_visits / $per_page));
 // IP. Jamais refusés et de score 0 : exclus dès qu'un filtre de motif ou de score > 0 est
 // actif. Le tableau et sa pagination restent sur les seules lignes journalisées.
 $journal_counted = 0;
-if ($show_journal && $reason_filter === '' && in_array($score_filter, ['', 'zero'], true)) {
+if ($show_journal && $reason_filter === '' && $net_filter === '' && in_array($score_filter, ['', 'zero'], true)) {
     $r = pwg_query('SELECT SUM(counted) FROM ' . $prefixeTable . 'ip_location_robot_count WHERE '
         . ip_location_robot_counted_where($country_filter !== '' ? [$country_filter] : [], $ip_filter, [], $date_from, $date_to));
     list($journal_counted) = pwg_db_fetch_row($r);
@@ -757,7 +771,7 @@ if ($show_journal && $reason_filter === '' && in_array($score_filter, ['', 'zero
 $logs = [];
 if ($show_journal) {
     $result = pwg_query('
-SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked, bot_score, block_reason
+SELECT id, visit_date, ip, country, city, url, user_agent, is_bot, is_blocked, bot_score, block_reason, hosting
   FROM ' . $prefixeTable . 'ip_location_log
   ' . $filter_where . '
   ORDER BY visit_date DESC
@@ -779,6 +793,7 @@ if ($date_to !== '')        $journal_qs .= '&date_to=' . urlencode($date_to);
 if ($ip_filter !== '')      $journal_qs .= '&ip_filter=' . urlencode($ip_filter);
 if ($reason_filter !== '')  $journal_qs .= '&reason=' . urlencode($reason_filter);
 if ($score_filter !== '')   $journal_qs .= '&score=' . urlencode($score_filter);
+if ($net_filter !== '')     $journal_qs .= '&net=' . urlencode($net_filter);
 $return_qs = ltrim($journal_qs, '&') . ($filter !== 'all' ? '&filter=' . $filter : '') . '&pnum=' . $current_page;
 $pager = [];
 if ($total_pages > 1) {
@@ -1384,6 +1399,8 @@ $template->assign([
     'REASON_FILTER' => $reason_filter,
     'REASON_COUNTS' => $reason_counts,
     'SCORE_FILTER'  => $score_filter,
+    'NET_FILTER'    => $net_filter,
+    'NET_COUNTS'    => $net_counts,
     'SCORE_COUNTS'  => $score_counts,
     'SCORE_THRESHOLD_NOW' => $score_threshold_now,
     'JOURNAL_QS'    => $journal_qs,

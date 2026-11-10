@@ -118,7 +118,7 @@ moins deux pour franchir un seuil prudent.
 | ip | IP ou plage ajoutée à la main à la liste de blocage. |
 | auto | IP placée par le calcul du score, pour 14 jours. |
 | pays | Pays de la liste des pays bloqués. |
-| hébergeur / proxy | IP d'un serveur, d'un centre de données, d'un proxy ou d'un VPN, levier « Blocage des IP d'hébergeur et de proxy » activé. Seul ip-api.com fournit l'information : une IP géolocalisée par un autre service n'est jamais refusée. |
+| hébergeur / proxy | IP d'un serveur, d'un centre de données, d'un proxy ou d'un VPN, levier « Blocage des IP d'hébergeur et de proxy » activé. Seul ip-api.com fournit l'information : une IP géolocalisée par un autre service n'est jamais refusée. Les accès non refusés d'une telle IP portent le repère « hébergeur / proxy » sous l'IP ; le filtre « Réseau » du Journal les regroupe. |
 | mot-clé | L'URL contient un mot interdit. Attention aux mots trop courants : `start` bloque la pagination des albums. |
 | téléchargement | Original demandé depuis un pays non autorisé, ou non géolocalisé. |
 

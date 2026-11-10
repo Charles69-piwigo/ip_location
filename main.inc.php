@@ -11,8 +11,15 @@ Has Settings: webmaster
 // Versions
 /*
     version 2.9 - 10/11/2026
-        regroupement de v2.8c.1 à v2.8c.3
+        regroupement de v2.8c.1 à v2.8c.4
         pour publication sur PEM
+
+    version 2.8c.4 - 10/11/2026
+        Journal : repère « hébergeur / proxy » sous l'IP des accès marqués et non refusés, et
+        nouveau filtre « Réseau » (hébergeur / proxy, fournisseur d'accès, inconnu), pour
+        voir quelles IP le levier « Blocage des IP d'hébergeur et de proxy » refuserait
+        avant de l'activer. Jusqu'ici seuls les accès refusés portaient l'information.
+        Journal, « Répartition par pays » : code pays affiché après le nom (ex. France (FR)).
 
     version 2.8c.3 - 10/11/2026
         Le signal et le levier « IP d'hébergeur » prennent aussi le champ proxy d'ip-api.com
