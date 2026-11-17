@@ -171,6 +171,11 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_blocklist (
         if (function_exists('ip_location_ensure_hosting_columns')) {
             ip_location_ensure_hosting_columns();
         }
+
+        // .htaccess retiré à la désactivation (v2.9.4) : à réécrire depuis la liste des IP.
+        // main.inc.php n'étant pas chargé ici quand le plugin était inactif, on pose un
+        // indicateur que la première requête suivante traite (ip_location_htaccess_pending()).
+        conf_update_param('ip_location_htaccess_pending', '1', true);
     }
 
     /**
@@ -211,7 +216,29 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
 
     function deactivate()
     {
-        // Les tables sont conservées lors d'une simple désactivation
+        // Les tables sont conservées lors d'une simple désactivation. Le bloc du .htaccess,
+        // lui, est retiré (v2.9.4) : laissé en place, Apache continuait de refuser les IP
+        // listées alors que le plugin, désactivé, n'offrait plus aucun moyen de les
+        // débloquer. Il est réécrit à la réactivation (cf. activate()).
+        self::strip_htaccess();
+    }
+
+    /**
+     * Retire la section « # BEGIN ip_location … # END ip_location » du .htaccess racine de
+     * Piwigo (v2.9.4). Autonome : main.inc.php n'est pas chargé quand Piwigo désactive ou
+     * désinstalle un plugin inactif. Même expression que ip_location_write_htaccess().
+     */
+    static function strip_htaccess()
+    {
+        $path = PHPWG_ROOT_PATH . '.htaccess';
+        if (!file_exists($path) || !is_writable($path)) {
+            return;
+        }
+        $content = file_get_contents($path);
+        $stripped = preg_replace('/\n?# BEGIN ip_location\b.*?# END ip_location[^\n]*/s', '', $content);
+        if ($stripped !== null && $stripped !== $content) {
+            file_put_contents($path, rtrim($stripped) . "\n");
+        }
     }
 
     function uninstall()
@@ -223,7 +250,9 @@ CREATE TABLE IF NOT EXISTS ' . $prefixeTable . 'ip_location_robot_check (
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_blocklist');
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_robot_check');
         pwg_query('DROP TABLE IF EXISTS ' . $prefixeTable . 'ip_location_robot_count');
-        pwg_query("DELETE FROM " . CONFIG_TABLE . " WHERE param IN ('ip_location', 'ip_location_last_classify')");
+        pwg_query("DELETE FROM " . CONFIG_TABLE . " WHERE param IN ('ip_location', 'ip_location_last_classify', 'ip_location_htaccess_pending')");
+        // Aucune trace dans le .htaccess après désinstallation (v2.9.4)
+        self::strip_htaccess();
     }
 
     /**

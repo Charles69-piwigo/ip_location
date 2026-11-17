@@ -224,7 +224,7 @@
   <p class="ipl-stats-footnote">{'Axe gauche et axe droit indépendants : utile pour comparer une courbe de fort volume (ex. « Tout ») à une courbe de faible amplitude (ex. une IP isolée) sur le même graphique. Granularité automatique : par jour jusqu\'à 31 jours de période, par semaine jusqu\'à 1 an, par mois au-delà (y compris pour une période personnalisée ou « Tous les logs »).'|@translate}</p>
 </div>
 
-<form method="post" action="" id="iplPresetForm" style="display:none;">
+<form method="post" action="" id="iplPresetForm" style="display:none;"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
   <input type="hidden" name="action" id="iplPresetFormAction" value="save_stats_preset">
   <input type="hidden" name="slot" id="iplPresetFormSlot" value="">
   <input type="hidden" name="name" id="iplPresetFormName" value="">
@@ -241,6 +241,7 @@ var IPL_STATS_AJAX_URL      = {$AJAX_STATS_URL_JSON};
 var IPL_LAST_STATS_DATE_FROM = {$LAST_STATS_DATE_FROM_JSON};
 var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
 var IPL_CHART_LOG_SCALE      = {$CHART_LOG_SCALE_JSON};
+var IPL_PWG_TOKEN            = {$PWG_TOKEN_JSON};
 </script>
 <script src="{$CHART_JS_URL|escape}"></script>
 <script>
@@ -780,6 +781,7 @@ var IPL_CHART_LOG_SCALE      = {$CHART_LOG_SCALE_JSON};
     payload.series = configs;
     payload.bg_color = currentBgColor();
     payload.log_scale = logScale;
+    payload.pwg_token = IPL_PWG_TOKEN;
 
     fetch(IPL_STATS_AJAX_URL, {
       method: 'POST',

@@ -26,6 +26,14 @@ if (!is_array($input)) {
     exit;
 }
 
+// Protection CSRF (v2.9.4) : l'appel enregistre aussi des réglages (période, fond,
+// échelle) ; jeton exigé, comme pour les formulaires d'admin.php.
+if (!isset($input['pwg_token']) || !is_string($input['pwg_token']) || !hash_equals(get_pwg_token(), $input['pwg_token'])) {
+    http_response_code(403);
+    echo json_encode(['error' => 'invalid_token']);
+    exit;
+}
+
 // ── Période ──────────────────────────────────────────────────────────────
 
 $period           = in_array($input['period'] ?? '', ['week', 'fortnight', 'month', 'quarter', 'all', 'custom'], true) ? $input['period'] : 'month';

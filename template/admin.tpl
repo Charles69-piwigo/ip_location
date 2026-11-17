@@ -424,13 +424,13 @@ if (window.location.search.indexOf('msg=') !== -1) {
                 <div class="pop">
                   <a href="{$BASE_URL|escape}&amp;sub=journal&amp;ip_filter={$log.ip|escape:'url'}">{'Filtrer sur cette IP'|@translate}</a>
                   {if $log.in_blocklist}
-                    <form method="post" action=""><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$log.ip|escape}"><input type="hidden" name="return_qs" value="{$RETURN_QS|escape}"><button type="submit">{'Débloquer'|@translate} {$log.ip|escape}</button></form>
+                    <form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$log.ip|escape}"><input type="hidden" name="return_qs" value="{$RETURN_QS|escape}"><button type="submit">{'Débloquer'|@translate} {$log.ip|escape}</button></form>
                   {elseif $log.in_range}
                     <span class="note">{'Plage /16 bloquée manuellement : à retirer depuis la liste des IP.'|@translate}</span>
                   {else}
-                    <form method="post" action=""><input type="hidden" name="action" value="block_ip"><input type="hidden" name="ip" value="{$log.ip|escape}"><input type="hidden" name="country" value="{$log.country|escape}"><input type="hidden" name="city" value="{$log.city|escape}"><input type="hidden" name="return_qs" value="{$RETURN_QS|escape}"><button type="submit">{'Bloquer l\'IP'|@translate} {$log.ip|escape}</button></form>
+                    <form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="block_ip"><input type="hidden" name="ip" value="{$log.ip|escape}"><input type="hidden" name="country" value="{$log.country|escape}"><input type="hidden" name="city" value="{$log.city|escape}"><input type="hidden" name="return_qs" value="{$RETURN_QS|escape}"><button type="submit">{'Bloquer l\'IP'|@translate} {$log.ip|escape}</button></form>
                     {if $log.range16}
-                    <form method="post" action=""><input type="hidden" name="action" value="block_ip"><input type="hidden" name="ip" value="{$log.range16|escape}"><input type="hidden" name="country" value="{$log.country|escape}"><input type="hidden" name="city" value=""><input type="hidden" name="return_qs" value="{$RETURN_QS|escape}"><button type="submit">{'Bloquer la plage'|@translate} {$log.range16|escape}</button></form>
+                    <form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="block_ip"><input type="hidden" name="ip" value="{$log.range16|escape}"><input type="hidden" name="country" value="{$log.country|escape}"><input type="hidden" name="city" value=""><input type="hidden" name="return_qs" value="{$RETURN_QS|escape}"><button type="submit">{'Bloquer la plage'|@translate} {$log.range16|escape}</button></form>
                     {/if}
                   {/if}
                 </div>

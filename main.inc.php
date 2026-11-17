@@ -11,8 +11,20 @@ Has Settings: webmaster
 // Versions
 /*
     version 3.0 - 17/11/2026
-        regroupement de v2.9.1 à v2.9.3
+        regroupement de v2.9.1 à v2.9.4
         pour publication sur PEM
+
+    version 2.9.4 - 17/11/2026
+        Mise en conformité avec les règles de piwigo-skills (dépôt Piwigo) :
+        Sécurité : protection CSRF. Chaque formulaire de l'admin porte pwg_token, vérifié
+        par check_pwg_token() avant toute action ; l'appel des Statistiques
+        (ajax_stats.php) exige aussi le jeton. Une page piégée visitée par un
+        administrateur connecté ne peut plus changer les réglages à sa place.
+        Désactivation et désinstallation : le bloc « # BEGIN ip_location » du .htaccess
+        est retiré. Laissé en place, Apache continuait de refuser les IP listées sans plus
+        aucun moyen de les débloquer. Il est réécrit à la première requête qui suit la
+        réactivation.
+        Fichier index.php dans chaque dossier du plugin (pas de liste de leur contenu).
 
     version 2.9.3 - 17/11/2026
         Sécurité : l'IP du visiteur ne vient plus de la 1re entrée de X-Forwarded-For,
@@ -1124,6 +1136,23 @@ add_event_handler('init', 'ip_location_download_guard');
 // (pages, action.php, ws.php...), pas seulement index/picture, et fonctionne même si le
 // .htaccess est inopérant (nginx, AllowOverride désactivé...).
 add_event_handler('init', 'ip_location_blocklist_guard');
+
+// .htaccess à réécrire après une réactivation (v2.9.4) : maintain.class.php le retire à la
+// désactivation et pose cet indicateur à l'activation, faute de pouvoir appeler
+// ip_location_write_htaccess() (main.inc.php n'y est pas chargé). Test en mémoire seulement.
+if (!empty($conf['ip_location_htaccess_pending'])) {
+    add_event_handler('init', 'ip_location_htaccess_pending');
+}
+
+/**
+ * Réécrit le bloc .htaccess depuis la liste des IP, puis efface l'indicateur posé par
+ * ip_location_maintain::activate() (v2.9.4).
+ */
+function ip_location_htaccess_pending()
+{
+    conf_delete_param('ip_location_htaccess_pending');
+    ip_location_write_htaccess();
+}
 
 // Logger les photos vues via PhotoSwipe (navigation JS sans rechargement)
 // Hook loc_begin_page_tail (pas loc_after_page_header) : à ce stade,

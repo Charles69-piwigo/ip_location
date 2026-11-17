@@ -80,6 +80,11 @@ unset($ipl_idx, $ipl_r, $ipl_row);
 // ── Actions POST ──────────────────────────────────────────────────────────────
 
 if (isset($_POST['action'])) {
+    // Protection CSRF (v2.9.4) : chaque formulaire porte pwg_token ; sans lui, une page
+    // piégée visitée par un administrateur connecté pouvait envoyer ces actions à sa place
+    // (désactiver un levier, ajouter une IP en liste blanche, purger le journal…).
+    check_pwg_token();
+
     if ($_POST['action'] === 'purge_cache') {
         pwg_query('DELETE FROM ' . $prefixeTable . 'ip_location_cache');
         redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=cache_purged#ipl-card-retention');
@@ -1399,6 +1404,8 @@ $template->assign([
     'LAST_STATS_DATE_TO_JSON'    => $last_stats_date_to_json,
     'CHART_BG_COLOR'             => $chart_bg_color,
     'CHART_LOG_SCALE_JSON'       => $chart_log_scale ? 'true' : 'false',
+    'PWG_TOKEN'                  => get_pwg_token(),
+    'PWG_TOKEN_JSON'             => json_encode(get_pwg_token()),
     'TAB'           => $tab,
     'SUB'           => $sub,
     'JOURNAL_COUNTS'=> $journal_counts,

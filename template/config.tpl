@@ -34,7 +34,7 @@
 
     {* Widget Visiteurs *}
     <section class="iplc-card{if !$VISITORS_ENABLED} is-off{/if}" id="ipl-card-visitors">
-      <form method="post" action="" data-card-form id="iplc-f-visitors">
+      <form method="post" action="" data-card-form id="iplc-f-visitors"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_visitors_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Widget « Visiteurs »'|@translate}</h4><span class="sub">{'Compteur public de visites qualifiées, par pays'|@translate}</span></div>
@@ -84,7 +84,7 @@
 
     {* Conservation du journal *}
     <section class="iplc-card" id="ipl-card-retention">
-      <form method="post" action="" data-card-form id="iplc-f-retention">
+      <form method="post" action="" data-card-form id="iplc-f-retention"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_retention">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Conservation du journal'|@translate}</h4><span class="sub">{$TOTAL_ALL} {'accès enregistrés'|@translate}{if $LOG_FIRST} · {$LOG_FIRST} → {$LOG_LAST}{/if}</span></div>
@@ -101,12 +101,12 @@
         <details class="iplc-fold">
           <summary>{'Supprimer les accès anciens ou vider le cache de géolocalisation'|@translate}</summary>
           <div class="fold-body">
-            <form method="post" action="" class="iplc-addrow">
+            <form method="post" action="" class="iplc-addrow"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
               <input type="hidden" name="action" value="purge_before_date">
               <input type="date" name="before_date" required aria-label="{'Supprimer les logs avant le'|@translate}">
               <button type="submit" class="iplc-btn ghost sm">{'Supprimer les accès antérieurs à cette date'|@translate}</button>
             </form>
-            <form method="post" action="" class="iplc-addrow" onsubmit="return confirm('{'Vider tout le cache de géolocalisation ?'|@translate|escape:javascript}');">
+            <form method="post" action="" class="iplc-addrow" onsubmit="return confirm('{'Vider tout le cache de géolocalisation ?'|@translate|escape:javascript}');"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
               <input type="hidden" name="action" value="purge_cache">
               <button type="submit" class="iplc-btn ghost sm">{'Vider le cache de géolocalisation'|@translate}</button>
               <span class="hint">{'Forcer la résolution géographique de toutes les IPs lors de leur prochaine visite.'|@translate}</span>
@@ -119,7 +119,7 @@
 
     {* Liste blanche *}
     <section class="iplc-card wide" id="ipl-card-whitelist">
-      <form method="post" action="" data-card-form id="iplc-f-whitelist">
+      <form method="post" action="" data-card-form id="iplc-f-whitelist"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_whitelist">
         <input type="hidden" name="whitelist_ips" id="iplc-wl-value" value="{$WHITELIST_IPS|escape}">
         <div class="iplc-head">
@@ -144,7 +144,7 @@
 
     {* Robots d'indexation *}
     <section class="iplc-card wide{if !$ROBOTS_ENABLED} is-off{/if}" id="ipl-card-robots">
-      <form method="post" action="" data-card-form id="iplc-f-robots">
+      <form method="post" action="" data-card-form id="iplc-f-robots"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_robots">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Robots d\'indexation'|@translate}</h4><span class="sub">{'Un robot autorisé passe tous les leviers ci-dessous (pays, mot-clé, IP, score). Un robot bloqué reçoit un refus dès qu\'il se présente.'|@translate}</span></div>
@@ -249,7 +249,7 @@
         </div>
       </form>
       {* Liste de robots en ligne (v2.7e.3) : formulaire distinct (pas d'imbrication) *}
-      <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+      <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="robots_remote_auto" value="1" form="iplc-f-robots"{if $ROBOTS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des robots depuis la liste en ligne (1 fois par jour)'|@translate}</label>
         <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_robots_remote" data-off-disable{if !$ROBOTS_ENABLED} disabled{/if}>{'Mettre à jour maintenant'|@translate}</button>
         <span class="hint" style="flex-basis:100%;margin:0;">
@@ -263,7 +263,7 @@
 
     {* Blocage par IP (manuel) *}
     <section class="iplc-card wide{if !$HTACCESS_ENABLED} is-off{/if}" id="ipl-card-manual">
-      <form method="post" action="" data-card-form id="iplc-f-manual">
+      <form method="post" action="" data-card-form id="iplc-f-manual"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_ip_block">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par IP'|@translate}</h4><span class="sub">{'IP et plages /16 bloquées à la main — appliqué par Apache (.htaccess) et par le plugin'|@translate}</span></div>
@@ -283,7 +283,7 @@
         </div>
       </form>
       <div class="iplc-body dimmable">
-        <form method="post" action="" class="iplc-addrow" onsubmit="var f=this.elements['ip'],v=f.value.trim();if(/^\d+\.\d+$/.test(v))f.value=v+'.0.0/16';">
+        <form method="post" action="" class="iplc-addrow" onsubmit="var f=this.elements['ip'],v=f.value.trim();if(/^\d+\.\d+$/.test(v))f.value=v+'.0.0/16';"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
           <input type="hidden" name="action" value="block_ip">
           <input type="text" name="ip" required placeholder="{'IP (ex. 213.209.159.133) ou plage (ex. 116.179.0.0/16)'|@translate}">
           <button type="submit" class="iplc-btn ghost sm">{'Bloquer'|@translate}</button>
@@ -296,7 +296,7 @@
               <td>{$bl.country|escape}</td><td class="muted">{$bl.city|escape}</td>
               <td class="muted">{$bl.blocked_at|escape}</td>
               <td class="num mono">{$bl.refusals}</td>
-              <td class="num"><form method="post" action=""><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$bl.ip|escape}"><button type="submit" class="iplc-btn ghost sm">{'Débloquer'|@translate}</button></form></td>
+              <td class="num"><form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$bl.ip|escape}"><button type="submit" class="iplc-btn ghost sm">{'Débloquer'|@translate}</button></form></td>
             </tr>
           {foreachelse}
             <tr><td colspan="6" class="muted" style="text-align:center;padding:12px;">{'Aucune IP bloquée manuellement.'|@translate}</td></tr>
@@ -310,7 +310,7 @@
 
     {* Blocage par pays *}
     <section class="iplc-card{if !$BLOCKING_ENABLED} is-off{/if}" id="ipl-card-country">
-      <form method="post" action="" data-card-form id="iplc-f-country">
+      <form method="post" action="" data-card-form id="iplc-f-country"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_config">
         <input type="hidden" name="blocked_countries" id="iplc-cc-value" value="{$BLOCKED_COUNTRIES|escape}">
         <div class="iplc-head">
@@ -346,7 +346,7 @@
 
     {* Blocage par mot-clé *}
     <section class="iplc-card{if !$KEYWORD_BLOCK_ENABLED} is-off{/if}" id="ipl-card-keyword">
-      <form method="post" action="" data-card-form id="iplc-f-keyword">
+      <form method="post" action="" data-card-form id="iplc-f-keyword"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_url_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage par mot-clé d\'URL'|@translate}</h4><span class="sub">{'Refuse toute URL qui contient l\'un de ces mots'|@translate}</span></div>
@@ -390,7 +390,7 @@
         </div>
       </form>
       {* Liste de mots-clés en ligne (v2.8) : formulaire distinct (pas d'imbrication) *}
-      <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+      <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="keywords_remote_auto" value="1" form="iplc-f-keyword"{if $KEYWORDS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'|@translate}</label>
         <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_keywords_remote" data-off-disable{if !$KEYWORD_BLOCK_ENABLED} disabled{/if}>{'Mettre à jour maintenant'|@translate}</button>
         <span class="hint" style="flex-basis:100%;margin:0;">
@@ -404,7 +404,7 @@
 
     {* Refus des IP d'hébergeur (v2.8c.2) *}
     <section class="iplc-card wide{if !$HOSTING_BLOCK_ENABLED} is-off{/if}" id="ipl-card-hosting">
-      <form method="post" action="" data-card-form id="iplc-f-hosting">
+      <form method="post" action="" data-card-form id="iplc-f-hosting"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_hosting_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage des IP d\'hébergeur et de proxy'|@translate}</h4><span class="sub">{'Refuse les pages aux adresses de serveurs et de centres de données (DigitalOcean, Amazon…), de proxys et de VPN, d\'où viennent beaucoup de robots qui changent d\'adresse à chaque passage'|@translate}</span></div>
@@ -429,7 +429,7 @@
 
     {* Blocage automatique *}
     <section class="iplc-card wide{if !$BOT_BLOCK_ENABLED} is-off{/if}" id="ipl-card-auto">
-      <form method="post" action="" data-card-form id="iplc-f-auto">
+      <form method="post" action="" data-card-form id="iplc-f-auto"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_bot_block_config">
         <div class="iplc-head">
           <div class="iplc-title"><h4>{'Blocage automatique par score'|@translate}</h4><span class="sub">{'Bloque pendant 14 jours chaque adresse jugée suspecte, une par une — jamais toute une plage d\'adresses, et jamais les appareils de votre réseau local.'|@translate}</span></div>
@@ -465,7 +465,7 @@
                 <tr>
                   <td class="ip">{$bl.ip|escape}</td><td>{$bl.country|escape}</td><td class="muted">{$bl.city|escape}</td>
                   <td class="muted">{$bl.blocked_at|escape}</td><td class="muted">{$bl.expires_at|escape}</td>
-                  <td class="num"><form method="post" action=""><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$bl.ip|escape}"><button type="submit" class="iplc-btn ghost sm">{'Débloquer'|@translate}</button></form></td>
+                  <td class="num"><form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$bl.ip|escape}"><button type="submit" class="iplc-btn ghost sm">{'Débloquer'|@translate}</button></form></td>
                 </tr>
               {foreachelse}
                 <tr><td colspan="6" class="muted" style="text-align:center;padding:12px;">{'Aucune IP bloquée automatiquement.'|@translate}</td></tr>
@@ -481,7 +481,7 @@
     {* Filtre des téléchargements *}
     <section class="iplc-card wide{if !$DOWNLOAD_FILTER_ENABLED} is-off{/if}" id="ipl-card-download">
       {if $GUEST_ENABLED_HIGH}
-      <form method="post" action="" data-card-form id="iplc-f-download">
+      <form method="post" action="" data-card-form id="iplc-f-download"><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}">
         <input type="hidden" name="action" value="save_download_config">
         <input type="hidden" name="download_allowed_countries" id="iplc-dl-value" value="{$DOWNLOAD_ALLOWED_COUNTRIES|escape}">
         <div class="iplc-head">
