@@ -251,7 +251,7 @@
       {* Liste de robots en ligne (v2.7e.3) : formulaire distinct (pas d'imbrication) *}
       <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
         <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="robots_remote_auto" value="1" form="iplc-f-robots"{if $ROBOTS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des robots depuis la liste en ligne (1 fois par jour)'|@translate}</label>
-        <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_robots_remote">{'Mettre à jour maintenant'|@translate}</button>
+        <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_robots_remote" data-off-disable{if !$ROBOTS_ENABLED} disabled{/if}>{'Mettre à jour maintenant'|@translate}</button>
         <span class="hint" style="flex-basis:100%;margin:0;">
           {'La liste en ligne ne fait qu\'ajouter des robots, toujours « Bloqué » : vos réglages et les robots que vous avez retirés ne sont jamais modifiés.'|@translate}
           {if $ROBOTS_REMOTE_LAST} {'Dernière mise à jour :'|@translate} {$ROBOTS_REMOTE_LAST|escape}{if $ROBOTS_REMOTE_REV} ({$ROBOTS_REMOTE_REV|escape}){/if}.{/if}
@@ -392,7 +392,7 @@
       {* Liste de mots-clés en ligne (v2.8) : formulaire distinct (pas d'imbrication) *}
       <form method="post" action="" style="padding:0 18px 12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
         <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" name="keywords_remote_auto" value="1" form="iplc-f-keyword"{if $KEYWORDS_REMOTE_AUTO} checked{/if}> {'Mettre à jour automatiquement la liste des mots-clés depuis la liste en ligne (1 fois par jour)'|@translate}</label>
-        <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_keywords_remote">{'Mettre à jour maintenant'|@translate}</button>
+        <button type="submit" class="iplc-btn ghost sm" name="action" value="sync_keywords_remote" data-off-disable{if !$KEYWORD_BLOCK_ENABLED} disabled{/if}>{'Mettre à jour maintenant'|@translate}</button>
         <span class="hint" style="flex-basis:100%;margin:0;">
           {'La liste en ligne ne fait qu\'ajouter des mots, toujours INACTIFS : activez vous-même ceux qui vous conviennent. Vos réglages et les mots que vous avez retirés ne sont jamais modifiés.'|@translate}
           {if $KEYWORDS_REMOTE_LAST} {'Dernière mise à jour :'|@translate} {$KEYWORDS_REMOTE_LAST|escape}{if $KEYWORDS_REMOTE_REV} ({$KEYWORDS_REMOTE_REV|escape}){/if}.{/if}
@@ -543,6 +543,8 @@
     var pill = card.querySelector('[data-pill]');
     if (sw) sw.addEventListener('change', function(){
       card.classList.toggle('is-off', !sw.checked);
+      // Boutons sans effet bloc coupé (ex. « Mettre à jour maintenant », v2.9.2)
+      card.querySelectorAll('[data-off-disable]').forEach(function(b){ b.disabled = !sw.checked; });
       // Étiquette d'état : suit l'interrupteur tout de suite, avant enregistrement
       if (pill) {
         pill.textContent = sw.checked ? pill.getAttribute('data-on') : pill.getAttribute('data-off');

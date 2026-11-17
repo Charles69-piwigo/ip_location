@@ -14,7 +14,7 @@
   .ipl-stats-custom-range{ display:flex; align-items:center; gap:6px; }
   .ipl-stats-custom-range[hidden]{ display:none; }
   .ipl-stats-granularity{
-    font-size:0.82em; background:#eee; color:#555; border-radius:12px; padding:3px 10px; margin-left:auto;
+    font-size:0.82em; background:#eee; color:#555; border-radius:12px; padding:3px 10px;
   }
 
   .ipl-stats-preset-buttons{ display:flex; gap:8px; flex-wrap:wrap; }
@@ -73,6 +73,10 @@
   }
   .ipl-stats-axis-toggle button + button{ border-left:1px solid #ccc; }
   .ipl-stats-axis-toggle button.active{ background:#555; color:#fff; font-weight:bold; }
+
+  .ipl-stats-series-fields input.ipl-stats-exclude{ width:190px; }
+  .ipl-stats-series-fields input.ipl-stats-exclude.invalid{ border-color:#c00; background:#fff4f4; }
+  .ipl-stats-log-btn.active{ background:#555; color:#fff; border-color:#555; }
 
   .ipl-stats-row-remove{
     margin-left:auto; background:none; border:none; color:#999; cursor:pointer; font-size:15px; padding:3px 5px;
@@ -203,6 +207,7 @@
     </div>
     <div class="ipl-stats-head-actions">
       <div class="ipl-stats-legend" id="iplLegend"></div>
+      <button type="button" id="iplLogScaleBtn" class="buttonLike ipl-stats-log-btn" style="font-size:0.85em;"></button>
       <div class="ipl-stats-export">
         <button type="button" id="iplExportBtn" class="buttonLike" style="font-size:0.85em;">{'Exporter'|@translate} &#9662;</button>
         <div class="ipl-stats-export-dd" id="iplExportDropdown" hidden>
@@ -235,6 +240,7 @@ var IPL_STATS_USER_PRESETS  = {$STATS_PRESETS_JSON};
 var IPL_STATS_AJAX_URL      = {$AJAX_STATS_URL_JSON};
 var IPL_LAST_STATS_DATE_FROM = {$LAST_STATS_DATE_FROM_JSON};
 var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
+var IPL_CHART_LOG_SCALE      = {$CHART_LOG_SCALE_JSON};
 </script>
 <script src="{$CHART_JS_URL|escape}"></script>
 <script>
@@ -284,6 +290,8 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
   var selectedSlot = null;
   var rowSeq = 0;
   var chart = null;
+  var lastPayload = null;
+  var logScale = !!IPL_CHART_LOG_SCALE;
 
   // ── Sous-onglets ─────────────────────────────────────────────────────
   function showSubTab(which){
@@ -428,6 +436,23 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     return wrap;
   }
 
+  // ── IP à exclure : découpage et contrôle (même règle que le serveur) ──
+  var RE_IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+  function isExcludeEntry(e){
+    var p = e.split('/');
+    if (p.length === 2) return RE_IPV4.test(p[0]) && /^\d{1,2}$/.test(p[1]) && +p[1] <= 32;
+    return RE_IPV4.test(e) || (e.indexOf(':') !== -1 && /^[0-9a-fA-F:.]+$/.test(e));
+  }
+  function parseExcludeList(text){
+    var valid = [], invalid = [];
+    String(text || '').split(/[\s,;]+/).forEach(function(e){
+      if (!e) return;
+      if (isExcludeEntry(e)) { if (valid.indexOf(e) === -1) valid.push(e); }
+      else invalid.push(e);
+    });
+    return { valid: valid, invalid: invalid };
+  }
+
   // ── Ligne "série" ────────────────────────────────────────────────────
   function createSeriesRow(cfg, colorHex){
     rowSeq++;
@@ -464,6 +489,20 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     var ipPop = makeCheckPopover('ip', cfg.ips || []);
     fields.appendChild(ipPop);
 
+    // IP à exclure (v2.9.1) : IP exactes ou plages CIDR IPv4 ; le serveur revalide
+    var excludeInput = document.createElement('input');
+    excludeInput.type = 'text'; excludeInput.className = 'ipl-stats-exclude';
+    excludeInput.placeholder = I.label_exclude_ips + ' : ' + I.exclude_ips_placeholder;
+    excludeInput.value = (cfg.exclude_ips || []).join(', ');
+    function checkExclude(){
+      var bad = parseExcludeList(excludeInput.value).invalid;
+      excludeInput.classList.toggle('invalid', bad.length > 0);
+      excludeInput.title = I.exclude_ips_help + (bad.length ? '\n' + I.exclude_ips_invalid + ' ' + bad.join(', ') : '');
+    }
+    excludeInput.addEventListener('input', checkExclude);
+    checkExclude();
+    fields.appendChild(excludeInput);
+
     var axisToggle = document.createElement('div');
     axisToggle.className = 'ipl-stats-axis-toggle';
     var btnLeft = document.createElement('button'); btnLeft.type = 'button'; btnLeft.textContent = I.axis_left;
@@ -494,6 +533,7 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
         countries: countryPop.getValues(),
         keywords: keywordPop.getValues(),
         ips: ipPop.getValues(),
+        exclude_ips: parseExcludeList(excludeInput.value).valid,
         axis: row.dataset.axis,
         color: row.dataset.color
       };
@@ -635,7 +675,7 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     var total = 0;
     chart.data.datasets.forEach(function(ds, i){
       if (chart.getDatasetMeta(i).hidden) return;
-      total += ds.data.reduce(function(a,b){ return a+b; }, 0);
+      total += (ds.rawData || ds.data).reduce(function(a,b){ return a+b; }, 0);
     });
     document.getElementById('iplStatTotal').textContent = total.toLocaleString();
   }
@@ -682,19 +722,30 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     var usesLeft  = payload.series.some(function(s){ return s.axis !== 'y1'; });
     var usesRight = payload.series.some(function(s){ return s.axis === 'y1'; });
 
+    // Échelle log (v2.9.1) : zéro n'y a pas de position, un jour à 0 devient un trou
+    // (null, sans relier les points voisins). rawData garde les vraies valeurs pour le
+    // total et les exports.
     var datasets = payload.series.map(function(s, i){
       var color = s.color || SERIES_PALETTE[i % SERIES_PALETTE.length];
       return {
-        label: s.label, data: s.data, borderColor: color, backgroundColor: color,
+        label: s.label, rawData: s.data,
+        data: logScale ? s.data.map(function(v){ return v > 0 ? v : null; }) : s.data,
+        borderColor: color, backgroundColor: color,
         yAxisID: s.axis, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
         pointHoverBackgroundColor: color, pointHoverBorderColor: '#fff',
-        pointHoverBorderWidth: 2, tension: 0.25, fill: false, spanGaps: true
+        pointHoverBorderWidth: 2, tension: logScale ? 0 : 0.25, fill: false, spanGaps: !logScale
       };
     });
 
     var scales = { x: { grid: { color: 'rgba(0,0,0,0.12)' }, ticks: { maxRotation:0, autoSkip:true } } };
-    if (usesLeft)  scales.y  = { beginAtZero:true, position:'left',  grid: { color:'rgba(0,0,0,0.12)' } };
-    if (usesRight) scales.y1 = { beginAtZero:true, position:'right', grid: { drawOnChartArea: !usesLeft } };
+    function yScale(position, grid){
+      var sc = { position: position, grid: grid };
+      if (logScale) { sc.type = 'logarithmic'; sc.min = 1; }
+      else sc.beginAtZero = true;
+      return sc;
+    }
+    if (usesLeft)  scales.y  = yScale('left',  { color:'rgba(0,0,0,0.12)' });
+    if (usesRight) scales.y1 = yScale('right', { drawOnChartArea: !usesLeft });
 
     var data = { labels: payload.labels, datasets: datasets };
     var options = {
@@ -728,6 +779,7 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     var payload = periodPayload();
     payload.series = configs;
     payload.bg_color = currentBgColor();
+    payload.log_scale = logScale;
 
     fetch(IPL_STATS_AJAX_URL, {
       method: 'POST',
@@ -742,6 +794,7 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
         errEl.textContent = res.error;
         return;
       }
+      lastPayload = res;
       renderChart(res);
     }).catch(function(){
       document.getElementById('iplChartWrap').hidden = true;
@@ -753,6 +806,22 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
   }
 
   document.getElementById('iplGenerateBtn').addEventListener('click', runGenerate);
+
+  // Bouton « Échelle log » : redessine sans recharger ; réglage retenu au prochain appel
+  // (comme le fond), envoyé avec chaque génération
+  var logBtn = document.getElementById('iplLogScaleBtn');
+  function syncLogBtn(){
+    logBtn.textContent = I.log_scale;
+    logBtn.title = I.log_scale_help;
+    logBtn.classList.toggle('active', logScale);
+    logBtn.setAttribute('aria-pressed', logScale ? 'true' : 'false');
+  }
+  logBtn.addEventListener('click', function(){
+    logScale = !logScale;
+    syncLogBtn();
+    if (lastPayload) runGenerate();
+  });
+  syncLogBtn();
   document.getElementById('iplDateFrom') && document.getElementById('iplDateFrom').addEventListener('change', function(){ if (!document.getElementById('iplStatsPanelChart').hidden) runGenerate(); });
   document.getElementById('iplDateTo')   && document.getElementById('iplDateTo').addEventListener('change', function(){ if (!document.getElementById('iplStatsPanelChart').hidden) runGenerate(); });
 
@@ -779,7 +848,7 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     if (!chart) return;
     var rows = [['Date'].concat(chart.data.datasets.map(function(ds){ return ds.label; }))];
     chart.data.labels.forEach(function(label, i){
-      rows.push([label].concat(chart.data.datasets.map(function(ds){ return ds.data[i]; })));
+      rows.push([label].concat(chart.data.datasets.map(function(ds){ return (ds.rawData || ds.data)[i]; })));
     });
     var csv = rows.map(function(r){ return r.map(csvEscape).join(';'); }).join('\r\n');
     triggerDownload(exportFilename('csv'), new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
@@ -790,8 +859,9 @@ var IPL_LAST_STATS_DATE_TO   = {$LAST_STATS_DATE_TO_JSON};
     var payload = {
       generated_at: new Date().toISOString(),
       labels: chart.data.labels,
+      scale: logScale ? 'logarithmic' : 'linear',
       series: chart.data.datasets.map(function(ds){
-        return { label: ds.label, axis: ds.yAxisID === 'y1' ? 'right' : 'left', color: ds.borderColor, data: ds.data };
+        return { label: ds.label, axis: ds.yAxisID === 'y1' ? 'right' : 'left', color: ds.borderColor, data: ds.rawData || ds.data };
       })
     };
     triggerDownload(exportFilename('json'), new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' }));

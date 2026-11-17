@@ -75,6 +75,7 @@ if ($period === 'custom') {
 $bg_color_raw = $input['bg_color'] ?? '';
 $last_period_conf['chart_bg_color'] = ($bg_color_raw === 'transparent' || preg_match('/^#[0-9a-fA-F]{6}$/', $bg_color_raw))
     ? $bg_color_raw : ($plugin_conf['chart_bg_color'] ?? '#ffffff');
+$last_period_conf['chart_log_scale'] = !empty($input['log_scale']) ? '1' : '0';
 conf_update_param('ip_location', serialize(array_merge($plugin_conf, $last_period_conf)));
 
 $days_span   = (int)$date_from->diff($date_to)->days + 1;
@@ -153,10 +154,13 @@ foreach ($series_in as $s) {
         $where[]  = '(' . implode(' OR ', $kw_parts) . ')';
     }
 
+    // IP à exclure (v2.9.1), appliquées au journal comme aux accès comptés ci-dessous
+    $exclude_sql = ip_location_ip_exclusion_sql($s['exclude_ips']);
+
     $result = pwg_query('
 SELECT ' . $bucket_expr . ' AS bucket, COUNT(*) AS cnt
   FROM ' . $prefixeTable . 'ip_location_log
-  WHERE ' . implode(' AND ', $where) . '
+  WHERE ' . implode(' AND ', $where) . $exclude_sql . '
   GROUP BY bucket');
 
     $counts = [];
@@ -171,7 +175,7 @@ SELECT ' . $bucket_expr . ' AS bucket, COUNT(*) AS cnt
         $result = pwg_query('
 SELECT ' . str_replace('visit_date', 'day', $bucket_expr) . ' AS bucket, SUM(counted) AS cnt
   FROM ' . $prefixeTable . 'ip_location_robot_count
-  WHERE ' . ip_location_robot_counted_where($s['countries'], '', $s['ips'], $date_from->format('Y-m-d'), $date_to->format('Y-m-d')) . '
+  WHERE ' . ip_location_robot_counted_where($s['countries'], '', $s['ips'], $date_from->format('Y-m-d'), $date_to->format('Y-m-d')) . $exclude_sql . '
   GROUP BY bucket');
         while ($row = pwg_db_fetch_assoc($result)) {
             $counts[$row['bucket']] = ($counts[$row['bucket']] ?? 0) + (int)$row['cnt'];

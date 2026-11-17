@@ -288,7 +288,7 @@ if (isset($_POST['action'])) {
                 // Jamais en base : une entrée mal formée ne doit pas atteindre le .htaccess (v2.7e)
                 $page['errors'][] = sprintf(l10n('Adresse invalide : %s (IP ou plage CIDR attendue).'), htmlspecialchars(stripslashes($ip)));
             } elseif (ip_location_ip_in_whitelist($ip, ip_location_get_conf()['whitelist'] ?? '')) {
-                $page['errors'][] = sprintf(l10n('IP %s est dans la liste blanche.'), $ip);
+                $page['errors'][] = sprintf(l10n('IP %s est dans la liste blanche.'), htmlspecialchars(stripslashes($ip)));
             } else {
                 // ON DUPLICATE KEY : promeut aussi une éventuelle entrée auto existante en
                 // blocage manuel permanent (origin='manuel', expires_at=NULL) — un clic
@@ -817,8 +817,8 @@ if (isset($_GET['msg'])) {
     if ($_GET['msg'] === 'config_saved') $page['infos'][] = l10n('Configuration enregistrée.');
     if ($_GET['msg'] === 'htaccess_error')   $page['errors'][] = l10n('.htaccess non accessible en écriture.');
     if ($_GET['msg'] === 'htaccess_missing') $page['errors'][] = l10n('Fichier .htaccess inexistant : vous devez le créer manuellement à la racine de Piwigo.');
-    if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s bloquée.'), $_GET['ip'] ?? '');
-    if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s débloquée.'), $_GET['ip'] ?? '');
+    if ($_GET['msg'] === 'ip_blocked')      $page['infos'][] = sprintf(l10n('IP %s bloquée.'), htmlspecialchars(stripslashes($_GET['ip'] ?? '')));
+    if ($_GET['msg'] === 'ip_unblocked')    $page['infos'][] = sprintf(l10n('IP %s débloquée.'), htmlspecialchars(stripslashes($_GET['ip'] ?? '')));
     if ($_GET['msg'] === 'preset_saved')    $page['infos'][] = l10n('Préréglage enregistré.');
     if ($_GET['msg'] === 'preset_deleted')  $page['infos'][] = l10n('Préréglage supprimé.');
     if ($_GET['msg'] === 'preset_invalid')  $page['errors'][] = l10n('Préréglage invalide.');
@@ -1264,6 +1264,7 @@ $last_stats_period      = 'month';
 $last_stats_date_from_json = json_encode('');
 $last_stats_date_to_json   = json_encode('');
 $chart_bg_color         = '#ffffff';
+$chart_log_scale        = false;
 
 if ($tab === 'stats') {
     $result = pwg_query('
@@ -1295,6 +1296,7 @@ SELECT ip, COUNT(*) AS hits
 
     $chart_bg_color = (!empty($plugin_conf['chart_bg_color']) && ($plugin_conf['chart_bg_color'] === 'transparent' || preg_match('/^#[0-9a-fA-F]{6}$/', $plugin_conf['chart_bg_color'])))
                     ? $plugin_conf['chart_bg_color'] : '#ffffff';
+    $chart_log_scale = ($plugin_conf['chart_log_scale'] ?? '0') === '1';
 
     $stats_i18n = [
         'type_all'            => l10n('Tous'),
@@ -1337,6 +1339,12 @@ SELECT ip, COUNT(*) AS hits
         'bg_light_gray'       => l10n('Gris clair'),
         'bg_light_blue'       => l10n('Bleu très pâle'),
         'bg_none'             => l10n('Aucune (transparent)'),
+        'label_exclude_ips'   => l10n('IP à exclure'),
+        'exclude_ips_placeholder' => l10n('ex. 66.249.0.0/16, 74.7.241.33'),
+        'exclude_ips_help'    => l10n('IP exactes ou plages CIDR IPv4, séparées par une virgule ou un espace : leurs accès sont retirés de cette série (journal et passages de robots comptés).'),
+        'exclude_ips_invalid' => l10n('Entrées ignorées (ni IP ni plage CIDR IPv4) :'),
+        'log_scale'           => l10n('Échelle log'),
+        'log_scale_help'      => l10n('Échelle logarithmique : un pic garde sa place sans écraser le reste des courbes. Les jours à zéro n\'apparaissent pas (trou dans la courbe).'),
     ];
     $stats_i18n_json = json_encode($stats_i18n, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
 
@@ -1390,6 +1398,7 @@ $template->assign([
     'LAST_STATS_DATE_FROM_JSON'  => $last_stats_date_from_json,
     'LAST_STATS_DATE_TO_JSON'    => $last_stats_date_to_json,
     'CHART_BG_COLOR'             => $chart_bg_color,
+    'CHART_LOG_SCALE_JSON'       => $chart_log_scale ? 'true' : 'false',
     'TAB'           => $tab,
     'SUB'           => $sub,
     'JOURNAL_COUNTS'=> $journal_counts,

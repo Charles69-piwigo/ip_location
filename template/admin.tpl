@@ -122,6 +122,7 @@
   .iplc-btn{ font-family:inherit; font-size:12.5px; font-weight:600; border-radius:7px; cursor:pointer; padding:6px 13px; border:1px solid transparent; white-space:nowrap; }
   .iplc-btn.primary{ background:var(--c-accent); color:var(--c-accent-ink); }
   .iplc-btn.primary:disabled{ opacity:.45; cursor:default; }
+  .iplc-btn.ghost:disabled{ opacity:.45; cursor:default; pointer-events:none; }
   .iplc-btn.ghost{ background:transparent; border-color:var(--c-border-strong); color:var(--c-text); }
   .iplc-btn.ghost:hover{ background:var(--c-surface-3); }
   .iplc-btn.sm{ padding:3px 9px; font-size:11.8px; }
@@ -457,6 +458,17 @@ if (window.location.search.indexOf('msg=') !== -1) {
       if (td) td.style.zIndex = m.open ? '5' : '';
       if (!m.open) return;
       menus.forEach(function(o){ if (o !== m) o.open = false; });
+      // Menu « Exporter » (v2.9.2) : calé à droite du bouton par défaut ; quand le bouton
+      // passe à la ligne, tout à gauche, le menu débordait sous la barre latérale fixe de
+      // Piwigo (tronqué) : on le cale alors à gauche du bouton.
+      if (!m.closest('.iplj-scroll')) {
+        var p = m.querySelector('.pop'), card = m.closest('section') || document.body;
+        p.style.left = ''; p.style.right = '';
+        if (p.getBoundingClientRect().left < card.getBoundingClientRect().left) {
+          p.style.left = '0'; p.style.right = 'auto';
+        }
+        return;
+      }
       // Menu du tableau : position fixed calée sous le bouton (au-dessus s'il manque de
       // place en bas), pour ne pas être coupé par la zone à défilement horizontal.
       if (!m.closest('.iplj-scroll')) return;

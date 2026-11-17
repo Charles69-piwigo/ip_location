@@ -10,6 +10,43 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 3.0 - 17/11/2026
+        regroupement de v2.9.1 à v2.9.3
+        pour publication sur PEM
+
+    version 2.9.3 - 17/11/2026
+        Sécurité : l'IP du visiteur ne vient plus de la 1re entrée de X-Forwarded-For,
+        en-tête que l'expéditeur écrit lui-même. N'importe qui pouvait y mettre une IP
+        d'un pays autorisé, de la liste blanche ou de Google (vérification DNS réussie
+        sur l'IP forgée) et passer tous les leviers, faire bloquer l'IP d'un tiers ou
+        fausser les statistiques. X-Forwarded-For n'est plus lu que derrière un proxy
+        local (REMOTE_ADDR privée ou de bouclage), en partant de la droite, IP validées.
+        Le .htaccess, qui teste l'adresse de connexion, n'était pas concerné.
+        Sécurité : messages de l'admin « IP … bloquée / débloquée / dans la liste
+        blanche » échappés. Le paramètre ip de l'adresse était inséré tel quel dans la
+        page : un lien piégé ouvert par un administrateur connecté exécutait du code avec
+        ses droits.
+
+    version 2.9.2 - 17/11/2026
+        Statistiques, Réglages : badge « granularité » collé à la période (il partait au
+        bord droit de la page).
+        Journal : le menu « Exporter » n'est plus tronqué quand le bouton passe à la ligne
+        (il s'ouvrait vers la gauche, sous la barre latérale de Piwigo) : il s'ouvre alors
+        vers la droite.
+        Configuration : « Mettre à jour maintenant » (listes en ligne des robots et des
+        mots-clés) grisé quand le bloc correspondant est désactivé, et réactivé avec lui.
+
+    version 2.9.1 - 17/11/2026
+        Statistiques : champ « IP à exclure » sur chaque série (IP exactes ou plages CIDR
+        IPv4), appliqué au journal comme aux passages de robots comptés : retire d'une
+        courbe le pic d'une IP ou d'un robot (ex. 66.249.0.0/16 pour un Googlebot qui
+        explore le site par une seconde adresse, 309 000 passages en 7 jours sur un site
+        réel). Gardé dans les préréglages.
+        Statistiques : bouton « Échelle log » (échelle logarithmique) au-dessus du
+        graphique, pour garder un pic visible sans écraser les autres courbes ; jours à
+        zéro en trou ; réglage retenu comme la couleur de fond ; total et exports CSV/JSON
+        sur les vraies valeurs.
+
     version 2.9 - 10/11/2026
         regroupement de v2.8c.1 à v2.8c.4
         pour publication sur PEM
@@ -916,6 +953,7 @@ function ip_location_get_conf()
         'last_stats_date_from'       => '',
         'last_stats_date_to'         => '',
         'chart_bg_color'             => '#ffffff',
+        'chart_log_scale'            => '0',   // Statistiques : échelle logarithmique (v2.9.1)
         'bot_block_enabled'          => '0',
         'bot_block_enabled_at'       => '',  // activation du blocage auto (v2.6.1), cf. ip_location_get_bot_candidates()
         'bot_block_score_threshold'  => 70,
@@ -1592,18 +1630,46 @@ function ip_location_client_ip()
 }
 
 /**
- * IP du visiteur telle que journalisée par ip_location_log_visit() (1ère entrée de
- * X-Forwarded-For si présente, sinon REMOTE_ADDR) — donc celle qui figure dans la
- * blocklist. Source unique pour log_visit() et ip_location_blocklist_guard(), afin que
- * le contrôle de blocage compare bien la même IP que celle enregistrée.
+ * IP du visiteur telle que journalisée par ip_location_log_visit() — donc celle qui
+ * figure dans la blocklist. Source unique pour log_visit() et
+ * ip_location_blocklist_guard(), afin que le contrôle de blocage compare bien la même
+ * IP que celle enregistrée.
+ *
+ * Sécurité (v2.9.3) : X-Forwarded-For est un en-tête écrit par l'expéditeur de la
+ * requête, qui peut y mettre n'importe quoi. Jusqu'ici sa 1re entrée était crue sur
+ * parole : un robot y écrivait une IP française, de la liste blanche ou de Google pour
+ * passer tous les leviers. Désormais il n'est lu que si la connexion vient d'un proxy
+ * local (REMOTE_ADDR privée ou de bouclage : proxy inverse du NAS, conteneur…), en
+ * partant de la DROITE — la dernière entrée est ajoutée par ce proxy, les premières
+ * peuvent être forgées — et en sautant les autres proxys privés. Toute entrée qui n'est
+ * pas une IP valide arrête la lecture.
  */
 function ip_location_visitor_ip()
 {
-    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-        return trim($parts[0]);
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+    if (empty($_SERVER['HTTP_X_FORWARDED_FOR']) || !ip_location_is_private_ip($remote)) {
+        return $remote;
     }
-    return $_SERVER['REMOTE_ADDR'];
+    $parts = array_reverse(array_map('trim', explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])));
+    foreach ($parts as $ip) {
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            break;
+        }
+        if (!ip_location_is_private_ip($ip)) {
+            return $ip;
+        }
+    }
+    return $remote;
+}
+
+/**
+ * IP privée, de bouclage ou réservée (127.0.0.1, 10.x, 192.168.x, ::1, fc00::/7…) ?
+ * Sert à reconnaître un proxy local de confiance dans ip_location_visitor_ip().
+ */
+function ip_location_is_private_ip($ip)
+{
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false
+        && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
 }
 
 /**
@@ -2567,20 +2633,61 @@ function ip_location_validate_stats_series($raw, array $allowed_keywords)
             }
         }
 
+        // IP à exclure (v2.9.1) : IP exactes (IPv4 / IPv6) ou plages CIDR IPv4, en tableau
+        // ou en texte libre (séparateurs : virgule, espace, retour à la ligne)
+        $exclude_raw = $item['exclude_ips'] ?? [];
+        if (!is_array($exclude_raw)) {
+            $exclude_raw = preg_split('/[\s,;]+/', (string)$exclude_raw);
+        }
+        $exclude_ips = [];
+        foreach ($exclude_raw as $e) {
+            $e = trim((string)$e);
+            if ($e === '' || in_array($e, $exclude_ips, true)) continue;
+            if (filter_var($e, FILTER_VALIDATE_IP) || ip_location_cidr4_bounds($e) !== null) {
+                $exclude_ips[] = $e;
+            }
+            if (count($exclude_ips) >= 50) break;
+        }
+
         $color = (!empty($item['color']) && preg_match('/^#[0-9a-fA-F]{6}$/', $item['color'])) ? $item['color'] : '';
 
         $clean[] = [
-            'label'     => $label,
-            'type'      => $type,
-            'countries' => $countries,
-            'keywords'  => $keywords,
-            'ips'       => $ips,
-            'axis'      => $axis,
-            'color'     => $color,
+            'label'       => $label,
+            'type'        => $type,
+            'countries'   => $countries,
+            'keywords'    => $keywords,
+            'ips'         => $ips,
+            'exclude_ips' => $exclude_ips,
+            'axis'        => $axis,
+            'color'       => $color,
         ];
     }
 
     return $clean;
+}
+
+/**
+ * Fragment SQL « AND NOT (…) » qui écarte une liste d'IP exactes et de plages CIDR IPv4
+ * (entrées déjà validées par ip_location_validate_stats_series()), '' si la liste est vide.
+ * Sert aux séries des Statistiques (v2.9.1) : retirer d'une courbe le pic d'une IP ou d'un
+ * robot (ex. 66.249.0.0/16 pour Googlebot). INET_ATON() rend NULL pour une IPv6 : le
+ * COALESCE évite que ce NULL n'écarte toutes les lignes IPv6.
+ */
+function ip_location_ip_exclusion_sql(array $entries, $col = 'ip')
+{
+    $exact = [];
+    $parts = [];
+    foreach ($entries as $e) {
+        if (($b = ip_location_cidr4_bounds($e)) !== null) {
+            $parts[] = 'COALESCE(INET_ATON(' . $col . ') BETWEEN ' . sprintf('%u', $b[0]) . ' AND ' . sprintf('%u', $b[1]) . ', 0)';
+        } elseif (filter_var($e, FILTER_VALIDATE_IP)) {
+            $exact[] = '\'' . pwg_db_real_escape_string($e) . '\'';
+        }
+    }
+    if ($exact) {
+        array_unshift($parts, $col . ' IN (' . implode(',', $exact) . ')');
+    }
+    return $parts ? ' AND NOT (' . implode(' OR ', $parts) . ')' : '';
 }
 
 /**
