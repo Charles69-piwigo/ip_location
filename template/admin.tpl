@@ -277,6 +277,32 @@ if (window.location.search.indexOf('msg=') !== -1) {
   <a href="{$BASE_URL|escape}&amp;tab=help" {if $TAB eq 'help'}class="active"{/if}>{'Aide'|@translate}</a>
 </div>
 
+{if $CLASSIFY_DUE}
+{* Classification des accès récents lancée une fois la page affichée (v3.0.1) *}
+<div class="iplc" style="text-align:left;"><p id="ipl-classify-note" style="margin:6px 0 10px; font-size:12.5px; color:var(--c-muted);">{'Classement des accès récents en cours…'|@translate}</p></div>
+<script>
+(function () {
+  var note = document.getElementById('ipl-classify-note');
+  var body = new FormData();
+  body.append('pwg_token', {$PWG_TOKEN_JSON});
+  fetch({$CLASSIFY_URL_JSON}, { method: 'POST', body: body, credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function (d) {
+      if (!d.ran) { note.parentNode.removeChild(note); return; }
+      note.innerHTML = '';
+      note.appendChild(document.createTextNode({'Classement des accès récents terminé.'|@translate|json_encode} + ' '));
+      var a = document.createElement('a');
+      a.href = window.location.href;
+      a.textContent = {'Recharger la page pour voir les chiffres à jour'|@translate|json_encode};
+      note.appendChild(a);
+    })
+    .catch(function () {
+      note.textContent = {'Le classement des accès récents n\'a pas pu aboutir ; il sera relancé plus tard.'|@translate|json_encode};
+    });
+})();
+</script>
+{/if}
+
 {if $TAB eq 'config'}
 <div style="text-align:left;"><div class="iplc-subtabs" role="tablist">
   <a href="{$BASE_URL|escape}" class="{if $SUB eq 'settings'}active{/if}" role="tab">{'Réglages'|@translate}</a>

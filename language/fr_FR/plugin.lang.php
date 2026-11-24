@@ -630,3 +630,7 @@ $lang['Tous les réseaux'] = 'Tous les réseaux';
 $lang['Hébergeur / proxy'] = 'Hébergeur / proxy';
 $lang['Fournisseur d\'accès'] = 'Fournisseur d\'accès';
 $lang['Inconnu'] = 'Inconnu';
+$lang['Classement des accès récents en cours…'] = 'Classement des accès récents en cours…';
+$lang['Classement des accès récents terminé.'] = 'Classement des accès récents terminé.';
+$lang['Recharger la page pour voir les chiffres à jour'] = 'Recharger la page pour voir les chiffres à jour';
+$lang['Le classement des accès récents n\'a pas pu aboutir ; il sera relancé plus tard.'] = 'Le classement des accès récents n\'a pas pu aboutir ; il sera relancé plus tard.';

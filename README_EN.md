@@ -83,6 +83,20 @@ flowchart TD
 Only the score can block automatically. The threshold is set with the slider of the
 "Automatic blocking" block (70 by default, 50 minimum recommended).
 
+**No page waits for this calculation** (since v3.0a). On a large log it can take several
+seconds:
+
+- **on the visitors' side** (at most once every 4 h), it runs once the page has been
+  sent;
+- **on the admin side** (at most once every 10 min), the page is shown first with the
+  figures of the previous pass and the note "Classifying recent hits…", then offers to
+  reload it when the calculation is done;
+- **a Log export** waits for the calculation, so that it contains up-to-date scores.
+
+The calculation time depends on the number of accesses in the last 7 days. The log
+maximum ("Log retention" block) caps the size of the table: there is no point in setting it
+very high.
+
 ### Signals and their weight
 
 | Signal | What triggers it | Points | Flagged bot |

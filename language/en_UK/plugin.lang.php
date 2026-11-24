@@ -630,3 +630,7 @@ $lang['Tous les réseaux'] = 'All networks';
 $lang['Hébergeur / proxy'] = 'Hosting / proxy';
 $lang['Fournisseur d\'accès'] = 'Internet provider';
 $lang['Inconnu'] = 'Unknown';
+$lang['Classement des accès récents en cours…'] = 'Classifying recent hits…';
+$lang['Classement des accès récents terminé.'] = 'Recent hits classified.';
+$lang['Recharger la page pour voir les chiffres à jour'] = 'Reload the page to see the updated figures';
+$lang['Le classement des accès récents n\'a pas pu aboutir ; il sera relancé plus tard.'] = 'Classifying recent hits could not be completed; it will be retried later.';

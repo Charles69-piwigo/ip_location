@@ -83,6 +83,19 @@ flowchart TD
 Seul le score peut bloquer automatiquement. Le seuil se règle avec le curseur du bloc
 « Blocage automatique » (70 par défaut, 50 minimum conseillé).
 
+**Aucune page n'attend ce calcul** (depuis la v3.0a). Sur un gros journal, il peut durer
+plusieurs secondes :
+
+- **côté visiteurs** (au plus une fois toutes les 4 h), il tourne une fois la page
+  envoyée ;
+- **côté admin** (au plus une fois toutes les 10 min), la page s'affiche d'abord avec
+  les chiffres du passage précédent et la mention « Classement des accès récents en
+  cours… », puis propose de la recharger quand le calcul est fini ;
+- **un export du Journal** attend le calcul, pour contenir des scores à jour.
+
+Le temps de calcul dépend du nombre d'accès des 7 derniers jours. Le maximum du journal
+(bloc « Conservation du journal ») limite la taille de la table : inutile de le monter très haut.
+
 ### Les signaux et leur poids
 
 | Signal | Ce qui le déclenche | Points | Marqué bot |

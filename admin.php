@@ -397,12 +397,20 @@ if (ip_location_sync_remote_if_due() > 0) {
     redirect(get_root_url() . 'admin.php?page=plugin-ip_location&msg=lists_synced#ipl-card-robots');
 }
 
-// Classification différée des bots (scan lourd de toute la fenêtre glissante). Placée
-// après les actions POST (qui redirigent) pour ne pas payer ce coût sur une simple
-// sauvegarde. Au plus une fois toutes les ip_location_classify_admin_interval_minutes
-// (défaut 10, v2.7a.4) : relancée à chaque chargement, elle faisait attendre des dizaines
-// de secondes sur un site très exploré (journal plein de passages de Googlebot).
-ip_location_classify_if_due(max(0, (int)$conf['ip_location_classify_admin_interval_minutes']) * 60);
+// Classification différée des bots (scan lourd de toute la fenêtre glissante), au plus une
+// fois toutes les ip_location_classify_admin_interval_minutes (défaut 10, v2.7a.4).
+// Depuis la v3.0.1, lancée par la page une fois affichée (ajax_classify.php, cf.
+// admin.tpl) : la page attendait sinon la fin du calcul (25 s et plus constatées sur un
+// journal de 80 000 accès en 7 jours). Les chiffres affichés sont ceux du passage
+// précédent. Un export l'attend encore : il doit refléter les scores à jour.
+$ipl_classify_interval = max(0, (int)$conf['ip_location_classify_admin_interval_minutes']) * 60;
+$ipl_classify_due = false;
+if (isset($_GET['export'])) {
+    @set_time_limit(300);
+    ip_location_classify_if_due($ipl_classify_interval);
+} else {
+    $ipl_classify_due = ip_location_classify_is_due($ipl_classify_interval);
+}
 
 // Migrations v2.5.5, une seule fois chacune. Faites ici et non dans
 // maintain.class.php::update() : pendant update(), c'est encore l'ancien main.inc.php qui
@@ -575,6 +583,21 @@ if ($ip_filter !== '')  $base_parts[] = "ip LIKE '" . pwg_db_real_escape_string(
 $net_keys   = ['host', 'isp', 'unknown'];
 $net_filter = isset($_GET['net']) && in_array($_GET['net'], $net_keys, true) ? $_GET['net'] : '';
 $net_sql    = ['host' => 'hosting = 1', 'isp' => 'hosting = 0', 'unknown' => 'hosting IS NULL'];
+// "Bloqués" = refus réels OU IP/robot actuellement bloqué (le Journal reflète l'état
+// actuel depuis v2.6.8 ; seuls les leviers allumés comptent, cf. ip_location_currently_blocked_sql()).
+$currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable);
+
+// Compteurs du Journal (Motif, Score, catégories) en une seule lecture de la
+// table (v3.0.1) : lignes regroupées par combinaison des colonnes qui servent aux
+// compteurs, avec les conditions « bloquée en ce moment » (cb) et « robot autorisé » (ar)
+// évaluées une seule fois par ligne ; les effectifs sont ensuite additionnés en PHP.
+// Avant : quatre lectures complètes, chacune refaisant les LIKE des robots sur chaque
+// ligne (3 s par affichage pour 82 000 lignes). Mêmes règles qu'en SQL, NULL compris :
+// une condition indéterminée (UA NULL dans un LIKE…) ne compte ni comme vraie ni comme
+// fausse, d'où $sql_true / $sql_false. « Robot autorisé » n'est évalué que pour les
+// lignes non refusées, seules concernées par la catégorie Robots.
+// Réseau : compteurs à part, sans LIKE (lecture rapide), pour que le filtre Réseau puisse
+// ensuite restreindre la lecture groupée.
 $net_counts = array_fill_keys($net_keys, 0);
 if ($show_journal) {
     $r = pwg_query('SELECT SUM(hosting = 1), SUM(hosting = 0), SUM(hosting IS NULL) FROM ' . $prefixeTable . 'ip_location_log'
@@ -583,9 +606,68 @@ if ($show_journal) {
     $net_counts = ['host' => (int)$nr[0], 'isp' => (int)$nr[1], 'unknown' => (int)$nr[2]];
 }
 if ($net_filter !== '') $base_parts[] = $net_sql[$net_filter];
-// "Bloqués" = refus réels OU IP/robot actuellement bloqué (le Journal reflète l'état
-// actuel depuis v2.6.8 ; seuls les leviers allumés comptent, cf. ip_location_currently_blocked_sql()).
-$currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable);
+
+$journal_groups = [];
+if ($show_journal) {
+    $r = pwg_query('SELECT is_bot, is_blocked, block_reason, bot_score,
+       ' . $currently_blocked_sql . ' AS cb,
+       CASE WHEN is_blocked = 0 THEN ' . $allowed_robot_sql . ' END AS ar, COUNT(*) AS n
+  FROM ' . $prefixeTable . 'ip_location_log'
+        . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)) . '
+ GROUP BY is_bot, is_blocked, block_reason, bot_score, cb, ar');
+    while ($g = pwg_db_fetch_assoc($r)) {
+        $journal_groups[] = $g;
+    }
+}
+$sql_true  = function ($v) { return $v !== null && (int)$v !== 0; };
+$sql_false = function ($v) { return $v !== null && (int)$v === 0; };
+$reason_match = function ($g, $k) use ($sql_true) {
+    if ($k === 'listed') {
+        return (int)$g['is_blocked'] === 0 && $sql_true($g['cb']);
+    }
+    if ((int)$g['is_blocked'] !== 1) {
+        return false;
+    }
+    return $k === 'unknown' ? $g['block_reason'] === null : $g['block_reason'] !== null && strcasecmp($g['block_reason'], $k) === 0;
+};
+$score_match = function ($g, $k) use ($score_threshold_now) {
+    $s = (int)$g['bot_score'];
+    switch ($k) {
+        case 'zero': return $s === 0;
+        case 'pos':  return $s > 0;
+        case '30':   return $s >= 30;
+        case '50':   return $s >= 50;
+        default:     return $s >= $score_threshold_now;
+    }
+};
+$category_match = function ($g, $k) use ($sql_true, $sql_false) {
+    $blocked = (int)$g['is_blocked'];
+    switch ($k) {
+        case 'normal':  return (int)$g['is_bot'] === 0 && $blocked === 0 && $sql_false($g['cb']);
+        case 'bot':     return (int)$g['is_bot'] === 1 && $blocked === 0 && $sql_false($g['cb']);
+        case 'robots':  return $blocked === 0 && $sql_true($g['ar']) && $sql_false($g['cb']);
+        case 'blocked': return $blocked === 1 || $sql_true($g['cb']);
+        default:        return true;
+    }
+};
+// Effectifs de chaque option, puis groupes restants une fois le filtre choisi appliqué
+$journal_tally = function ($groups, $keys, $match) {
+    $out = array_fill_keys($keys, 0);
+    foreach ($groups as $g) {
+        foreach ($keys as $k) {
+            if ($match($g, $k)) {
+                $out[$k] += (int)$g['n'];
+            }
+        }
+    }
+    return $out;
+};
+$journal_keep = function ($groups, $k, $match) {
+    return $k === '' ? $groups : array_values(array_filter($groups, function ($g) use ($k, $match) {
+        return $match($g, $k);
+    }));
+};
+
 
 // Filtre "Motif" : conditions par motif, et effectif de chacun (mêmes filtres pays /
 // dates / IP) pour l'afficher dans la liste déroulante.
@@ -596,21 +678,8 @@ $reason_sql = [
 foreach (['country', 'keyword', 'hosting', 'ip', 'auto', 'robot', 'download'] as $rk) {
     $reason_sql[$rk] = "is_blocked = 1 AND block_reason = '" . $rk . "'";
 }
-$reason_cols = [];
-foreach ($reason_sql as $rk => $sql) {
-    $reason_cols[] = 'SUM(' . $sql . ') AS r_' . $rk;
-}
-// Effectifs, compteurs et lignes du Journal : lus seulement quand il est affiché (v2.7c.2)
-$row = [];
-if ($show_journal) {
-    $r = pwg_query('SELECT ' . implode(', ', $reason_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
-        . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)));
-    $row = pwg_db_fetch_assoc($r) ?: [];
-}
-$reason_counts = [];
-foreach ($reason_keys as $rk) {
-    $reason_counts[$rk] = (int)($row['r_' . $rk] ?? 0);
-}
+$reason_counts = $journal_tally($journal_groups, $reason_keys, $reason_match);
+$journal_groups = $journal_keep($journal_groups, $reason_filter, $reason_match);
 
 // Filtre "Score" : même principe (effectifs calculés avec le motif éventuel, mais avant
 // d'appliquer le score lui-même, pour que chaque option montre ce qu'elle donnerait).
@@ -621,22 +690,8 @@ $score_sql = [
     '50'   => 'bot_score >= 50',
     'thr'  => 'bot_score >= ' . $score_threshold_now,
 ];
-$score_cols = [];
-foreach ($score_sql as $sk => $sql) {
-    $score_cols[] = 'SUM(' . $sql . ') AS s_' . $sk;
-}
-$score_base = $base_parts;
-if ($reason_filter !== '') $score_base[] = '(' . $reason_sql[$reason_filter] . ')';
-$row = [];
-if ($show_journal) {
-    $r = pwg_query('SELECT ' . implode(', ', $score_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
-        . (empty($score_base) ? '' : ' WHERE ' . implode(' AND ', $score_base)));
-    $row = pwg_db_fetch_assoc($r) ?: [];
-}
-$score_counts = [];
-foreach ($score_keys as $sk) {
-    $score_counts[$sk] = (int)($row['s_' . $sk] ?? 0);
-}
+$score_counts = $journal_tally($journal_groups, $score_keys, $score_match);
+$journal_groups = $journal_keep($journal_groups, $score_filter, $score_match);
 
 if ($reason_filter !== '') {
     $base_parts[] = '(' . $reason_sql[$reason_filter] . ')';
@@ -745,19 +800,8 @@ if (($_GET['export'] ?? '') === 'csv') {
     exit;
 }
 
-// Compteurs par catégorie (mêmes filtres hors catégorie), en une requête
-$journal_counts = ['all' => 0, 'normal' => 0, 'bot' => 0, 'robots' => 0, 'blocked' => 0];
-$count_cols = [];
-foreach ($category_sql as $cat => $sql) {
-    $count_cols[] = 'SUM(' . $sql . ') AS c_' . $cat;
-}
-if ($show_journal
-    && ($row = pwg_db_fetch_assoc(pwg_query('SELECT ' . implode(', ', $count_cols) . ' FROM ' . $prefixeTable . 'ip_location_log'
-        . (empty($base_parts) ? '' : ' WHERE ' . implode(' AND ', $base_parts)))))) {
-    foreach ($journal_counts as $cat => $v) {
-        $journal_counts[$cat] = (int)$row['c_' . $cat];
-    }
-}
+// Compteurs par catégorie (mêmes filtres hors catégorie), depuis la lecture groupée
+$journal_counts = $journal_tally($journal_groups, ['all', 'normal', 'bot', 'robots', 'blocked'], $category_match);
 $total_visits = $journal_counts[$filter];
 $total_pages  = max(1, ceil($total_visits / $per_page));
 
@@ -1112,18 +1156,28 @@ if ($show_settings) {
         $country_rows[] = $c;
     }
 
-    // Robots : passages sur 7 jours et dernier passage, en une seule requête
+    // Robots : passages sur 7 jours et dernier passage. Regroupés par User-Agent en SQL,
+    // puis attribués aux robots en PHP (v3.0.1) : avant, un LIKE '%…%' par robot sur
+    // chaque ligne des 7 jours (4 s à chaque affichage pour 65 000 accès et 34 robots).
+    // stripos() : même correspondance, insensible à la casse, que LIKE sous la collation
+    // de la table.
     $robots = ip_location_get_robots();
     $robot_rows = [];
     if (!empty($robots)) {
-        $cols = [];
-        foreach ($robots as $i => $rb) {
-            $like = 'user_agent LIKE \'%' . pwg_db_real_escape_string($rb['ua']) . '%\'';
-            $cols[] = 'SUM(' . $like . ') AS n' . $i . ', MAX(CASE WHEN ' . $like . ' THEN visit_date END) AS d' . $i;
+        $robot_stats = [];
+        $r = pwg_query('SELECT user_agent, COUNT(*), MAX(visit_date) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE visit_date >= NOW() - INTERVAL 7 DAY AND user_agent IS NOT NULL
+  GROUP BY user_agent');
+        while ($row = pwg_db_fetch_row($r)) {
+            foreach ($robots as $i => $rb) {
+                if (stripos($row[0], (string)$rb['ua']) !== false) {
+                    $robot_stats['n' . $i] = ($robot_stats['n' . $i] ?? 0) + (int)$row[1];
+                    if (($robot_stats['d' . $i] ?? '') < $row[2]) {
+                        $robot_stats['d' . $i] = $row[2];
+                    }
+                }
+            }
         }
-        $r = pwg_query('SELECT ' . implode(', ', $cols) . ' FROM ' . $prefixeTable . 'ip_location_log
-  WHERE visit_date >= NOW() - INTERVAL 7 DAY');
-        $robot_stats = pwg_db_fetch_assoc($r) ?: [];
         // Accès comptés mais non journalisés (v2.7a.5) : ajoutés aux passages sur 7 jours
         $robot_counted = [];
         $r = pwg_query('SELECT robot, SUM(counted) FROM ' . $prefixeTable . 'ip_location_robot_count
@@ -1406,6 +1460,8 @@ $template->assign([
     'CHART_LOG_SCALE_JSON'       => $chart_log_scale ? 'true' : 'false',
     'PWG_TOKEN'                  => get_pwg_token(),
     'PWG_TOKEN_JSON'             => json_encode(get_pwg_token()),
+    'CLASSIFY_DUE'               => $ipl_classify_due,
+    'CLASSIFY_URL_JSON'          => json_encode(get_root_url() . 'plugins/ip_location/ajax_classify.php'),
     'TAB'           => $tab,
     'SUB'           => $sub,
     'JOURNAL_COUNTS'=> $journal_counts,

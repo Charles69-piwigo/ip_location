@@ -10,6 +10,35 @@ Has Settings: webmaster
 
 // Versions
 /*
+    version 3.0a - 24/11/2026
+        regroupement de v3.0.1
+        diffusion privée aux testeurs
+
+    version 3.0.1 - 24/11/2026
+        Lenteur de la page d'administration sur un gros journal (signalée par deux
+        utilisateurs : 25 s pour ouvrir Configuration, ou page blanche). Mesurée sur le
+        site de dev avec 65 000 accès sur 7 jours : 43 à 52 s quand la classification des
+        robots était due, 5 s sinon. Résultats de la classification inchangés (vérifié
+        avant/après sur les mêmes données : mêmes scores, mêmes bots, mêmes IP bloquées).
+        Classification 3 fois plus rapide (37,7 s → 12,9 s) : co-visitation et rafales
+        calculées une seule fois au lieu de deux (une pour is_bot, une pour le score), et
+        lignes retrouvées par une plage de dates qui utilise les index (url, visit_date)
+        et (ip, visit_date), puis mises à jour par lots sur la clé primaire.
+        La page d'admin n'attend plus la classification : elle est lancée une fois la page
+        affichée (ajax_classify.php, avec jeton), avec la mention « Classement des accès
+        récents en cours… » puis un lien pour recharger. Un export du Journal l'attend
+        encore, pour exporter des scores à jour.
+        Site public : la classification (au plus 1 fois toutes les 4 h) tourne après
+        l'envoi de la page au visiteur, qui ne l'attend plus (fastcgi_finish_request).
+        Réglages, passages des robots sur 7 jours : 3,4 s → 0,24 s (regroupement par
+        User-Agent en SQL, attribution aux robots en PHP).
+        Réglages : 5 s → 1,7 s ; avec classification due : 43 à 52 s → 1,8 s.
+        Journal : compteurs Motif, Score et catégories tirés d'une seule lecture de la
+        table, regroupée par combinaison d'états, au lieu de trois lectures complètes qui
+        refaisaient chacune les LIKE des robots sur chaque ligne. 3,3 s → 1,7 s par
+        affichage (82 000 lignes) ; vues filtrées sur un motif de refus 1,2 s → 1,7 s.
+        Compteurs et lignes identiques (19 combinaisons de filtres comparées).
+
     version 3.0 - 17/11/2026
         regroupement de v2.9.1 à v2.9.4
         pour publication sur PEM
@@ -2981,7 +3010,8 @@ function ip_location_log_visit($override_url = null, $do_block = true, $log_type
     // puisqu'aucune visite admin ne le garantit sinon (ip_location_classify_recent()
     // n'était auparavant appelée que depuis admin.php, donc jamais mise à jour sur un
     // site peu administré).
-    ip_location_classify_if_due((int)$conf['ip_location_classify_interval_hours'] * 3600);
+    // Lancée après l'envoi de la page (v3.0.1), cf. ip_location_classify_after_response().
+    ip_location_classify_after_response((int)$conf['ip_location_classify_interval_hours'] * 3600);
 
     if ($is_blocked && $do_block) {
         header('HTTP/1.0 403 Forbidden');
@@ -3259,23 +3289,64 @@ function ip_location_is_bot_ua($user_agent)
 }
 
 /**
+ * Vrai si le dernier passage de la classification date d'au moins $interval_seconds
+ * (v3.0.1, extrait de ip_location_classify_if_due()). Heure du dernier passage :
+ * paramètre de config à part (et non une clé de la conf sérialisée 'ip_location', qu'on
+ * réécrirait entière depuis le trafic public au risque d'écraser un réglage admin
+ * enregistré entre-temps). Relue en base, pas dans $conf chargé en début de requête,
+ * pour voir un passage lancé par une requête concurrente.
+ */
+function ip_location_classify_is_due($interval_seconds)
+{
+    $r = pwg_query('SELECT value FROM ' . CONFIG_TABLE . ' WHERE param = \'ip_location_last_classify\'');
+    $row = pwg_db_fetch_row($r);
+    return !($row && (int)$row[0] > time() - $interval_seconds);
+}
+
+/**
+ * Classification depuis le trafic public, une fois la page envoyée au visiteur (v3.0.1).
+ * Le calcul peut durer plusieurs dizaines de secondes sur un gros journal : avant, le
+ * visiteur qui tombait sur le passage dû (au plus 1x/ip_location_classify_interval_hours)
+ * attendait la fin du calcul pour voir sa page. Lancée en fin de requête : PHP-FPM
+ * (fastcgi_finish_request) ou LiteSpeed clôturent la réponse avant le calcul ; sinon la
+ * page déjà produite est au moins vidée vers le navigateur, qui peut l'afficher.
+ */
+function ip_location_classify_after_response($interval_seconds)
+{
+    static $registered = false;
+    if ($registered || !ip_location_classify_is_due($interval_seconds)) {
+        return;
+    }
+    $registered = true;
+    register_shutdown_function(function () use ($interval_seconds) {
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        } elseif (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        } else {
+            while (ob_get_level() > 0 && @ob_end_flush()) {
+            }
+            @flush();
+        }
+        ignore_user_abort(true);
+        @set_time_limit(300);
+        ip_location_classify_if_due($interval_seconds);
+    });
+}
+
+/**
  * Lance ip_location_classify_recent() si le dernier passage date d'au moins
  * $interval_seconds, et retourne true dans ce cas. Seul point d'entrée du calcul :
- * depuis admin.php (au plus 1x/ip_location_classify_admin_interval_minutes, défaut 10,
- * v2.7a.4 — avant, à chaque chargement de l'onglet, soit des dizaines de secondes
- * d'attente sur un site très exploré) et depuis ip_location_log_visit() (trafic public,
- * au plus 1x/ip_location_classify_interval_hours) pour garantir que le blocage auto
+ * depuis ajax_classify.php (admin, appelé par la page une fois affichée, au plus
+ * 1x/ip_location_classify_admin_interval_minutes, défaut 10 ; avant la v3.0.1, pendant
+ * le chargement de la page, qui attendait la fin du calcul) et depuis
+ * ip_location_classify_after_response() (trafic public, au plus
+ * 1x/ip_location_classify_interval_hours) pour garantir que le blocage auto
  * fonctionne même sans visite admin régulière.
  */
 function ip_location_classify_if_due($interval_seconds)
 {
-    // Heure du dernier passage : paramètre de config à part (et non une clé de la conf
-    // sérialisée 'ip_location', qu'on réécrirait entière depuis le trafic public au risque
-    // d'écraser un réglage admin enregistré entre-temps). Relue en base, pas dans $conf
-    // chargé en début de requête, pour voir un passage lancé par une requête concurrente.
-    $r = pwg_query('SELECT value FROM ' . CONFIG_TABLE . ' WHERE param = \'ip_location_last_classify\'');
-    $row = pwg_db_fetch_row($r);
-    if ($row && (int)$row[0] > time() - $interval_seconds) {
+    if (!ip_location_classify_is_due($interval_seconds)) {
         return false;
     }
     // Horodaté AVANT le calcul, qui peut durer plusieurs secondes sur un gros journal :
@@ -3286,13 +3357,43 @@ function ip_location_classify_if_due($interval_seconds)
 }
 
 /**
+ * Identifiants renvoyés par une requête SELECT dont la 1re colonne est l'id (v3.0.1).
+ */
+function ip_location_query_ids($sql)
+{
+    $ids = [];
+    $result = pwg_query($sql);
+    while ($row = pwg_db_fetch_row($result)) {
+        $ids[] = (int)$row[0];
+    }
+    return $ids;
+}
+
+/**
+ * Marque comme bots les lignes du journal données par leur id et ajoute $score à leur
+ * bot_score, par lots de 2 000 (v3.0.1). Les rafales de ip_location_classify_recent()
+ * cherchent d'abord leurs lignes par un SELECT, puis les mettent à jour par la clé
+ * primaire : MariaDB n'applique pas au UPDATE multi-table le filtrage par index
+ * (url, visit_date) qu'il fait sur le même SELECT (mesuré : 9,7 s contre 3,4 s).
+ */
+function ip_location_flag_bot_rows($ids, $score)
+{
+    global $prefixeTable;
+    foreach (array_chunk(array_unique($ids), 2000) as $chunk) {
+        pwg_query('UPDATE ' . $prefixeTable . 'ip_location_log
+   SET is_bot = 1, bot_score = bot_score + ' . (int)$score . '
+ WHERE id IN (' . implode(',', $chunk) . ')');
+    }
+}
+
+/**
  * Rejoue en lot, sur les 7 derniers jours, la détection de bots par co-visitation
  * (>= 2 IP distinctes sur la même URL dans une fenêtre de ~10 s), ainsi que le calcul
  * du score de suspicion bot (bot_score) et le blocage automatique associé (4ème
  * levier, cf. ip_location_auto_block_bots()). Approximation par buckets fixes de 10 s
  * (au lieu d'une fenêtre glissante) — sans impact sur is_bot, qui reste une info de
- * stats/filtre ne pilotant aucun blocage par lui-même. Idempotent (WHERE is_bot = 0
- * pour la co-visitation ; bot_score recalculé intégralement à chaque passage).
+ * stats/filtre ne pilotant aucun blocage par lui-même. Idempotent (is_bot ne fait que
+ * passer à 1 ; bot_score recalculé intégralement à chaque passage).
  * Calcul lourd sur toute la fenêtre glissante : ne pas appeler directement, passer par
  * ip_location_classify_if_due().
  */
@@ -3336,74 +3437,88 @@ function ip_location_classify_recent()
         $covisit_exclude_sql .= ' AND NOT COALESCE(' . $allowed_robot_sql . ', 0)';
     }
 
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')' . $covisit_exclude_sql . '
-     GROUP BY url, bucket
-    HAVING COUNT(DISTINCT ip) >= 2
-) g
-  ON t.url = g.url
- AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/10) = g.bucket
-SET t.is_bot = 1
-WHERE t.is_bot = 0
-  AND t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-
-    // Rafale mono-IP : >= 3 accès de la même IP sur la même URL dans une fenêtre de ~10 s
-    // (ex. martèlement automatisé d'une seule page, contrairement à la co-visitation
-    // ci-dessus qui vise les rafales distribuées sur IP différentes).
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT ip, url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
-     GROUP BY ip, url, bucket
-    HAVING COUNT(*) >= 3
-) g
-  ON t.ip = g.ip
- AND t.url = g.url
- AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/10) = g.bucket
-SET t.is_bot = 1
-WHERE t.is_bot = 0
-  AND t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-
-    // Rafale multi-URL mono-IP : >= $multi_url_threshold URL distinctes (défaut 20) par la
-    // même IP en ~30 s (ex. un scraper qui parcourt le catalogue à grande vitesse),
-    // contrairement à la rafale mono-IP ci-dessus qui vise la répétition d'une même URL.
-    // Ajouté suite à une analyse du journal réel (v2.5) : plusieurs IP faisaient 47 à 88
-    // accès à des URL toutes différentes en moins de 25 s, invisibles aux règles
-    // précédentes. Seuil initial de 10 relevé à 20 en v2.5.5 : un humain qui clique
-    // "suivant" dans un album atteint facilement 11-12 photos en 30 s (faux positif réel).
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT ip, FLOOR(UNIX_TIMESTAMP(visit_date)/30) AS bucket
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
-     GROUP BY ip, bucket
-    HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
-) g
-  ON t.ip = g.ip
- AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/30) = g.bucket
-SET t.is_bot = 1
-WHERE t.is_bot = 0
-  AND t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-
     // ── Score de suspicion bot (4ème levier de blocage, optionnel) ──────────
     // Recalculé intégralement à chaque passage (remise à 0 puis réaccumulation) plutôt
-    // qu'incrémenté : contrairement à is_bot (booléen, idempotent via WHERE is_bot=0),
-    // bot_score doit refléter l'état actuel des signaux agrégés sur l'IP ou l'UA (absence
-    // de JS, UA partagé...), qui évoluent d'un passage à l'autre avec les nouvelles lignes.
+    // qu'incrémenté : contrairement à is_bot (booléen, idempotent), bot_score doit refléter
+    // l'état actuel des signaux agrégés sur l'IP ou l'UA (absence de JS, UA partagé...),
+    // qui évoluent d'un passage à l'autre avec les nouvelles lignes.
     pwg_query('
 UPDATE ' . $prefixeTable . 'ip_location_log
    SET bot_score = 0
  WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
+
+    // Rafales (v3.0.1) : chaque détection est calculée une seule fois et pose à la fois
+    // is_bot et son poids dans bot_score (avant : deux requêtes identiques, l'une pour
+    // is_bot, l'autre pour le score, une fois le score remis à 0 ci-dessus). Les lignes
+    // touchées sont retrouvées par une plage de dates [début du créneau, début + durée[
+    // plutôt que par FLOOR(UNIX_TIMESTAMP(visit_date)/10) = créneau : le calcul sur la
+    // colonne empêchait MySQL d'utiliser les index (url, visit_date) et (ip, visit_date),
+    // et la jointure relisait toute la fenêtre pour chaque groupe trouvé. Mesuré sur 65 000
+    // accès en 7 jours : 26 s pour les deux co-visitations, 3,5 s après.
+    // STRAIGHT_JOIN : groupes trouvés d'abord, puis lignes correspondantes par l'index ;
+    // mise à jour ensuite par la clé primaire (cf. ip_location_flag_bot_rows()).
+    $slot_sql = function ($seconds) {
+        return 'FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(visit_date)/' . $seconds . ')*' . $seconds . ')';
+    };
+
+    // Co-visitation : >= 2 IP distinctes sur la même URL dans un créneau de 10 s.
+    // Toutes les lignes du créneau sont marquées, y compris celles des robots exclus du
+    // décompte des IP (comme avant la v3.0.1).
+    ip_location_flag_bot_rows(ip_location_query_ids('
+SELECT t.id
+  FROM (
+    SELECT url, ' . $slot_sql(10) . ' AS slot
+      FROM ' . $prefixeTable . 'ip_location_log
+     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type != \'prefetch\')' . $covisit_exclude_sql . '
+     GROUP BY url, slot
+    HAVING COUNT(DISTINCT ip) >= 2
+) g
+STRAIGHT_JOIN ' . $prefixeTable . 'ip_location_log t
+  ON t.url = g.url
+ AND t.visit_date >= g.slot AND t.visit_date < g.slot + INTERVAL 10 SECOND
+ WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY'), (int)$conf['ip_location_score_covisit']);
+
+    // Rafale mono-IP : >= 3 accès de la même IP sur la même URL dans un créneau de 10 s
+    // (ex. martèlement automatisé d'une seule page, contrairement à la co-visitation
+    // ci-dessus qui vise les rafales distribuées sur IP différentes).
+    ip_location_flag_bot_rows(ip_location_query_ids('
+SELECT t.id
+  FROM (
+    SELECT ip, url, ' . $slot_sql(10) . ' AS slot
+      FROM ' . $prefixeTable . 'ip_location_log
+     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
+     GROUP BY ip, url, slot
+    HAVING COUNT(*) >= 3
+) g
+STRAIGHT_JOIN ' . $prefixeTable . 'ip_location_log t
+  ON t.ip = g.ip
+ AND t.url = g.url
+ AND t.visit_date >= g.slot AND t.visit_date < g.slot + INTERVAL 10 SECOND
+ WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY'), (int)$conf['ip_location_score_burst']);
+
+    // Rafale multi-URL mono-IP : >= $multi_url_threshold URL distinctes (défaut 20) par la
+    // même IP dans un créneau de 30 s (ex. un scraper qui parcourt le catalogue à grande
+    // vitesse), contrairement à la rafale mono-IP ci-dessus qui vise la répétition d'une
+    // même URL. Ajouté suite à une analyse du journal réel (v2.5) : plusieurs IP faisaient
+    // 47 à 88 accès à des URL toutes différentes en moins de 25 s, invisibles aux règles
+    // précédentes. Seuil initial de 10 relevé à 20 en v2.5.5 : un humain qui clique
+    // "suivant" dans un album atteint facilement 11-12 photos en 30 s (faux positif réel).
+    ip_location_flag_bot_rows(ip_location_query_ids('
+SELECT t.id
+  FROM (
+    SELECT ip, ' . $slot_sql(30) . ' AS slot
+      FROM ' . $prefixeTable . 'ip_location_log
+     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
+       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
+     GROUP BY ip, slot
+    HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
+) g
+STRAIGHT_JOIN ' . $prefixeTable . 'ip_location_log t
+  ON t.ip = g.ip
+ AND t.visit_date >= g.slot AND t.visit_date < g.slot + INTERVAL 30 SECOND
+ WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY'), (int)$conf['ip_location_score_multi_url_burst']);
 
     // User-Agent vide
     pwg_query('
@@ -3462,55 +3577,6 @@ UPDATE ' . $prefixeTable . 'ip_location_log
  WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
    AND user_agent IS NOT NULL AND user_agent != \'\'
    AND user_agent NOT LIKE \'Mozilla/%\'');
-
-    // Co-visitation (même détection que la mise à jour is_bot ci-dessus)
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type != \'prefetch\')' . $covisit_exclude_sql . '
-     GROUP BY url, bucket
-    HAVING COUNT(DISTINCT ip) >= 2
-) g
-  ON t.url = g.url
- AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/10) = g.bucket
-SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_covisit'] . '
-WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-
-    // Rafale mono-IP (même détection que la mise à jour is_bot ci-dessus)
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT ip, url, FLOOR(UNIX_TIMESTAMP(visit_date)/10) AS bucket
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
-     GROUP BY ip, url, bucket
-    HAVING COUNT(*) >= 3
-) g
-  ON t.ip = g.ip
- AND t.url = g.url
- AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/10) = g.bucket
-SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_burst'] . '
-WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
-
-    // Rafale multi-URL mono-IP (même détection que la mise à jour is_bot ci-dessus)
-    pwg_query('
-UPDATE ' . $prefixeTable . 'ip_location_log t
-JOIN (
-    SELECT ip, FLOOR(UNIX_TIMESTAMP(visit_date)/30) AS bucket
-      FROM ' . $prefixeTable . 'ip_location_log
-     WHERE visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY
-       AND (log_type IS NULL OR log_type NOT IN (\'prefetch\', \'js\'))
-     GROUP BY ip, bucket
-    HAVING COUNT(DISTINCT url) >= ' . $multi_url_threshold . '
-) g
-  ON t.ip = g.ip
- AND FLOOR(UNIX_TIMESTAMP(t.visit_date)/30) = g.bucket
-SET t.bot_score = t.bot_score + ' . (int)$conf['ip_location_score_multi_url_burst'] . '
-WHERE t.visit_date >= NOW() - INTERVAL ' . $window_days . ' DAY');
 
     // User-Agent "figé" partagé par un nombre anormalement élevé d'IP distinctes : un vrai
     // navigateur populaire est réutilisé par de nombreux visiteurs différents, mais avec
