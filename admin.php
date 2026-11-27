@@ -10,10 +10,15 @@ function ip_location_admin_return_qs()
 {
     parse_str(stripslashes($_POST['return_qs'] ?? ''), $in);
     $out = '';
-    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'reason', 'score', 'pnum'] as $k) {
+    foreach (['sub', 'filter', 'country', 'date_from', 'date_to', 'ip_filter', 'reason', 'score', 'pnum', 'auto_p'] as $k) {
         if (isset($in[$k]) && is_string($in[$k]) && preg_match('/^[A-Za-z0-9.:\/-]{1,45}$/', $in[$k])) {
             $out .= '&' . $k . '=' . urlencode($in[$k]);
         }
+    }
+    // Recherche de la liste des IP bloquées automatiquement (v3.0a.3) : noms de pays ou
+    // de villes, espaces et lettres accentuées compris
+    if (isset($in['auto_q']) && is_string($in['auto_q']) && preg_match('/^[\p{L}\p{N} .:\/-]{1,45}$/u', $in['auto_q'])) {
+        $out .= '&auto_q=' . urlencode($in['auto_q']);
     }
     return $out;
 }
@@ -338,7 +343,10 @@ UPDATE ' . $prefixeTable . 'ip_location_blocklist
    SET origin = \'exempt\', blocked_at = NOW(), expires_at = NULL
  WHERE ip = \'' . pwg_db_real_escape_string($ip) . '\'');
             ip_location_write_htaccess();
-            redirect(get_root_url() . 'admin.php?page=plugin-ip_location' . ip_location_admin_return_qs() . '&msg=ip_unblocked&ip=' . urlencode($ip));
+            $ipl_ret = ip_location_admin_return_qs();
+            // Depuis la liste paginée des IP automatiques (v3.0a.3) : retour à la même page
+            redirect(get_root_url() . 'admin.php?page=plugin-ip_location' . $ipl_ret . '&msg=ip_unblocked&ip=' . urlencode($ip)
+                . (strpos($ipl_ret, '&auto_') !== false ? '#ipl-card-auto' : ''));
         }
     } elseif ($_POST['action'] === 'save_stats_preset') {
         $slot = (int)($_POST['slot'] ?? -1);
@@ -571,12 +579,26 @@ $score_threshold_now = (int)(ip_location_get_conf()['bot_block_score_threshold']
 // motif (block_reason).
 // Filtres hors catégorie (pays, dates, IP) : partagés par les compteurs cliquables et le
 // tableau. "robots" (v2.6.6) = accès servis à un robot autorisé et authentique.
-$allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
 $base_parts = [];
 if ($country_filter !== '') $base_parts[] = "country_code = '" . pwg_db_real_escape_string($country_filter) . "'";
 if ($date_from !== '') $base_parts[] = "visit_date >= '" . pwg_db_real_escape_string($date_from) . " 00:00:00'";
 if ($date_to   !== '') $base_parts[] = "visit_date <= '" . pwg_db_real_escape_string($date_to)   . " 23:59:59'";
 if ($ip_filter !== '')  $base_parts[] = "ip LIKE '" . pwg_db_real_escape_string($ip_filter) . "%'";
+// User-Agent distincts des lignes que le Journal va parcourir (v3.0a.1) : les conditions
+// « robot autorisé » et « robot bloqué » deviennent une comparaison exacte IN (…) au lieu
+// d'un LIKE par robot sur chaque ligne (cf. ip_location_ua_match_sql()). Les filtres ajoutés
+// plus bas (Réseau, Motif, Score, catégorie) ne font que restreindre ces lignes.
+$journal_uas = null;
+if ($show_journal || ($_GET['export'] ?? '') === 'csv') {
+    $journal_uas = [];
+    $r = pwg_query('SELECT user_agent FROM ' . $prefixeTable . 'ip_location_log
+  WHERE user_agent IS NOT NULL' . (empty($base_parts) ? '' : ' AND ' . implode(' AND ', $base_parts)) . '
+  GROUP BY user_agent');
+    while ($row = pwg_db_fetch_row($r)) {
+        $journal_uas[] = $row[0];
+    }
+}
+$allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable, 'user_agent', 'ip', $journal_uas);
 // Filtre "Réseau" (v2.8c.4) : colonne hosting = IP d'hébergeur ou de proxy selon ip-api.com
 // (1), fournisseur d'accès (0), inconnu (NULL : autre service de géolocalisation, ou accès
 // antérieur à la v2.9). Effectifs avec les seuls filtres pays / dates / IP.
@@ -585,7 +607,7 @@ $net_filter = isset($_GET['net']) && in_array($_GET['net'], $net_keys, true) ? $
 $net_sql    = ['host' => 'hosting = 1', 'isp' => 'hosting = 0', 'unknown' => 'hosting IS NULL'];
 // "Bloqués" = refus réels OU IP/robot actuellement bloqué (le Journal reflète l'état
 // actuel depuis v2.6.8 ; seuls les leviers allumés comptent, cf. ip_location_currently_blocked_sql()).
-$currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable);
+$currently_blocked_sql = ip_location_currently_blocked_sql($prefixeTable, 'ip', 'user_agent', $journal_uas);
 
 // Compteurs du Journal (Motif, Score, catégories) en une seule lecture de la
 // table (v3.0.1) : lignes regroupées par combinaison des colonnes qui servent aux
@@ -983,6 +1005,21 @@ $blocklist_manual = array_values(array_filter($blocklist, function ($b) { return
 $blocklist_auto    = array_values(array_filter($blocklist, function ($b) { return $b['origin'] === 'auto'; }));
 $blocklist_ips = array_column($blocklist, 'ip');
 
+// Liste des IP bloquées automatiquement : paginée par 100 côté serveur (v3.0a.3). Elle
+// était écrite en entier dans la page (1 200 IP = 660 Ko de HTML ; 20 000 IP chez un
+// testeur, plus de 10 Mo). Recherche dans l'IP, le pays et la ville.
+$auto_per_page = 100;
+$auto_q = isset($_GET['auto_q']) && is_string($_GET['auto_q']) ? stripslashes($_GET['auto_q']) : '';
+$auto_q = mb_substr(trim(preg_replace('/[^\p{L}\p{N} .:\/-]/u', '', $auto_q)), 0, 45);
+$auto_list = $auto_q === '' ? $blocklist_auto : array_values(array_filter($blocklist_auto, function ($b) use ($auto_q) {
+    return stripos((string)$b['ip'], $auto_q) !== false
+        || stripos((string)$b['country'], $auto_q) !== false
+        || stripos((string)$b['city'], $auto_q) !== false;
+}));
+$auto_pages = max(1, (int)ceil(count($auto_list) / $auto_per_page));
+$auto_p = isset($_GET['auto_p']) ? min(max(1, (int)$_GET['auto_p']), $auto_pages) : 1;
+$auto_rows = array_slice($auto_list, ($auto_p - 1) * $auto_per_page, $auto_per_page);
+
 // IP retirées manuellement du .htaccess (origin='exempt') : leur bot_score peut rester
 // affiché au-dessus du seuil courant sans qu'elles soient bloquées — badge dédié dans le
 // journal pour que ça ne ressemble pas à un bug (cf. ip_location_get_bot_candidates()).
@@ -1114,13 +1151,6 @@ if ($show_settings) {
         return (int)$n;
     };
 
-    // IP d'hébergeur vues sur 7 jours (v2.8c.2), hors robots autorisés : accès et IP
-    $r = pwg_query('SELECT COUNT(*), COUNT(DISTINCT ip) FROM ' . $prefixeTable . 'ip_location_log
-  WHERE hosting = 1 AND visit_date >= NOW() - INTERVAL 7 DAY'
-        . (($ars = ip_location_allowed_robot_sql($prefixeTable)) !== '0' ? ' AND NOT ' . $ars : ''));
-    list($hs_hits, $hs_ips) = pwg_db_fetch_row($r);
-    $hosting_seen_7d = ['hits' => (int)$hs_hits, 'ips' => (int)$hs_ips];
-
     // Blocage par IP : refus par entrée (plage /16 : préfixe "A.B.")
     $manual_rows = [];
     foreach ($blocklist_manual as $b) {
@@ -1163,12 +1193,16 @@ if ($show_settings) {
     // de la table.
     $robots = ip_location_get_robots();
     $robot_rows = [];
+    // User-Agent distincts des 7 jours : resservent aux deux compteurs « hors robots
+    // autorisés » plus bas, sans LIKE par ligne (v3.0a.1, cf. ip_location_allowed_robot_sql()).
+    $ua_seen_7d = [];
     if (!empty($robots)) {
         $robot_stats = [];
         $r = pwg_query('SELECT user_agent, COUNT(*), MAX(visit_date) FROM ' . $prefixeTable . 'ip_location_log
   WHERE visit_date >= NOW() - INTERVAL 7 DAY AND user_agent IS NOT NULL
   GROUP BY user_agent');
         while ($row = pwg_db_fetch_row($r)) {
+            $ua_seen_7d[] = $row[0];
             foreach ($robots as $i => $rb) {
                 if (stripos($row[0], (string)$rb['ua']) !== false) {
                     $robot_stats['n' . $i] = ($robot_stats['n' . $i] ?? 0) + (int)$row[1];
@@ -1196,7 +1230,15 @@ if ($show_settings) {
     $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_robot_check
   WHERE verified = 0 AND checked_at >= NOW() - INTERVAL 7 DAY');
     list($robots_spoofed) = pwg_db_fetch_row($r);
-    $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable);
+    $allowed_robot_sql = ip_location_allowed_robot_sql($prefixeTable, 'user_agent', 'ip', $ua_seen_7d);
+
+    // IP d'hébergeur vues sur 7 jours (v2.8c.2), hors robots autorisés : accès et IP
+    $r = pwg_query('SELECT COUNT(*), COUNT(DISTINCT ip) FROM ' . $prefixeTable . 'ip_location_log
+  WHERE hosting = 1 AND visit_date >= NOW() - INTERVAL 7 DAY'
+        . ($allowed_robot_sql !== '0' ? ' AND NOT ' . $allowed_robot_sql : ''));
+    list($hs_hits, $hs_ips) = pwg_db_fetch_row($r);
+    $hosting_seen_7d = ['hits' => (int)$hs_hits, 'ips' => (int)$hs_ips];
+
     $robots_seen_7d = 0;
     if ($allowed_robot_sql !== '0') {
         $r = pwg_query('SELECT COUNT(*) FROM ' . $prefixeTable . 'ip_location_log
@@ -1434,7 +1476,15 @@ $template->assign([
     'BOT_BLOCK_ENABLED'          => $bot_block_enabled,
     'BOT_BLOCK_SCORE_THRESHOLD'  => $bot_block_score_threshold,
     'BLOCKLIST_MANUAL'   => $blocklist_manual,
-    'BLOCKLIST_AUTO'     => $blocklist_auto,
+    'AUTO_TOTAL'         => count($blocklist_auto),
+    'AUTO_ROWS'          => $auto_rows,
+    'AUTO_MATCHES'       => count($auto_list),
+    'AUTO_Q'             => $auto_q,
+    'AUTO_P'             => $auto_p,
+    'AUTO_PAGES'         => $auto_pages,
+    'AUTO_FIRST'         => count($auto_list) ? ($auto_p - 1) * $auto_per_page + 1 : 0,
+    'AUTO_LAST'          => ($auto_p - 1) * $auto_per_page + count($auto_rows),
+    'AUTO_OPEN'          => isset($_GET['auto_q']) || isset($_GET['auto_p']),
     'STATS'              => $stats,
     'LOGS'               => $logs,
     'TOTAL_PAGES'        => $total_pages,

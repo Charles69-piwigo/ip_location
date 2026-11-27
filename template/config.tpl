@@ -446,7 +446,7 @@
             </div>
             <p class="warn" id="iplc-threshold-low"{if $BOT_BLOCK_SCORE_THRESHOLD >= 50} hidden{/if}>&#9888; {'Seuil bas : un seul signal suspect peut suffire à bloquer une IP, y compris un vrai visiteur. 50 ou plus est conseillé.'|@translate}</p>
             <div class="iplc-tiles">
-              <div class="iplc-tile"><span class="n">{$BLOCKLIST_AUTO|@count}</span><span class="l">{'IP bloquées en ce moment'|@translate}</span></div>
+              <div class="iplc-tile"><span class="n">{$AUTO_TOTAL}</span><span class="l">{'IP bloquées en ce moment'|@translate}</span></div>
               <div class="iplc-tile"><span class="n" id="iplc-would">—</span><span class="l">{'IP des dernières'|@translate} {$RECENT_HOURS} h {'au-dessus du seuil'|@translate}</span></div>
               <div class="iplc-tile"><span class="n">{$EXEMPT_COUNT}</span><span class="l">{'IP débloquées à la main (exemptées)'|@translate}</span></div>
             </div>
@@ -455,23 +455,45 @@
         </div>
       </form>
       <div class="iplc-body dimmable" style="padding-top:0;">
-        <details class="iplc-fold">
-          <summary>{'IP bloquées automatiquement'|@translate} ({$BLOCKLIST_AUTO|@count})</summary>
+        <details class="iplc-fold"{if $AUTO_OPEN} open{/if}>
+          <summary>{'IP bloquées automatiquement'|@translate} ({$AUTO_TOTAL})</summary>
           <div class="fold-body">
-            <input type="text" data-filter-table="iplc-auto-table" placeholder="{'Filtrer (IP ou pays)…'|@translate}" style="max-width:320px;">
+            {* Paginée par 100 côté serveur (v3.0a.3) : recherche et pages rechargent la page *}
+            {if $AUTO_TOTAL > 0}
+            <form method="get" action="admin.php#ipl-card-auto" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+              <input type="hidden" name="page" value="plugin-ip_location">
+              <input type="text" name="auto_q" value="{$AUTO_Q|escape}" placeholder="{'Rechercher (IP, pays ou ville)…'|@translate}" style="max-width:320px;">
+              <button type="submit" class="iplc-btn ghost sm">{'Rechercher'|@translate}</button>
+              {if $AUTO_Q neq ''}<a class="iplc-btn ghost sm" href="{$BASE_URL|escape}&amp;auto_p=1#ipl-card-auto">{'Effacer la recherche'|@translate}</a>{/if}
+              <span class="hint" style="margin:0;">{if $AUTO_MATCHES > 0}{'IP %d à %d sur %d'|@translate|@sprintf:$AUTO_FIRST:$AUTO_LAST:$AUTO_MATCHES}{else}{'Aucune IP ne correspond à la recherche.'|@translate}{/if}</span>
+            </form>
+            {/if}
+            {capture assign=AUTO_NAV}{if $AUTO_PAGES > 1}
+            <div style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+              {if $AUTO_P > 1}<a class="iplc-btn ghost sm" href="{$BASE_URL|escape}&amp;auto_q={$AUTO_Q|escape:'url'}&amp;auto_p={$AUTO_P-1}#ipl-card-auto">‹ {'Précédentes'|@translate}</a>{/if}
+              <span class="hint" style="margin:0;">{'Page %d / %d'|@translate|@sprintf:$AUTO_P:$AUTO_PAGES}</span>
+              {if $AUTO_P < $AUTO_PAGES}<a class="iplc-btn ghost sm" href="{$BASE_URL|escape}&amp;auto_q={$AUTO_Q|escape:'url'}&amp;auto_p={$AUTO_P+1}#ipl-card-auto">{'Suivantes'|@translate} ›</a>{/if}
+            </div>
+            {/if}{/capture}
+            {$AUTO_NAV}
+            {* Un seul formulaire pour toute la page de liste : le bouton porte l'IP *}
+            <form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="unblock_ip">
+              <input type="hidden" name="return_qs" value="auto_p={$AUTO_P}{if $AUTO_Q neq ''}&amp;auto_q={$AUTO_Q|escape:'url'}{/if}">
             <div class="iplc-list"><div class="iplc-scroll">
               <table class="iplc-t" id="iplc-auto-table"><thead><tr><th>{'IP'|@translate}</th><th>{'Pays'|@translate}</th><th>{'Ville'|@translate}</th><th>{'Bloquée le'|@translate}</th><th>{'Expire le'|@translate}</th><th></th></tr></thead><tbody>
-              {foreach from=$BLOCKLIST_AUTO item=bl}
+              {foreach from=$AUTO_ROWS item=bl}
                 <tr>
                   <td class="ip">{$bl.ip|escape}</td><td>{$bl.country|escape}</td><td class="muted">{$bl.city|escape}</td>
                   <td class="muted">{$bl.blocked_at|escape}</td><td class="muted">{$bl.expires_at|escape}</td>
-                  <td class="num"><form method="post" action=""><input type="hidden" name="pwg_token" value="{$PWG_TOKEN}"><input type="hidden" name="action" value="unblock_ip"><input type="hidden" name="ip" value="{$bl.ip|escape}"><button type="submit" class="iplc-btn ghost sm">{'Débloquer'|@translate}</button></form></td>
+                  <td class="num"><button type="submit" name="ip" value="{$bl.ip|escape}" class="iplc-btn ghost sm">{'Débloquer'|@translate}</button></td>
                 </tr>
               {foreachelse}
-                <tr><td colspan="6" class="muted" style="text-align:center;padding:12px;">{'Aucune IP bloquée automatiquement.'|@translate}</td></tr>
+                {if $AUTO_TOTAL == 0}<tr><td colspan="6" class="muted" style="text-align:center;padding:12px;">{'Aucune IP bloquée automatiquement.'|@translate}</td></tr>{/if}
               {/foreach}
               </tbody></table>
             </div></div>
+            </form>
+            {$AUTO_NAV}
           </div>
         </details>
       </div>
@@ -539,6 +561,22 @@
     // champs rattachés au formulaire par l'attribut form="…" mais placés hors de lui
     root.querySelectorAll('[form="' + form.id + '"]:not([data-save])').forEach(function(el){ el.addEventListener('change', markDirty); });
     card._markDirty = markDirty;
+    // Modifications faites AVANT ce script (v3.0a.2) : sur une grande page, le navigateur
+    // affiche les blocs du haut bien avant d'avoir lu ce script, en fin de page ; un clic à
+    // ce moment ne déclenchait aucun écouteur et le bouton restait grisé. Idem pour des
+    // choix non enregistrés que le navigateur remet en place (Précédent, onglet restauré).
+    // On compare donc chaque champ à sa valeur d'origine, celle écrite dans la page.
+    if ([].some.call(form.elements, function(el){
+      if (el.type === 'checkbox' || el.type === 'radio') return el.checked !== el.defaultChecked;
+      if (el.tagName === 'SELECT') {
+        return [].some.call(el.options, function(o, i){
+          var def = [].some.call(el.options, function(x){ return x.defaultSelected; }) ? o.defaultSelected : i === 0;
+          return o.selected !== def;
+        });
+      }
+      if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' || !('defaultValue' in el)) return false;
+      return el.value !== el.defaultValue;
+    })) markDirty();
     var sw = card.querySelector('[data-card-switch]');
     var pill = card.querySelector('[data-pill]');
     if (sw) sw.addEventListener('change', function(){
@@ -670,14 +708,17 @@
       });
     });
     robotsCard.querySelectorAll('[data-status]').forEach(function(st){
-      st.addEventListener('change', function(){
+      function paint(){
         var labels = st.querySelectorAll('label');
         labels[0].className = labels[0].querySelector('input').checked ? 'allow-on' : '';
         labels[1].className = labels[1].querySelector('input').checked ? 'block-on' : '';
-      });
+      }
+      st.addEventListener('change', paint);
+      paint(); // statut coché avant la lecture de ce script (v3.0a.2)
     });
     robotsCard.querySelectorAll('[data-remove]').forEach(function(cb){
       cb.addEventListener('change', function(){ cb.closest('tr').classList.toggle('removed', cb.checked); });
+      cb.closest('tr').classList.toggle('removed', cb.checked);
     });
   }
 
